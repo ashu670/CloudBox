@@ -3,36 +3,25 @@ import jwt from 'jsonwebtoken';
 export const authenticate = (req, res, next) => {
     const head = req.headers.authorization;
 
-    if(!head || !head.startsWith('Bearer ')){
-        return res.status(401).json({error : 'Acess token missing'});
-    }
+    if(!head || !head.startsWith("Bearer ")) return res.status(401).json({error : 'token missing'});
 
     const token = head.split(' ')[1];
 
     try{
-        const decode = jwt.verify(token, process.env.JWT_ACCESS_SECRET); //token sign compares with new sign...
+        const decode = jwt.verify(token, process.env.JWT_SECRET);
         req.user = decode;
         next();
-    }catch(err){
-        return res.status(403).json({err : 'Access token invalid or expired'});
+    }catch(error){
+        return res.status(403).json({error : "Invalid token"});
     }
 };
-// newSignature = HMAC_SHA256(
-//     AAA + "." + BBB,
-//     JWT_ACCESS_SECRET
-// )
 
-
-export const authorizeRoles = (...allowed) => {
+export const authorizeRole = (...allowed) => {
     return (req, res, next) => {
-        if(!req.user){
-            return res.status(401).json({error : 'unauthorised'});
-        }
+        if(!req.user) return res.status(401).json({error : 'unauthorized'});
 
-        if(!allowed.includes(req.user.role)){
-            return res.status(403).json({error : 'insuffiecient permission'});
-        }
+        if(!allowed.includes(req.user.role)) return res.status(403).json({error : 'Insuffiecient permisson'});
 
         next();
-    }
-}
+    };
+};
