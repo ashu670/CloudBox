@@ -20,7 +20,7 @@ export const authenticate = (req, res, next) => {
     const token = head.split(' ')[1]; // Splits "Bearer <JWT>" into ["Bearer", "<JWT>"] and extracts the JWT token using index [1].
 
     try{
-       const decode = jwt.verify(token, process.env.JWT_ACCESS_SECRET); // Verifies the received JWT by checking its signature with the secret key (header + payload + secret); if valid, it returns the decoded payload.          or       Uses the server's JWT secret key to verify whether the received JWT is valid, untampered, and not expired. If valid, it returns the decoded payload.
+       const decode = jwt.verify(token, process.env.JWT_SECRET); // Verifies the received JWT by checking its signature with the secret key (header + payload + secret); if valid, it returns the decoded payload.          or       Uses the server's JWT secret key to verify whether the received JWT is valid, untampered, and not expired. If valid, it returns the decoded payload.
         req.user = decode;  // abhi jo current m user h jisee authenticate kiya h req.user m ussi ki id and role aayegi 
 
         next();
