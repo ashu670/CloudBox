@@ -6,7 +6,6 @@ export const authenticate = (req, res, next) => {
     if(!head || !head.startsWith('Bearer ')){    // Bearer hum frontend ke sath bhejnege 
         return res.status(401).json({error : 'Acess token missing'});
     }
-
     // jwt contains 3 parts - header , payload , sign 
 
     // - >  sign part structure 
@@ -23,26 +22,19 @@ export const authenticate = (req, res, next) => {
     try{
        const decode = jwt.verify(token, process.env.JWT_ACCESS_SECRET); // Verifies the received JWT by checking its signature with the secret key (header + payload + secret); if valid, it returns the decoded payload.          or       Uses the server's JWT secret key to verify whether the received JWT is valid, untampered, and not expired. If valid, it returns the decoded payload.
         req.user = decode;  // abhi jo current m user h jisee authenticate kiya h req.user m ussi ki id and role aayegi 
+
         next();
-    }catch(err){
-        return res.status(403).json({err : 'Access token invalid or expired'});
+    }catch(error){
+        return res.status(403).json({error : "Invalid token"});
     }
 };
-// newSignature = HMAC_SHA256(
-//     AAA + "." + BBB,
-//     JWT_ACCESS_SECRET
-// )
-
 
 export const authorizeRoles = (...allowed) => {  // ye rest operator h yha kuch bhiaa skta h - admin, user   jo ki aisa banega [admin] or [user] or [admin, user]
     return (req, res, next) => {      // express ko middleware chayiye isliye iske andr return kr rha h
         if(!req.user){
             return res.status(401).json({error : 'unauthorised'});
         }
-
-        if(!allowed.includes(req.user.role)){
-            return res.status(403).json({error : 'insuffiecient permission'});
-        }
+        if(!allowed.includes(req.user.role)) return res.status(403).json({error : 'Insuffiecient permisson'});
 
         next();
     }

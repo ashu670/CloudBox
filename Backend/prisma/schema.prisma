@@ -1,6 +1,5 @@
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 generator client {
@@ -13,11 +12,51 @@ enum Role{
 }
 
 model User {
-  id        Int     @id @default(autoincrement())
-  username  String
-  email     String  @unique
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String   @unique
   password  String
-  role      Role
+  role      Role     @default(USER)
   createdAt DateTime @default(now()) // default used so that e dont need to give the values
+  updatedAt DateTime @updatedAt
+
+  folders   Folder[]
+  files     File[]
+}
+
+model Folder{
+  id        Int     @id @default(autoincrement())
+  name      String
+
+  pid       Int?
+  parent    Folder?  @relation("FolderToFolder", fields: [pid], references: [id], onDelete: Cascade)
+  children  Folder[] @relation("FolderToFolder")
+
+  uid       Int
+  user      User    @relation(fields: [uid], references: [id], onDelete: Cascade)
+
+  files     File[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+}
+
+model File {
+  id        Int      @id @default(autoincrement())
+  orgName   String
+  stoName   String
+  mimeType  String
+  size      Int
+
+  // Foreign relation for folder
+  folderId  Int
+  folder    Folder  @relation(fields: [folderId], references: [id], onDelete: Cascade)
+
+  // Foreign relation for user
+  uid       Int
+  user      User    @relation(fields: [uid], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
