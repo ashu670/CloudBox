@@ -53,3 +53,9 @@ export const logout = (req, res) => {
 export const getProfile = (req, res) => {
     return res.status(200).json({user : req.user});   // profile page pe bhej rha h bss normally 
 }
+
+
+
+
+
+// hey 
