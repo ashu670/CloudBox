@@ -1,0 +1,242 @@
+=========================================
+BACKEND ARCHITECTURE (SHORT NOTES)
+=========================================
+
+Request Flow
+
+Client
+  ↓
+Router
+  ↓
+Middleware
+  ↓
+Controller
+  ↓
+Service
+  ↓
+Repository (Optional)
+  ↓
+Database (MongoDB)
+  ↑
+Response
+
+=========================================
+1. ROUTER
+=========================================
+
+Purpose:
+- Defines API endpoints.
+- Decides which Controller should handle the request.
+- Can call one or more middlewares before the controller.
+
+Example:
+POST /login
+GET /profile
+DELETE /user/:id
+
+Example Flow:
+Client
+   ↓
+Router
+   ↓
+Controller
+
+Key Point:
+Router only routes requests.
+It does NOT contain business logic.
+
+=========================================
+2. MIDDLEWARE
+=========================================
+
+Purpose:
+- Runs BEFORE the controller.
+- Checks or modifies the request.
+- Calls next() to continue.
+
+Common Uses:
+✓ Authentication (JWT)
+✓ Authorization (Role Check)
+✓ Validation
+✓ Logging
+✓ File Upload
+✓ Rate Limiting
+
+Flow:
+
+Request
+   ↓
+Middleware
+   ↓
+next()
+   ↓
+Controller
+
+If middleware fails:
+
+Request
+   ↓
+Middleware
+   ↓
+401 / 403 Response
+   ↓
+END
+
+Key Point:
+Middleware checks the request before it reaches the controller.
+
+=========================================
+3. AUTH (Authentication)
+=========================================
+
+Purpose:
+- Verifies the identity of the user.
+
+Common Features:
+✓ Register
+✓ Login
+✓ Logout
+✓ JWT
+✓ Refresh Token
+✓ Forgot Password
+✓ OTP
+
+Common Files:
+
+authRoutes.js
+authController.js
+authService.js
+authMiddleware.js
+
+Key Point:
+Authentication = "Who are you?"
+
+=========================================
+4. CONTROLLER
+=========================================
+
+Purpose:
+- Handles Request and Response.
+- Calls Service.
+- Sends final response.
+
+Controller Responsibilities:
+✓ Read req.body
+✓ Read req.params
+✓ Read req.query
+✓ Call Service
+✓ Return res.json()
+
+Controller DOES NOT:
+✗ Compare Password
+✗ Generate JWT
+✗ Write Business Logic
+
+Key Point:
+Controller is the bridge between Route and Service.
+
+=========================================
+5. SERVICE
+=========================================
+
+Purpose:
+- Contains Business Logic.
+
+Examples:
+✓ Login Logic
+✓ Register Logic
+✓ Password Hashing
+✓ JWT Generation
+✓ Email Sending
+✓ OTP Verification
+
+Key Point:
+Service contains the application's brain.
+
+=========================================
+6. REPOSITORY
+=========================================
+
+Purpose:
+- Handles only database operations.
+
+Examples:
+✓ Find User
+✓ Create User
+✓ Update User
+✓ Delete User
+
+Key Point:
+Repository never contains business logic.
+
+=========================================
+7. DATABASE
+=========================================
+
+Purpose:
+- Stores all application data.
+
+Examples:
+MongoDB
+MySQL
+PostgreSQL
+
+=========================================
+LOGIN FLOW
+=========================================
+
+Client
+   ↓
+Router
+   ↓
+Middleware (Optional)
+   ↓
+Controller
+   ↓
+Service
+   ↓
+Repository
+   ↓
+MongoDB
+   ↑
+Repository
+   ↑
+Service
+   ↑
+Controller
+   ↑
+Response
+
+=========================================
+EASY MEMORY TRICK
+=========================================
+
+Router
+→ "Where should the request go?"
+
+Middleware
+→ "Should the request be allowed?"
+
+Controller
+→ "Receive request & send response."
+
+Service
+→ "Do the actual work."
+
+Repository
+→ "Talk to the database."
+
+Database
+→ "Store data."
+
+=========================================
+ONE LINE REVISION
+=========================================
+
+Router      → Routes the request.
+Middleware  → Checks the request.
+Controller  → Handles request & response.
+Service     → Contains business logic.
+Repository  → Performs database operations.
+Database    → Stores data.
+Auth         → Verifies user identity.
