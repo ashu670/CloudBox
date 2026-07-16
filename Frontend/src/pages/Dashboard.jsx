@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
 import axios from "../api/axios";
+import { useNavigate } from "react-router-dom";
 
 export default function FolderView() {
 
     const [folders, setFolders] = useState([]);
-    const [currentFolderId, setCurrentFolderId] = useState(0);
+    const [currentFolderId, setCurrentFolderId] = useState(-1);
     const [history, setHistory] = useState([]);
     const [folderName, setFolderName] = useState("");
     const [loading, setLoading] = useState(false);
+    const navigate = useNavigate();
 
     const fetchFolders = async (id = currentFolderId) => {
         setLoading(true);
@@ -19,7 +21,24 @@ export default function FolderView() {
             });
             setFolders(data.children);
         } catch (err) {
+            // try{
+            //     const res = await axios.post('api/auth/refresh');
+            //     localStorage.setItem('accessToken', res.data.accessToken);
+            //     console.log("issues new token");
+            //     navigate('/dashboard');
+            // }catch(error){
+            //     console.error(error);
+            //     alert(
+            //             error.response?.data?.error || "Unable to fetch profile."
+            //         );
+            //     navigate("/login");
+            // }
+            
             console.error(err);
+            alert(
+                    err.response?.data?.error || "Unable to fetch profile."
+                );
+            navigate("/login");
         } finally {
             setLoading(false);
         }
@@ -39,7 +58,7 @@ export default function FolderView() {
 
             await axios.post("api/folder/create", {
                 name: folderName,
-                pid: currentFolderId === 0 ? null : currentFolderId
+                pid: currentFolderId === -1 ? null : currentFolderId
             },{
                 headers : {Authorization : `Bearer ${token}`}
             });
@@ -49,6 +68,10 @@ export default function FolderView() {
 
         } catch (err) {
             console.error(err);
+            alert(
+                    err.response?.data?.error || "Unable to fetch profile."
+                );
+            navigate("/login");
         }
     };
 
@@ -65,7 +88,7 @@ export default function FolderView() {
         setHistory(temp);
 
         if (temp.length === 0)
-            setCurrentFolderId(0);
+            setCurrentFolderId(-1);
         else
             setCurrentFolderId(temp[temp.length - 1].id);
 

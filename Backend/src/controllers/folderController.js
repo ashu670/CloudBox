@@ -28,3 +28,15 @@ export const fetch = async (req, res) => {
         res.status(500).json({error : err.message});
     }
 }
+
+export const deleteFolder = async (req, res) => {
+    const id = Number(req.params.id);
+    const uid = req.user.id;
+
+    try{
+        const response = await service.delFolder(uid, id);
+        return res.status(200).json(response);
+    }catch(err){
+        res.status(500).json({error : err.message});
+    }
+}
