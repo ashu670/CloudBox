@@ -16,6 +16,10 @@ export default function Navbar() {
 
             <Link to="/profile">Profile</Link>
 
+            {" / "}
+
+            <Link to="/dashboard">Dashboard</Link>
+
         </nav>
 
     );

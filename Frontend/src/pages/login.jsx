@@ -23,7 +23,7 @@ export default function Signup(){
         try{
             const res = await axios.post('api/auth/login', form);
             localStorage.setItem('accessToken', res.data.accessToken);
-            navigate('/profile');
+            navigate('/dashboard');
         }catch(err){
             alert(err.response.data.error);
         }
