@@ -4,8 +4,10 @@ import { authenticate } from "../middleware/authMiddleware.js";
 
 const router = Router();
 
-router.post('/create', authenticate, folderCon.create);
-router.get('/fetch/:id', authenticate, folderCon.fetch);
-router.delete('/delete/:id', authenticate, folderCon.deleteFolder);
+router.use(authenticate);
+
+router.post('/create', folderCon.create);
+router.get('/fetch/:id', folderCon.fetch);
+router.delete('/delete/:id', folderCon.deleteFolder);
 
 export default router;
