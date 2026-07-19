@@ -28,16 +28,40 @@ export const create = async (data) => {
 };
 
 export const findChildren = async (uid, pid) => {
-    return await prisma.folder.findUnique({
+    if (pid === null || pid === 0) {
+        const children = await prisma.folder.findMany({
+            where: {
+                pid: null,
+                uid
+            }
+        });
+        return {
+            id: null,
+            name: "Root",
+            children,
+            files: []
+        };
+    }
+
+    const folder = await prisma.folder.findUnique({
         where: {
-            id : pid,
-            uid : uid
+            id: pid
         },
-        include : {
-            files : true,
-            children : true
+        include: {
+            files: true,
+            children: true
         }
     });
+
+    if (!folder) {
+        return null;
+    }
+
+    if (folder.uid !== uid) {
+        throw new Error("Folder access denied");
+    }
+
+    return folder;
 };
 
 export const deleteFolder = async (id) => {
