@@ -48,8 +48,6 @@ model File {
   stoName   String   @unique
   mimeType  String
   size      Int
-
-  // Foreign relation for folder
   folderId  Int
   folder    Folder  @relation(fields: [folderId], references: [id], onDelete: Cascade)
 

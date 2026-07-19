@@ -1,3 +1,6 @@
+import dotenv from "dotenv";
+dotenv.config();
+
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
@@ -5,7 +8,9 @@ import compression from "compression";
 import cookieParser from "cookie-parser";
 
 import authRoutes from "./routes/authRoutes.js";
-import folderRoutes from "./routes/folderRoutes.js"
+import folderRoutes from "./routes/folderRoutes.js";
+import fileRoutes from "./routes/fileRoutes.js";
+
 
 const app = express();
 
@@ -36,14 +41,21 @@ app.use(cookieParser());
 
 /* ---------------------- Routes ---------------------- */
 
+// Health Check Route
 app.get("/", (req, res) => {
     return res.status(200).json({
         message: "CloudBox Backend Running",
     });
 });
 
+// Authentication Routes
 app.use("/api/auth", authRoutes);
+
+// Folder Routes
 app.use("/api/folder", folderRoutes);
+
+// File Routes
+app.use("/api/file", fileRoutes);
 
 /* ---------------------- 404 Handler ---------------------- */
 
