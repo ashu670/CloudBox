@@ -1,7 +1,5 @@
-// src/routes/fileRoutes.js
-
 import express from "express";
-import upload from "../files/multerConfig.js";
+import upload from "../config/multerConfig.js";
 import * as fileController from "../controllers/fileController.js";
 import { authenticate } from "../middleware/authMiddleware.js";
 

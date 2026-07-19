@@ -14,7 +14,7 @@ export const create = async (data) => {
 // Find file by storage name
 export const findByStoName = async (stoName) => {
 
-    return await prisma.file.findUnique({
+    return await prisma.file.findFirst({
         where: {
             stoName
         }

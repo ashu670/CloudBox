@@ -1,6 +1,6 @@
 import * as fileRepo from "../repositories/fileRepo.js";
 import * as folderRepo from "../repositories/folderRepo.js";
-import path from "path";
+import * as storage from "../storage/storageService.js";
 
 export const uploadFile = async (file, folderId, uid) => {
 
@@ -17,22 +17,8 @@ export const uploadFile = async (file, folderId, uid) => {
         throw new Error("Folder not found or access denied.");
     }
 
-
-    const fileName = path.parse(file.originalname).name;
-    const extension = path.parse(file.originalname).ext;    // file name aur extension alag karne ke liye 
-
-    // initial storage name
-    let count = 0;
-    let stoName = `${uid}_${folderId}_${fileName}${extension}`;
-
-    while (true) {
-        const exists = await fileRepo.findByStoName(stoName);
-        if (!exists) {
-            break;
-        }
-        count++;
-        stoName = `${uid}_${folderId}_${fileName}${count}${extension}`;
-    }
+    const {stoName} = await storage.storageService.store(file, uid, folderId);
+    
 
     const data = {
         orgName: file.originalname,
