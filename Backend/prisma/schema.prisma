@@ -45,7 +45,7 @@ model Folder{
 model File {
   id        Int      @id @default(autoincrement())
   orgName   String
-  stoName   String
+  stoName   String   @unique
   mimeType  String
   size      Int
 
