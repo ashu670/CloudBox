@@ -28,10 +28,14 @@ export const create = async (data) => {
 };
 
 export const findChildren = async (uid, pid) => {
-    return await prisma.folder.findMany({
+    return await prisma.folder.findUnique({
         where: {
-            uid,
-            pid
+            id : pid,
+            uid : uid
+        },
+        include : {
+            files : true,
+            children : true
         }
     });
 };

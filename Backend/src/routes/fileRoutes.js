@@ -13,10 +13,4 @@ router.post(
     fileController.uploadFile
 );
 
-router.get(
-    "/folder/:folderId",
-    authenticate,
-    fileController.getFilesByFolder
-);
-
 export default router;
