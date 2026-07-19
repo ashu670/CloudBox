@@ -5,7 +5,7 @@ export const findByIdAndUser = async (id, uid) => {
 
     return await prisma.folder.findFirst({
         where: {
-            id,
+            id,   // returning proper folder
             uid
         }
     });
