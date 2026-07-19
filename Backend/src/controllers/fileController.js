@@ -1,3 +1,4 @@
+import { error } from "console";
 import * as fileService from "../services/fileService.js";
 
 export const uploadFile = async (req, res) => {
@@ -38,33 +39,27 @@ export const uploadFile = async (req, res) => {
     }
 };
 
+export const del = async (req, res) => {
+    const id = Number(req.params.id);
+    const uid = req.user.id;
 
-
-export const getFilesByFolder = async (req, res) => {
-    try {
-       
-        const { folderId } = req.params;    // Folder ID comes from URL parameter
-
-        const uid = req.user.id;
-
-        const files = await fileService.getFilesByFolder(
-            folderId,
-            uid
-        );
-
-        // Success response
-        return res.status(200).json({
-            success: true,
-            message: files.length
-                ? "Files fetched successfully."
-                : "No files found.",
-            data: files
-        });
-
-    } catch (error) {
-        return res.status(400).json({
-            success: false,
-            message: error.message
-        });
+    try{
+        const response = await fileService.del(id, uid);
+        res.status(200).json({message : "deleted successFully", response});
+    }catch(err){
+        res.status(500).json({error : err.message});
     }
-};
+}
+
+export const rename = async (req, res) => {
+    const id = Number(req.params.id);
+    const uid = req.user.id;
+    const {newName} = req.body;
+
+    try{
+        const response = await fileService.renameFile(id, uid, newName);
+        res.status(200).json({message : "renamed succeful", response});
+    }catch(err){
+        res.status(500).json({error : err.message});
+    }
+}
