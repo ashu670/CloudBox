@@ -50,6 +50,10 @@ const storageService = {
         const oldPath = path.join(UPLOAD_BASE_DIR, oldName);
         const newPath = path.join(UPLOAD_BASE_DIR, newName);
         await fs.rename(oldPath, newPath);
+    },
+
+    getFilePath(stoName){
+        return path.join(UPLOAD_BASE_DIR, stoName);
     }
 };
 

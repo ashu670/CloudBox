@@ -123,3 +123,12 @@ export const move = async (id, uid, newPid) => {
 
     return await fileRepo.move(id, newPid);
 }
+
+export const download = async (id, uid) => {
+    const file = await fileRepo.findByUserId(id, uid);
+    if(!file) throw new Error("File doesnt exist or access denied");
+
+    const absolutePath = storageService.getFilePath(file.stoName);
+
+    return {absolutePath, orgName : file.orgName};
+}
