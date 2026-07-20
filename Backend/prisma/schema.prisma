@@ -6,9 +6,27 @@ generator client {
   provider = "prisma-client-js"
 }
 
-enum Role{
-    USER
-    ADMIN
+enum Role {
+  USER
+  ADMIN
+}
+
+enum Visibility {
+  PRIVATE
+  PUBLIC
+}
+
+enum FolderRole {
+  OWNER
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 model User {
@@ -17,15 +35,19 @@ model User {
   email     String   @unique
   password  String
   role      Role     @default(USER)
-  createdAt DateTime @default(now()) // default used so that e dont need to give the values
+  createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  folders   Folder[]
-  files     File[]
+  folders        Folder[]
+  files          File[]
+
+  sharedFolders FolderMember[]
+  joinRequests  FolderJoinRequest[]
+  activities    FolderActivity[]
 }
 
-model Folder{
-  id        Int     @id @default(autoincrement())
+model Folder {
+  id        Int    @id @default(autoincrement())
   name      String
 
   pid       Int?
@@ -33,13 +55,70 @@ model Folder{
   children  Folder[] @relation("FolderToFolder")
 
   uid       Int
-  user      User    @relation(fields: [uid], references: [id], onDelete: Cascade)
+  user      User @relation(fields: [uid], references: [id], onDelete: Cascade)
 
   files     File[]
 
+  isShared       Boolean    @default(false)
+  inviteCode     String?    @unique
+  isInviteActive Boolean    @default(false)
+  visibility     Visibility @default(PRIVATE)
+
+  members    FolderMember[]
+  requests   FolderJoinRequest[]
+  activities FolderActivity[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
 
+model FolderMember {
+  id Int @id @default(autoincrement())
+
+  folderId Int
+  folder   Folder @relation(fields: [folderId], references: [id], onDelete: Cascade)
+
+  userId Int
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  role FolderRole
+
+  joinedAt DateTime @default(now())
+
+  @@unique([folderId, userId])
+}
+
+model FolderJoinRequest {
+  id Int @id @default(autoincrement())
+
+  folderId Int
+  folder   Folder @relation(fields: [folderId], references: [id], onDelete: Cascade)
+
+  requestedBy Int
+  user        User @relation(fields: [requestedBy], references: [id], onDelete: Cascade)
+
+  message String?
+
+  status RequestStatus @default(PENDING)
+
+  requestedAt DateTime @default(now())
+
+  @@unique([folderId, requestedBy])
+}
+
+model FolderActivity {
+  id Int @id @default(autoincrement())
+
+  folderId Int
+  folder   Folder @relation(fields: [folderId], references: [id], onDelete: Cascade)
+
+  userId Int
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  action      String
+  description String
+
+  createdAt DateTime @default(now())
 }
 
 model File {
@@ -48,12 +127,12 @@ model File {
   stoName   String   @unique
   mimeType  String
   size      Int
-  folderId  Int
-  folder    Folder  @relation(fields: [folderId], references: [id], onDelete: Cascade)
 
-  // Foreign relation for user
-  uid       Int
-  user      User    @relation(fields: [uid], references: [id], onDelete: Cascade)
+  folderId Int
+  folder   Folder @relation(fields: [folderId], references: [id], onDelete: Cascade)
+
+  uid  Int
+  user User @relation(fields: [uid], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
