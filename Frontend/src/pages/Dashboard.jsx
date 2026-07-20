@@ -1,418 +1,20 @@
-import { useEffect, useState, useCallback } from "react";
-import axios from "../api/axios";
-import { useNavigate } from "react-router-dom";
+import { useFolderManager } from "../hooks/useFolderManager";
+import { formatBytes, formatDate } from "../utils/formatters";
+import FileIcon from "../components/FileIcon"; // Correct relative import path
 
 export default function FolderView() {
-    const [folders, setFolders] = useState([]);
-    const [files, setFiles] = useState([]);
-    const [currentFolderId, setCurrentFolderId] = useState(-1);
-    const [history, setHistory] = useState([]);
-    const [folderName, setFolderName] = useState("");
-    const [loading, setLoading] = useState(false);
-    const [isUploading, setIsUploading] = useState(false);
-    const [isDragging, setIsDragging] = useState(false);
-    const [showCreator, setShowCreator] = useState(false);
+    const {
+        folders, files, currentFolderId, history, folderName, setFolderName,
+        loading, isUploading, isDragging, setIsDragging, showCreator, setShowCreator,
+        editingItem, setEditingItem, renameValue, setRenameValue, movingItem, setMovingItem,
+        toasts, expandedFolders, treeNodes, createFolder, deleteFolder, deleteFile,
+        downloadFile, handleRenameSubmit, executeMove, handleFileUpload,
+        handleFolderSelect, toggleFolderExpand, goBack
+    } = useFolderManager();
 
-    // States for rename and move operations
-    const [editingItem, setEditingItem] = useState(null); // { type: 'file' | 'folder', id: number }
-    const [renameValue, setRenameValue] = useState("");
-    const [movingItem, setMovingItem] = useState(null); // { type: 'file' | 'folder', id: number, name: string }
-
-    // Toast notifications
-    const [toasts, setToasts] = useState([]);
-
-    // Tree sidebar state
-    const [expandedFolders, setExpandedFolders] = useState({ "-1": true });
-    const [treeNodes, setTreeNodes] = useState({});
-    const [foldersCache, setFoldersCache] = useState({});
-
-    const navigate = useNavigate();
-
-    const showToast = (message, type = "success") => {
-        const id = Date.now();
-        setToasts(prev => [...prev, { id, message, type }]);
-        setTimeout(() => {
-            setToasts(prev => prev.filter(t => t.id !== id));
-        }, 4000);
-    };
-
-    const addToCache = (folderList) => {
-        if (!folderList || !Array.isArray(folderList)) return;
-        setFoldersCache(prev => {
-            const next = { ...prev };
-            folderList.forEach(f => {
-                next[f.id] = f;
-            });
-            return next;
-        });
-    };
-
-    const fetchTreeSubfolders = async (folderId) => {
-        try {
-            const token = localStorage.getItem("accessToken");
-            const fetchId = folderId === -1 ? -1 : folderId;
-            const { data } = await axios.get(`api/folder/fetch/${fetchId}`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            
-            const fetchedChildren = data.children?.children || [];
-            addToCache(fetchedChildren);
-
-            setTreeNodes(prev => ({
-                ...prev,
-                [folderId]: fetchedChildren
-            }));
-        } catch (err) {
-            console.error("Error fetching tree subfolders:", err);
-        }
-    };
-
-    const fetchFolders = useCallback(async (id = currentFolderId) => {
-        setLoading(true);
-
-        try {
-            const token = localStorage.getItem("accessToken");
-            const { data } = await axios.get(`api/folder/fetch/${id}`, {
-                headers : {Authorization : `Bearer ${token}`}
-            });
-            
-            setFolders(data.children?.children || []);
-            setFiles(data.children?.files || []);
-            addToCache(data.children?.children || []);
-            
-            if (data.children && data.children.id !== null) {
-                setFoldersCache(prev => ({
-                    ...prev,
-                    [data.children.id]: data.children
-                }));
-            }
-        } catch (err) {
-            console.error(err);
-            if (err.response?.status === 401 || err.response?.status === 403) {
-                showToast("Session expired. Please log in again.", "error");
-                navigate("/login");
-            } else {
-                showToast(err.response?.data?.error || "Unable to fetch contents.", "error");
-            }
-        } finally {
-            setLoading(false);
-        }
-    }, [currentFolderId, navigate]);
-
-    // Rebuild breadcrumbs history using the parent-pointer cache
-    const rebuildHistory = (folderId) => {
-        const path = [];
-        let currentId = folderId;
-        while (currentId && currentId !== -1 && currentId !== 0) {
-            const folder = foldersCache[currentId];
-            if (!folder) break;
-            path.unshift({ id: folder.id, name: folder.name, pid: folder.pid });
-            currentId = folder.pid;
-        }
-        return path;
-    };
-
-    useEffect(() => {
-        const initDashboard = async () => {
-            await fetchTreeSubfolders(-1);
-            setExpandedFolders(prev => ({ ...prev, "-1": true }));
-        };
-        initDashboard();
-    }, []);
-
-    useEffect(() => {
-        fetchFolders();
-    }, [fetchFolders]);
-
-    const createFolder = async (e) => {
-        e.preventDefault();
-
-        if (!folderName.trim()) return;
-
-        try {
-            const token = localStorage.getItem("accessToken");
-
-            await axios.post("api/folder/create", {
-                name: folderName,
-                pid: currentFolderId === -1 ? null : currentFolderId
-            },{
-                headers : {Authorization : `Bearer ${token}`}
-            });
-
-            showToast("Folder created successfully", "success");
-            setFolderName("");
-            setShowCreator(false);
-            
-            // Reload views
-            fetchFolders();
-            fetchTreeSubfolders(currentFolderId);
-
-        } catch (err) {
-            console.error(err);
-            showToast(err.response?.data?.error || "Failed to create folder", "error");
-        }
-    };
-
-    const deleteFolder = async (e, folderId) => {
-        e.stopPropagation();
-        if (!window.confirm("Are you sure you want to delete this folder and all its contents?")) return;
-
-        try {
-            const token = localStorage.getItem("accessToken");
-            await axios.delete(`api/folder/delete/${folderId}`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            showToast("Folder deleted successfully", "success");
-            
-            // Refresh views
-            fetchFolders();
-            fetchTreeSubfolders(currentFolderId);
-        } catch (err) {
-            console.error(err);
-            showToast(err.response?.data?.error || "Failed to delete folder", "error");
-        }
-    };
-
-    const deleteFile = async (e, fileId) => {
-        e.stopPropagation();
-        if (!window.confirm("Are you sure you want to delete this file?")) return;
-
-        try {
-            const token = localStorage.getItem("accessToken");
-            await axios.delete(`api/file/delete/${fileId}`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            showToast("File deleted successfully", "success");
-            fetchFolders();
-        } catch (err) {
-            console.error(err);
-            showToast(err.response?.data?.error || "Failed to delete file", "error");
-        }
-    };
-
-    const startRename = (e, item, type) => {
-        e.stopPropagation();
-        setEditingItem({ type, id: item.id });
-        setRenameValue(type === 'folder' ? item.name : item.orgName);
-    };
-
-    const handleRenameSubmit = async (e, id, type) => {
-        e.preventDefault();
-        if (!renameValue.trim()) return;
-
-        try {
-            const token = localStorage.getItem("accessToken");
-            if (type === 'folder') {
-                await axios.patch(`api/folder/rename/${id}`, {
-                    newName: renameValue
-                }, {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
-                showToast("Folder renamed successfully", "success");
-                fetchTreeSubfolders(currentFolderId);
-            } else {
-                await axios.patch(`api/file/rename/${id}`, {
-                    newName: renameValue
-                }, {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
-                showToast("File renamed successfully", "success");
-            }
-            setEditingItem(null);
-            fetchFolders();
-        } catch (err) {
-            console.error(err);
-            showToast(err.response?.data?.error || `Failed to rename ${type}`, "error");
-        }
-    };
-
-    const startMove = (e, item, type) => {
-        e.stopPropagation();
-        const name = type === 'folder' ? item.name : item.orgName;
-        setMovingItem({ type, id: item.id, name });
-        showToast(`Moving "${name}". Navigate to destination and click "Move Here".`, "success");
-    };
-
-    const executeMove = async () => {
-        if (!movingItem) return;
-
-        if (movingItem.type === 'file' && currentFolderId <= 0) {
-            showToast("Files cannot be moved to the root folder. Please open a subfolder.", "error");
-            return;
-        }
-
-        if (movingItem.type === 'folder' && movingItem.id === currentFolderId) {
-            showToast("Cannot move a folder into itself.", "error");
-            return;
-        }
-
-        try {
-            const token = localStorage.getItem("accessToken");
-            const targetPid = currentFolderId === -1 ? 0 : currentFolderId;
-
-            if (movingItem.type === 'folder') {
-                await axios.patch(`api/folder/move/${movingItem.id}/${targetPid}`, {}, {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
-                showToast("Folder moved successfully", "success");
-                fetchTreeSubfolders(-1);
-                fetchTreeSubfolders(currentFolderId);
-            } else {
-                await axios.patch(`api/file/move/${movingItem.id}/${targetPid}`, {}, {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
-                showToast("File moved successfully", "success");
-            }
-            setMovingItem(null);
-            fetchFolders();
-        } catch (err) {
-            console.error(err);
-            showToast(err.response?.data?.error || "Failed to move item", "error");
-        }
-    };
-
-    const handleFileUpload = async (file) => {
-        if (!file) return;
-        setIsUploading(true);
-
-        if (currentFolderId <= 0) {
-            showToast("Please open or create a folder first to upload files.", "error");
-            setIsUploading(false);
-            return;
-        }
-
-        const formData = new FormData();
-        formData.append("file", file);
-        formData.append("folderId", currentFolderId);
-
-        try {
-            const token = localStorage.getItem("accessToken");
-            await axios.post("api/file/upload", formData, {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    "Content-Type": "multipart/form-data"
-                }
-            });
-            showToast(`File "${file.name}" uploaded successfully`, "success");
-            fetchFolders();
-        } catch (err) {
-            console.error(err);
-            showToast(err.response?.data?.message || err.response?.data?.error || "File upload failed", "error");
-        } finally {
-            setIsUploading(false);
-        }
-    };
-
-    const handleFolderSelect = (folder) => {
-        if (folder.id === -1 || folder.id === 0) {
-            setCurrentFolderId(-1);
-            setHistory([]);
-        } else {
-            const newHistory = rebuildHistory(folder.id);
-            setHistory(newHistory);
-            setCurrentFolderId(folder.id);
-        }
-    };
-
-    const toggleFolderExpand = async (folderId, e) => {
-        e.stopPropagation();
-        const isExpanded = expandedFolders[folderId];
-        
-        setExpandedFolders(prev => ({
-            ...prev,
-            [folderId]: !isExpanded
-        }));
-
-        if (!isExpanded && !treeNodes[folderId]) {
-            await fetchTreeSubfolders(folderId);
-        }
-    };
-
-    const goBack = () => {
-        const temp = [...history];
-        temp.pop();
-        setHistory(temp);
-
-        if (temp.length === 0)
-            setCurrentFolderId(-1);
-        else
-            setCurrentFolderId(temp[temp.length - 1].id);
-    };
-
-    const handleDragOver = (e) => {
-        e.preventDefault();
-        setIsDragging(true);
-    };
-
-    const handleDragLeave = () => {
-        setIsDragging(false);
-    };
-
-    const handleDrop = (e) => {
-        e.preventDefault();
-        setIsDragging(false);
-        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-            handleFileUpload(e.dataTransfer.files[0]);
-        }
-    };
-
-    // Helper to format byte counts
-    const formatBytes = (bytes, decimals = 2) => {
-        if (bytes === 0) return '0 Bytes';
-        const k = 1024;
-        const dm = decimals < 0 ? 0 : decimals;
-        const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
-    };
-
-    const formatDate = (dateStr) => {
-        if (!dateStr) return "-";
-        const date = new Date(dateStr);
-        return date.toLocaleDateString(undefined, {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric'
-        });
-    };
-
-    const getFileIcon = (mimeType) => {
-        if (mimeType.startsWith("image/")) {
-            return (
-                <svg className="file-svg" viewBox="0 0 24 24" style={{ fill: '#3b82f6' }}>
-                    <path d="M8.5,13.5L11,16.5L14.5,12L19,18H5L8.5,13.5M21,19V5C21,3.89 20.1,3 19,3H5A2,2 0 0,0 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19M5,5H19V19H5V5Z" />
-                </svg>
-            );
-        }
-        if (mimeType === "application/pdf") {
-            return (
-                <svg className="file-svg" viewBox="0 0 24 24" style={{ fill: '#ef4444' }}>
-                    <path d="M19,3H5C3.89,3 3,3.89 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5C21,3.89 20.1,3 19,3M19,19H5V5H19V19M10,17H14V15H10V17M10,13H16V11H10V13M10,9H16V7H10V9Z" />
-                </svg>
-            );
-        }
-        if (mimeType.startsWith("audio/") || mimeType.startsWith("video/")) {
-            return (
-                <svg className="file-svg" viewBox="0 0 24 24" style={{ fill: '#aa3bff' }}>
-                    <path d="M17,10.5V7A1,1 0 0,0 16,6H4A1,1 0 0,0 3,7V17A1,1 0 0,0 4,18H16A1,1 0 0,0 17,17V13.5L21,17.5V6.5L17,10.5Z" />
-                </svg>
-            );
-        }
-        if (mimeType.startsWith("text/") || mimeType.includes("javascript") || mimeType.includes("json")) {
-            return (
-                <svg className="file-svg" viewBox="0 0 24 24" style={{ fill: '#f59e0b' }}>
-                    <path d="M12.89,3L14.85,3.4L11.11,21L9.15,20.6L12.89,3M19.59,12L16,8.41V5.58L22.42,12L16,18.41V15.58L19.59,12M1.58,12L8,5.58V8.41L4.41,12L8,15.58V18.41L1.58,12Z" />
-                </svg>
-            );
-        }
-        return (
-            <svg className="file-svg" viewBox="0 0 24 24" style={{ fill: '#6b7280' }}>
-                <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z" />
-            </svg>
-        );
-    };
-
+    // Helper to format type labels
     const getFileTypeLabel = (mimeType) => {
+        if (!mimeType) return "File";
         if (mimeType.startsWith("image/")) return "Image file";
         if (mimeType === "application/pdf") return "PDF Document";
         if (mimeType.startsWith("audio/")) return "Audio track";
@@ -442,11 +44,9 @@ export default function FolderView() {
                     >
                         <path d="M8.59,16.59L13.17,12L8.59,7.41L10,6L16,12L10,18L8.59,16.59Z" />
                     </svg>
-
                     <svg className="tree-icon" viewBox="0 0 24 24">
                         <path d="M10,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V8C22,6.89 21.1,6 20,6H12L10,4Z" />
                     </svg>
-
                     <span>{node.name}</span>
                 </div>
 
@@ -489,11 +89,9 @@ export default function FolderView() {
                     >
                         <path d="M8.59,16.59L13.17,12L8.59,7.41L10,6L16,12L10,18L8.59,16.59Z" />
                     </svg>
-
                     <svg className="tree-icon" viewBox="0 0 24 24">
                         <path d="M12,3L20,9V21H16V14H8V21H4V9L12,3Z" />
                     </svg>
-
                     <span>Root</span>
                 </div>
 
@@ -531,9 +129,15 @@ export default function FolderView() {
             {/* Main Area */}
             <main 
                 className="main-content"
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
+                onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                onDragLeave={() => setIsDragging(false)}
+                onDrop={(e) => {
+                    e.preventDefault();
+                    setIsDragging(false);
+                    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                        handleFileUpload(e.dataTransfer.files[0]);
+                    }
+                }}
             >
                 {/* Explorer Header */}
                 <div className="explorer-header">
@@ -568,24 +172,15 @@ export default function FolderView() {
                             </div>
                         )}
 
-                        <button 
-                            className="btn btn-secondary"
-                            onClick={() => setShowCreator(!showCreator)}
-                        >
-                            <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M20,6H12L10,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V8C22,6.89 21.1,6 20,6M18,12H14V16H12V12H8V10H12V6H14V10H18V12Z" />
-                            </svg>
+                        <button className="btn btn-secondary" onClick={() => setShowCreator(!showCreator)}>
                             New Folder
                         </button>
 
                         <button 
-                            className="btn btn-primary"
+                            className="btn btn-primary" 
                             onClick={() => document.getElementById("file-picker").click()}
                             disabled={isUploading}
                         >
-                            <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M9,16V10H5L12,3L19,10H15V16H9M5,20V18H19V20H5Z" />
-                            </svg>
                             {isUploading ? "Uploading..." : "Upload File"}
                         </button>
 
@@ -628,7 +223,7 @@ export default function FolderView() {
 
                 {/* Back button */}
                 {currentFolderId !== -1 && currentFolderId !== 0 && (
-                    <div>
+                    <div style={{ marginBottom: '12px' }}>
                         <button onClick={goBack} className="btn btn-secondary btn-sm">
                             ← Back
                         </button>
@@ -639,11 +234,7 @@ export default function FolderView() {
                 {currentFolderId > 0 && (
                     <div className={`upload-dropzone ${isDragging ? 'dragover' : ''}`}>
                         <div className="upload-dropzone-inner">
-                            <svg className="upload-icon" viewBox="0 0 24 24">
-                                <path d="M19.35,10.03C18.67,6.59 15.64,4 12,4C9.11,4 6.6,5.64 5.35,8.03C2.34,8.36 0,10.9 0,14C0,17.1 2.9,20 6,20H19C21.76,20 24,17.76 24,15C24,12.36 21.95,10.22 19.35,10.03M14,13V17H10V13H7L12,8L17,13H14Z" />
-                            </svg>
                             <span className="upload-dropzone-text">Drag & drop files here to upload</span>
-                            <span className="upload-dropzone-subtext">or click the Upload button above</span>
                         </div>
                     </div>
                 )}
@@ -655,9 +246,6 @@ export default function FolderView() {
                     </div>
                 ) : folders.length === 0 && files.length === 0 ? (
                     <div className="empty-state">
-                        <svg className="empty-state-svg" viewBox="0 0 24 24">
-                            <path d="M20,18H4V8H20M20,6H12L10,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V8C22,6.89 21.1,6 20,6Z" />
-                        </svg>
                         <h3 className="empty-state-title">This folder is empty</h3>
                         <p className="empty-state-text">
                             {currentFolderId <= 0 
@@ -665,7 +253,7 @@ export default function FolderView() {
                                 : "Upload a file or create a subfolder here."}
                         </p>
                     </div>
-                                ) : (
+                ) : (
                     <div className="files-list">
                         <div className="file-row file-row-header">
                             <div></div>
@@ -676,7 +264,7 @@ export default function FolderView() {
                             <div>Actions</div>
                         </div>
 
-                        {/* Folders first */}
+                        {/* Folders List */}
                         {folders.map(folder => {
                             const isEditing = editingItem && editingItem.type === 'folder' && editingItem.id === folder.id;
                             return (
@@ -686,7 +274,7 @@ export default function FolderView() {
                                     onClick={() => !isEditing && handleFolderSelect(folder)}
                                 >
                                     <div className="item-icon-col">
-                                        <svg className="folder-svg" viewBox="0 0 24 24">
+                                        <svg className="folder-svg" viewBox="0 0 24 24" width="20" height="20" style={{ fill: '#ffb020' }}>
                                             <path d="M10,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V8C22,6.89 21.1,6 20,6H12L10,4Z" />
                                         </svg>
                                     </div>
@@ -695,20 +283,19 @@ export default function FolderView() {
                                             <form 
                                                 onSubmit={(e) => handleRenameSubmit(e, folder.id, 'folder')} 
                                                 onClick={(e) => e.stopPropagation()}
-                                                style={{ display: 'flex', gap: '4px', alignItems: 'center' }}
+                                                style={{ display: 'flex', gap: '4px' }}
                                             >
                                                 <input 
                                                     value={renameValue} 
                                                     onChange={(e) => setRenameValue(e.target.value)} 
                                                     className="input-field" 
-                                                    style={{ padding: '2px 6px', fontSize: '13px' }}
                                                     autoFocus
                                                 />
-                                                <button type="submit" className="btn btn-primary" style={{ padding: '2px 8px', fontSize: '12px' }}>Save</button>
-                                                <button type="button" className="btn btn-secondary" onClick={() => setEditingItem(null)} style={{ padding: '2px 8px', fontSize: '12px' }}>Cancel</button>
+                                                <button type="submit" className="btn btn-primary">Save</button>
+                                                <button type="button" className="btn btn-secondary" onClick={() => setEditingItem(null)}>Cancel</button>
                                             </form>
                                         ) : (
-                                            <span title={folder.name}>{folder.name}</span>
+                                            <span>{folder.name}</span>
                                         )}
                                     </div>
                                     <div className="file-size">-</div>
@@ -717,33 +304,9 @@ export default function FolderView() {
                                     <div className="row-actions">
                                         {!isEditing && (
                                             <>
-                                                <button 
-                                                    className="action-btn"
-                                                    onClick={(e) => startRename(e, folder, 'folder')}
-                                                    title="Rename folder"
-                                                >
-                                                    <svg viewBox="0 0 24 24">
-                                                        <path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.07,6.19L3,17.25Z" />
-                                                    </svg>
-                                                </button>
-                                                <button 
-                                                    className="action-btn"
-                                                    onClick={(e) => startMove(e, folder, 'folder')}
-                                                    title="Move folder"
-                                                >
-                                                    <svg viewBox="0 0 24 24">
-                                                        <path d="M19,20H4C2.89,20 2,19.1 2,18V6C2,4.89 2.89,4 4,4H10L12,6H19A2,2 0 0,1 21,8V18A2,2 0 0,1 19,20M20,11H13V18H20V11Z" />
-                                                    </svg>
-                                                </button>
-                                                <button 
-                                                    className="action-btn btn-delete"
-                                                    onClick={(e) => deleteFolder(e, folder.id)}
-                                                    title="Delete folder"
-                                                >
-                                                    <svg viewBox="0 0 24 24">
-                                                        <path d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z" />
-                                                    </svg>
-                                                </button>
+                                                <button className="action-btn" onClick={(e) => { e.stopPropagation(); setEditingItem({ type: 'folder', id: folder.id }); setRenameValue(folder.name); }}>Rename</button>
+                                                <button className="action-btn" onClick={(e) => { e.stopPropagation(); setMovingItem({ type: 'folder', id: folder.id, name: folder.name }); }}>Move</button>
+                                                <button className="action-btn btn-delete" onClick={(e) => deleteFolder(e, folder.id)}>Delete</button>
                                             </>
                                         )}
                                     </div>
@@ -751,33 +314,31 @@ export default function FolderView() {
                             );
                         })}
 
-                        {/* Files second */}
+                        {/* Files List */}
                         {files.map(file => {
                             const isEditing = editingItem && editingItem.type === 'file' && editingItem.id === file.id;
                             return (
                                 <div key={`file-${file.id}`} className="file-row">
                                     <div className="item-icon-col">
-                                        {getFileIcon(file.mimeType)}
+                                        <FileIcon mimeType={file.mimeType} />
                                     </div>
                                     <div className="file-name">
                                         {isEditing ? (
                                             <form 
-                                                onSubmit={(e) => handleRenameSubmit(e, file.id, 'file')} 
-                                                onClick={(e) => e.stopPropagation()}
-                                                style={{ display: 'flex', gap: '4px', alignItems: 'center' }}
+                                                onSubmit={(e) => handleRenameSubmit(e, file.id, 'file')}
+                                                style={{ display: 'flex', gap: '4px' }}
                                             >
                                                 <input 
                                                     value={renameValue} 
                                                     onChange={(e) => setRenameValue(e.target.value)} 
                                                     className="input-field" 
-                                                    style={{ padding: '2px 6px', fontSize: '13px' }}
                                                     autoFocus
                                                 />
-                                                <button type="submit" className="btn btn-primary" style={{ padding: '2px 8px', fontSize: '12px' }}>Save</button>
-                                                <button type="button" className="btn btn-secondary" onClick={() => setEditingItem(null)} style={{ padding: '2px 8px', fontSize: '12px' }}>Cancel</button>
+                                                <button type="submit" className="btn btn-primary">Save</button>
+                                                <button type="button" className="btn btn-secondary" onClick={() => setEditingItem(null)}>Cancel</button>
                                             </form>
                                         ) : (
-                                            <span title={file.orgName}>{file.orgName}</span>
+                                            <span>{file.orgName}</span>
                                         )}
                                     </div>
                                     <div className="file-size">{formatBytes(file.size)}</div>
@@ -786,33 +347,10 @@ export default function FolderView() {
                                     <div className="row-actions">
                                         {!isEditing && (
                                             <>
-                                                <button 
-                                                    className="action-btn"
-                                                    onClick={(e) => startRename(e, file, 'file')}
-                                                    title="Rename file"
-                                                >
-                                                    <svg viewBox="0 0 24 24">
-                                                        <path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.07,6.19L3,17.25Z" />
-                                                    </svg>
-                                                </button>
-                                                <button 
-                                                    className="action-btn"
-                                                    onClick={(e) => startMove(e, file, 'file')}
-                                                    title="Move file"
-                                                >
-                                                    <svg viewBox="0 0 24 24">
-                                                        <path d="M19,20H4C2.89,20 2,19.1 2,18V6C2,4.89 2.89,4 4,4H10L12,6H19A2,2 0 0,1 21,8V18A2,2 0 0,1 19,20M20,11H13V18H20V11Z" />
-                                                    </svg>
-                                                </button>
-                                                <button 
-                                                    className="action-btn btn-delete"
-                                                    onClick={(e) => deleteFile(e, file.id)}
-                                                    title="Delete file"
-                                                >
-                                                    <svg viewBox="0 0 24 24">
-                                                        <path d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z" />
-                                                    </svg>
-                                                </button>
+                                                <button className="action-btn" onClick={(e) => downloadFile(e, file.id, file.orgName)}>Download</button>
+                                                <button className="action-btn" onClick={(e) => { e.stopPropagation(); setEditingItem({ type: 'file', id: file.id }); setRenameValue(file.orgName); }}>Rename</button>
+                                                <button className="action-btn" onClick={(e) => { e.stopPropagation(); setMovingItem({ type: 'file', id: file.id, name: file.orgName }); }}>Move</button>
+                                                <button className="action-btn btn-delete" onClick={(e) => deleteFile(e, file.id)}>Delete</button>
                                             </>
                                         )}
                                     </div>
@@ -823,19 +361,10 @@ export default function FolderView() {
                 )}
             </main>
 
-            {/* Custom sliding Toast notifications */}
+            {/* Toast Container */}
             <div className="toast-container">
                 {toasts.map(toast => (
                     <div key={toast.id} className={`toast toast-${toast.type}`}>
-                        {toast.type === "success" ? (
-                            <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                        ) : (
-                            <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                            </svg>
-                        )}
                         <span>{toast.message}</span>
                     </div>
                 ))}

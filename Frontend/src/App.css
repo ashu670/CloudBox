@@ -497,7 +497,7 @@ nav a.active {
 
 .file-row {
   display: grid;
-  grid-template-columns: 30px 2fr 100px 120px 140px 115px;
+  grid-template-columns: 30px 2fr 100px 120px 140px 135px;
   align-items: center;
   padding: 6px 12px;
   font-size: 13px;
