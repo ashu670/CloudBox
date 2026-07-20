@@ -497,7 +497,7 @@ nav a.active {
 
 .file-row {
   display: grid;
-  grid-template-columns: 30px 2fr 100px 120px 140px 60px;
+  grid-template-columns: 30px 2fr 100px 120px 140px 115px;
   align-items: center;
   padding: 6px 12px;
   font-size: 13px;
@@ -527,6 +527,48 @@ nav a.active {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.row-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  justify-content: flex-end;
+}
+
+.action-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  color: #9ca3af;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.action-btn svg {
+  width: 14px !important;
+  height: 14px !important;
+  min-width: 14px;
+  min-height: 14px;
+  fill: currentColor;
+}
+
+.file-row:hover .action-btn {
+  color: #6b7280;
+}
+
+.action-btn:hover {
+  background: #f3f4f6;
+  color: var(--accent) !important;
+}
+
+.action-btn.btn-delete:hover {
+  color: #ef4444 !important;
+  background: #fee2e2;
 }
 
 .file-name {

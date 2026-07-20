@@ -13,6 +13,11 @@ export default function FolderView() {
     const [isDragging, setIsDragging] = useState(false);
     const [showCreator, setShowCreator] = useState(false);
 
+    // States for rename and move operations
+    const [editingItem, setEditingItem] = useState(null); // { type: 'file' | 'folder', id: number }
+    const [renameValue, setRenameValue] = useState("");
+    const [movingItem, setMovingItem] = useState(null); // { type: 'file' | 'folder', id: number, name: string }
+
     // Toast notifications
     const [toasts, setToasts] = useState([]);
 
@@ -165,6 +170,104 @@ export default function FolderView() {
         } catch (err) {
             console.error(err);
             showToast(err.response?.data?.error || "Failed to delete folder", "error");
+        }
+    };
+
+    const deleteFile = async (e, fileId) => {
+        e.stopPropagation();
+        if (!window.confirm("Are you sure you want to delete this file?")) return;
+
+        try {
+            const token = localStorage.getItem("accessToken");
+            await axios.delete(`api/file/delete/${fileId}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            showToast("File deleted successfully", "success");
+            fetchFolders();
+        } catch (err) {
+            console.error(err);
+            showToast(err.response?.data?.error || "Failed to delete file", "error");
+        }
+    };
+
+    const startRename = (e, item, type) => {
+        e.stopPropagation();
+        setEditingItem({ type, id: item.id });
+        setRenameValue(type === 'folder' ? item.name : item.orgName);
+    };
+
+    const handleRenameSubmit = async (e, id, type) => {
+        e.preventDefault();
+        if (!renameValue.trim()) return;
+
+        try {
+            const token = localStorage.getItem("accessToken");
+            if (type === 'folder') {
+                await axios.patch(`api/folder/rename/${id}`, {
+                    newName: renameValue
+                }, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                showToast("Folder renamed successfully", "success");
+                fetchTreeSubfolders(currentFolderId);
+            } else {
+                await axios.patch(`api/file/rename/${id}`, {
+                    newName: renameValue
+                }, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                showToast("File renamed successfully", "success");
+            }
+            setEditingItem(null);
+            fetchFolders();
+        } catch (err) {
+            console.error(err);
+            showToast(err.response?.data?.error || `Failed to rename ${type}`, "error");
+        }
+    };
+
+    const startMove = (e, item, type) => {
+        e.stopPropagation();
+        const name = type === 'folder' ? item.name : item.orgName;
+        setMovingItem({ type, id: item.id, name });
+        showToast(`Moving "${name}". Navigate to destination and click "Move Here".`, "success");
+    };
+
+    const executeMove = async () => {
+        if (!movingItem) return;
+
+        if (movingItem.type === 'file' && currentFolderId <= 0) {
+            showToast("Files cannot be moved to the root folder. Please open a subfolder.", "error");
+            return;
+        }
+
+        if (movingItem.type === 'folder' && movingItem.id === currentFolderId) {
+            showToast("Cannot move a folder into itself.", "error");
+            return;
+        }
+
+        try {
+            const token = localStorage.getItem("accessToken");
+            const targetPid = currentFolderId === -1 ? 0 : currentFolderId;
+
+            if (movingItem.type === 'folder') {
+                await axios.patch(`api/folder/move/${movingItem.id}/${targetPid}`, {}, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                showToast("Folder moved successfully", "success");
+                fetchTreeSubfolders(-1);
+                fetchTreeSubfolders(currentFolderId);
+            } else {
+                await axios.patch(`api/file/move/${movingItem.id}/${targetPid}`, {}, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                showToast("File moved successfully", "success");
+            }
+            setMovingItem(null);
+            fetchFolders();
+        } catch (err) {
+            console.error(err);
+            showToast(err.response?.data?.error || "Failed to move item", "error");
         }
     };
 
@@ -454,7 +557,17 @@ export default function FolderView() {
                         ))}
                     </div>
 
-                    <div className="toolbar-actions">
+                    <div className="toolbar-actions" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {movingItem && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--accent-bg)', border: '1px solid var(--accent-border)', padding: '6px 12px', borderRadius: '6px', marginRight: '8px' }}>
+                                <span style={{ fontSize: '13px', color: 'var(--accent)', fontWeight: 500 }}>
+                                    Moving <strong>{movingItem.name}</strong>
+                                </span>
+                                <button type="button" className="btn btn-primary" onClick={executeMove} style={{ padding: '4px 10px', fontSize: '12px' }}>Move Here</button>
+                                <button type="button" className="btn btn-secondary" onClick={() => setMovingItem(null)} style={{ padding: '4px 10px', fontSize: '12px' }}>Cancel</button>
+                            </div>
+                        )}
+
                         <button 
                             className="btn btn-secondary"
                             onClick={() => setShowCreator(!showCreator)}
@@ -564,52 +677,148 @@ export default function FolderView() {
                         </div>
 
                         {/* Folders first */}
-                        {folders.map(folder => (
-                            <div 
-                                key={`folder-${folder.id}`} 
-                                className="file-row clickable-row"
-                                onClick={() => handleFolderSelect(folder)}
-                            >
-                                <div className="item-icon-col">
-                                    <svg className="folder-svg" viewBox="0 0 24 24">
-                                        <path d="M10,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V8C22,6.89 21.1,6 20,6H12L10,4Z" />
-                                    </svg>
-                                </div>
-                                <div className="file-name" title={folder.name}>
-                                    {folder.name}
-                                </div>
-                                <div className="file-size">-</div>
-                                <div className="file-type">File folder</div>
-                                <div className="file-date">{formatDate(folder.createdAt)}</div>
-                                <div>
-                                    <button 
-                                        className="delete-btn"
-                                        onClick={(e) => deleteFolder(e, folder.id)}
-                                        title="Delete folder"
-                                    >
-                                        <svg className="delete-icon" viewBox="0 0 24 24">
-                                            <path d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z" />
+                        {folders.map(folder => {
+                            const isEditing = editingItem && editingItem.type === 'folder' && editingItem.id === folder.id;
+                            return (
+                                <div 
+                                    key={`folder-${folder.id}`} 
+                                    className="file-row clickable-row"
+                                    onClick={() => !isEditing && handleFolderSelect(folder)}
+                                >
+                                    <div className="item-icon-col">
+                                        <svg className="folder-svg" viewBox="0 0 24 24">
+                                            <path d="M10,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V8C22,6.89 21.1,6 20,6H12L10,4Z" />
                                         </svg>
-                                    </button>
+                                    </div>
+                                    <div className="file-name">
+                                        {isEditing ? (
+                                            <form 
+                                                onSubmit={(e) => handleRenameSubmit(e, folder.id, 'folder')} 
+                                                onClick={(e) => e.stopPropagation()}
+                                                style={{ display: 'flex', gap: '4px', alignItems: 'center' }}
+                                            >
+                                                <input 
+                                                    value={renameValue} 
+                                                    onChange={(e) => setRenameValue(e.target.value)} 
+                                                    className="input-field" 
+                                                    style={{ padding: '2px 6px', fontSize: '13px' }}
+                                                    autoFocus
+                                                />
+                                                <button type="submit" className="btn btn-primary" style={{ padding: '2px 8px', fontSize: '12px' }}>Save</button>
+                                                <button type="button" className="btn btn-secondary" onClick={() => setEditingItem(null)} style={{ padding: '2px 8px', fontSize: '12px' }}>Cancel</button>
+                                            </form>
+                                        ) : (
+                                            <span title={folder.name}>{folder.name}</span>
+                                        )}
+                                    </div>
+                                    <div className="file-size">-</div>
+                                    <div className="file-type">File folder</div>
+                                    <div className="file-date">{formatDate(folder.createdAt)}</div>
+                                    <div className="row-actions">
+                                        {!isEditing && (
+                                            <>
+                                                <button 
+                                                    className="action-btn"
+                                                    onClick={(e) => startRename(e, folder, 'folder')}
+                                                    title="Rename folder"
+                                                >
+                                                    <svg viewBox="0 0 24 24">
+                                                        <path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.07,6.19L3,17.25Z" />
+                                                    </svg>
+                                                </button>
+                                                <button 
+                                                    className="action-btn"
+                                                    onClick={(e) => startMove(e, folder, 'folder')}
+                                                    title="Move folder"
+                                                >
+                                                    <svg viewBox="0 0 24 24">
+                                                        <path d="M19,20H4C2.89,20 2,19.1 2,18V6C2,4.89 2.89,4 4,4H10L12,6H19A2,2 0 0,1 21,8V18A2,2 0 0,1 19,20M20,11H13V18H20V11Z" />
+                                                    </svg>
+                                                </button>
+                                                <button 
+                                                    className="action-btn btn-delete"
+                                                    onClick={(e) => deleteFolder(e, folder.id)}
+                                                    title="Delete folder"
+                                                >
+                                                    <svg viewBox="0 0 24 24">
+                                                        <path d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z" />
+                                                    </svg>
+                                                </button>
+                                            </>
+                                        )}
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
 
                         {/* Files second */}
-                        {files.map(file => (
-                            <div key={`file-${file.id}`} className="file-row">
-                                <div className="item-icon-col">
-                                    {getFileIcon(file.mimeType)}
+                        {files.map(file => {
+                            const isEditing = editingItem && editingItem.type === 'file' && editingItem.id === file.id;
+                            return (
+                                <div key={`file-${file.id}`} className="file-row">
+                                    <div className="item-icon-col">
+                                        {getFileIcon(file.mimeType)}
+                                    </div>
+                                    <div className="file-name">
+                                        {isEditing ? (
+                                            <form 
+                                                onSubmit={(e) => handleRenameSubmit(e, file.id, 'file')} 
+                                                onClick={(e) => e.stopPropagation()}
+                                                style={{ display: 'flex', gap: '4px', alignItems: 'center' }}
+                                            >
+                                                <input 
+                                                    value={renameValue} 
+                                                    onChange={(e) => setRenameValue(e.target.value)} 
+                                                    className="input-field" 
+                                                    style={{ padding: '2px 6px', fontSize: '13px' }}
+                                                    autoFocus
+                                                />
+                                                <button type="submit" className="btn btn-primary" style={{ padding: '2px 8px', fontSize: '12px' }}>Save</button>
+                                                <button type="button" className="btn btn-secondary" onClick={() => setEditingItem(null)} style={{ padding: '2px 8px', fontSize: '12px' }}>Cancel</button>
+                                            </form>
+                                        ) : (
+                                            <span title={file.orgName}>{file.orgName}</span>
+                                        )}
+                                    </div>
+                                    <div className="file-size">{formatBytes(file.size)}</div>
+                                    <div className="file-type">{getFileTypeLabel(file.mimeType)}</div>
+                                    <div className="file-date">{formatDate(file.createdAt)}</div>
+                                    <div className="row-actions">
+                                        {!isEditing && (
+                                            <>
+                                                <button 
+                                                    className="action-btn"
+                                                    onClick={(e) => startRename(e, file, 'file')}
+                                                    title="Rename file"
+                                                >
+                                                    <svg viewBox="0 0 24 24">
+                                                        <path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.07,6.19L3,17.25Z" />
+                                                    </svg>
+                                                </button>
+                                                <button 
+                                                    className="action-btn"
+                                                    onClick={(e) => startMove(e, file, 'file')}
+                                                    title="Move file"
+                                                >
+                                                    <svg viewBox="0 0 24 24">
+                                                        <path d="M19,20H4C2.89,20 2,19.1 2,18V6C2,4.89 2.89,4 4,4H10L12,6H19A2,2 0 0,1 21,8V18A2,2 0 0,1 19,20M20,11H13V18H20V11Z" />
+                                                    </svg>
+                                                </button>
+                                                <button 
+                                                    className="action-btn btn-delete"
+                                                    onClick={(e) => deleteFile(e, file.id)}
+                                                    title="Delete file"
+                                                >
+                                                    <svg viewBox="0 0 24 24">
+                                                        <path d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z" />
+                                                    </svg>
+                                                </button>
+                                            </>
+                                        )}
+                                    </div>
                                 </div>
-                                <div className="file-name" title={file.orgName}>
-                                    {file.orgName}
-                                </div>
-                                <div className="file-size">{formatBytes(file.size)}</div>
-                                <div className="file-type">{getFileTypeLabel(file.mimeType)}</div>
-                                <div className="file-date">{formatDate(file.createdAt)}</div>
-                                <div></div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 )}
             </main>
