@@ -2,6 +2,7 @@ import fs from "fs/promises";
 import path from "path";
 import * as fileRepo from "../repositories/fileRepo.js";
 import * as folderRepo from "../repositories/folderRepo.js";
+import { touchFolder } from "./folderService.js";
 import storageService from "../storage/storageService.js";
 
 const UPLOAD_BASE_DIR = path.resolve("uploads");
@@ -59,6 +60,8 @@ export const uploadFile = async (file, folderId, uid) => {
             uid: uid
         };
 
+        touchFolder(folderId);
+
         return await fileRepo.create(data);   // Saving in Database
     } catch (error) {
         // 4. Rollback: delete the uploaded file from disk if DB insertion fails
@@ -70,6 +73,7 @@ export const uploadFile = async (file, folderId, uid) => {
 export const del = async (id, uid) => {
     const valid = await fileRepo.findByUserId(id, uid);
     if(!valid) throw new Error("File not exists or access denied");
+    touchFolder(valid.folderId);
     await storageService.delete(valid.stoName);
 
     return await fileRepo.delById(id);
@@ -101,6 +105,7 @@ export const renameFile = async (id, uid, newOrgName) => {
 
     try {
         // 4. Update the database record parameters using your repository update method
+        touchFolder(currentFile.folderId);
         return await fileRepo.update(id, newStoName, newOrgName);
     } catch (error) {
         // 5. Rollback on disk if the Postgres transaction query fails

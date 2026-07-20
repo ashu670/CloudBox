@@ -33,6 +33,8 @@ export const createFolder = async (name, pid, uid) => {
         count++;
     }
 
+    touchFolder(pid);
+    
     return await repo.create({
         name: uniqueName,
         pid,
@@ -47,8 +49,7 @@ export const fetchFolder = async (uid, pid) => {
 
     const valid = await validateFolder(pid, uid);
 
-    if (!valid)
-        throw new Error("Parent folder not found or access denied");
+    if (!valid) throw new Error("Parent folder not found or access denied");
 
     return await repo.findChildren(uid, pid);
 };
@@ -58,8 +59,23 @@ export const delFolder = async (uid, id) => {
 
     const valid = await validateFolder(id, uid);
 
-    if (!valid)
-        throw new Error("Folder not found or access denied");
+    if (!valid) throw new Error("Folder not found or access denied");
+    if(valid.pid) touchFolder(valid.pid);
 
     return await repo.deleteFolder(id);
 };
+
+export const rename = async (id, uid, newName) => {
+    if(!newName || !newName.trim()) throw new Error("New folder name is required");
+
+    const valid = await validateFolder(id, uid);
+    if(!valid) throw new Error("FOlder not found or access denied");
+    if(valid.pid) touchFolder(valid.pid);
+
+    return await repo.renameFolder(id, newName);
+}
+
+export const touchFolder = async (id) => {
+    const folder = await repo.touch(id);
+    if(folder.pid) touchFolder(folder.pid);
+}
