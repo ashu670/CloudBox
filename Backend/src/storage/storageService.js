@@ -46,14 +46,10 @@ const storageService = {
         }
     },
 
-    async rename(newName, oldName){
+    async rename(oldName, newName) {
         const oldPath = path.join(UPLOAD_BASE_DIR, oldName);
         const newPath = path.join(UPLOAD_BASE_DIR, newName);
-        try{
-            await fs.rename(oldPath, newPath);
-        }catch(err){
-            console.log(err);
-        }
+        await fs.rename(oldPath, newPath);
     }
 };
 

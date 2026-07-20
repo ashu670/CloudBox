@@ -30,7 +30,7 @@ export const findAllByFolderId = async (folderId) => {
 };
 
 export const findByUserId = async (id, uid) => {
-    return await prisma.file.findUnique({
+    return await prisma.file.findFirst({
         where : {
             id,
             uid : uid
@@ -46,6 +46,15 @@ export const delById = async (id) => {
 
 export const update = async (id, stoName, orgName) => {
     const data = {orgName : orgName, stoName : stoName};
+    return await prisma.file.update({
+        where : {id},
+        data : data
+    });
+};
+
+export const move = async (id, newPid) => {
+    const data = {folderId : newPid};
+
     return await prisma.file.update({
         where : {id},
         data : data

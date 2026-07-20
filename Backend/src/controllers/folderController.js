@@ -1,3 +1,4 @@
+import { error } from "console";
 import * as service from "../services/folderService.js";
 
 export const create = async (req, res) => {
@@ -49,6 +50,19 @@ export const rename = async (req, res) => {
     try{
         const response = await service.rename(id, uid, newName);
         return res.status(200).json(response);
+    }catch(err){
+        res.status(500).json({error : err.message});
+    }
+}
+
+export const move = async (req, res) => {
+    const id = Number(req.params.id);
+    const uid = req.user.id;
+    const newPid = Number(req.params.pid);
+
+    try{
+        const response = await service.move(id, uid, newPid);
+        return res.status(200).json({message : 'folder moved successful', response});
     }catch(err){
         res.status(500).json({error : err.message});
     }
