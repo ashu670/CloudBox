@@ -113,3 +113,13 @@ export const renameFile = async (id, uid, newOrgName) => {
         throw error;
     }
 };
+
+export const move = async (id, uid, newPid) => {
+    const validFile = await fileRepo.findByUserId(id, uid);
+    if(!validFile) throw new Error("File does not exists or access denied");
+
+    const validFolder = await folderRepo.findByIdAndUser(newPid, uid);
+    if(!validFolder) throw new Error("Folder doesn't exists or access denied");
+
+    return await fileRepo.move(id, newPid);
+}

@@ -88,3 +88,12 @@ export const touch = async (id) => {
         }
     });
 };
+
+export const move = async (id, newPid) => {
+    return await prisma.folder.update({
+        where : {id},
+        data : {
+            pid : newPid
+        }
+    });
+};

@@ -63,3 +63,15 @@ export const rename = async (req, res) => {
         res.status(500).json({error : err.message});
     }
 }
+
+export const move = async (req, res) => {
+    const id = Number(req.params.id);
+    const pid = Number(req.params.pid);
+    const uid = req.user.id;
+    try{
+        const response = await fileService.move(id, uid, pid);
+        res.status(200).json({message : "File moved succesfully", response});
+    }catch(err){
+        res.status(500).json({error : err.message});
+    }
+}
