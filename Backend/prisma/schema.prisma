@@ -11,12 +11,21 @@ enum Role{
     ADMIN
 }
 
+enum Provider{
+  LOCAL
+  GOOGLE
+}
+
 model User {
   id        Int      @id @default(autoincrement())
   name      String
   email     String   @unique
-  password  String
+  password  String?
+
+  provider  Provider @default(LOCAL)
+  googleId  String?  @unique
   role      Role     @default(USER)
+
   createdAt DateTime @default(now()) // default used so that e dont need to give the values
   updatedAt DateTime @updatedAt
 
