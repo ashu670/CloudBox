@@ -20,6 +20,17 @@ const generateTokens = (user) => {
     return {accessToken, refreshToken};
 };
 
+export const googleTokens = (data) => {
+    const accessToken = jwt.sign(data, process.env.JWT_SECRET, {expiresIn : "1h"});
+    const refreshToken = jwt.sign(
+        {id : data.id},
+        process.env.JWT_SECRET_REF,
+        {expiresIn : '7d'}
+    );
+
+    return {accessToken, refreshToken};
+}
+
 export const registerUser = async (name, email, password) => {
     const existing = await prisma.user.findUnique({where : {email}});
     if(existing) throw new Error('Email already exists');
