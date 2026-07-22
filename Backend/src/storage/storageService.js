@@ -15,20 +15,6 @@ async function ensureDirectoryExists(dirPath) {
     }
 }
 
-/**
- * Storage Service should ONLY:
- * - receive a file
- * - receive a final storage filename
- * - write the file to disk
- * - return success/path
- *
- * It should NOT know:
- * - uid
- * - folderId
- * - users
- * - folders
- * - database
- */
 const storageService = {
     async store(file, storageName) {
         if (!file || !file.buffer) {
@@ -58,6 +44,16 @@ const storageService = {
                 throw error;
             }
         }
+    },
+
+    async rename(oldName, newName) {
+        const oldPath = path.join(UPLOAD_BASE_DIR, oldName);
+        const newPath = path.join(UPLOAD_BASE_DIR, newName);
+        await fs.rename(oldPath, newPath);
+    },
+
+    getFilePath(stoName){
+        return path.join(UPLOAD_BASE_DIR, stoName);
     }
 };
 

@@ -20,8 +20,9 @@ router.get("/members/:folderId",checkFolderRole("OWNER"),folderCon.getFolderMemb
 
 // PATCH Routes
 router.patch("/request/approve",checkFolderRole("OWNER"),folderCon.approveRequest);
-
 router.patch("/request/reject",checkFolderRole("OWNER"),folderCon.rejectRequest);
+router.patch('/rename/:id', folderCon.rename);
+router.patch('/move/:id/:pid', folderCon.move);
 
 // DELETE Routes
 router.delete("/delete/:id", folderCon.deleteFolder);
