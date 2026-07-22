@@ -89,3 +89,30 @@ export const findById = async (id) => {
         }
     });
 };
+
+
+export const renameFolder = async (id, newName) => {
+    const data = {name : newName};
+    return await prisma.folder.update({
+        where : {id},
+        data : data
+    });
+}
+
+export const touch = async (id) => {
+    return await prisma.folder.update({
+        where : {id},
+        data : {
+            updatedAt : new Date()
+        }
+    });
+};
+
+export const move = async (id, newPid) => {
+    return await prisma.folder.update({
+        where : {id},
+        data : {
+            pid : newPid
+        }
+    });
+};
