@@ -72,6 +72,25 @@ export const deleteFolder = async (id) => {
     });
 };
 
+
+
+export const findByInviteCode = async (inviteCode) => {
+    return await prisma.folder.findUnique({
+        where: {
+            inviteCode
+        }
+    });
+};
+
+export const findById = async (id) => {
+    return await prisma.folder.findUnique({
+        where: {
+            id
+        }
+    });
+};
+
+
 export const renameFolder = async (id, newName) => {
     const data = {name : newName};
     return await prisma.folder.update({
