@@ -11,7 +11,8 @@ swagger-ui-express swagger-jsdoc \
 redis \
 kafkajs \
 minio \
-prom-client
+prom-client \
+passport passport-google-oauth20 jsonwebtoken
 
 npm install -D \
 prisma \
