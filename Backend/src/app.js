@@ -10,7 +10,7 @@ import cookieParser from "cookie-parser";
 import authRoutes from "./routes/authRoutes.js";
 import folderRoutes from "./routes/folderRoutes.js";
 import fileRoutes from "./routes/fileRoutes.js";
-
+import passport from './config/passport.js';
 
 const app = express();
 
@@ -38,6 +38,8 @@ app.use(express.urlencoded({ extended: true }));
 
 // Parse Cookies
 app.use(cookieParser());
+
+app.use(passport.initialize());
 
 /* ---------------------- Routes ---------------------- */
 
