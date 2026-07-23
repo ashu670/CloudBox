@@ -50,3 +50,22 @@ export const logout = (req, res) => {
 export const getProfile = (req, res) => {
     return res.status(200).json({user : req.user});
 }
+
+export const handleGoogleCallback = async (req, res) => {
+    const data = {
+        id : req.user.id,
+        email : req.user.email,
+        role : req.user.role
+    };
+
+    try{
+        const {accessToken, refreshToken} = await authService.googleTokens(data);
+
+        res.cookie("refreshToken", refreshToken, COOKIE_OPTIONS);
+        const frontendURL = process.env.FRONTEND_URL;
+        return res.status(200).json({message : "everything works fine bryh"});
+        res.redirect(`${frontendURL}/auth/success?token=${accessToken}`);
+    }catch(err){
+        return res.status(500).json({error : "Failed to generate authentication tokens"});
+    }
+}
