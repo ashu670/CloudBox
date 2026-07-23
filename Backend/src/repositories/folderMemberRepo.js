@@ -7,10 +7,19 @@ export const create = async (data) => {
 };
 
 export const findMember = async (folderId, userId) => {
-    return await prisma.folderMember.findFirst({
+    const normalizedFolderId = Number(folderId);
+    const normalizedUserId = Number(userId);
+
+    if (!Number.isInteger(normalizedFolderId) || !Number.isInteger(normalizedUserId)) {
+        return null;
+    }
+
+    return await prisma.folderMember.findUnique({
         where: {
-            folderId,
-            userId,
+            folderId_userId: {
+                folderId: normalizedFolderId,
+                userId: normalizedUserId,
+            },
         },
     });
 };

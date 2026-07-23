@@ -125,8 +125,11 @@ export const move = async (id, uid, newPid) => {
 }
 
 export const download = async (id, uid) => {
-    const file = await fileRepo.findByUserId(id, uid);
-    if(!file) throw new Error("File doesnt exist or access denied");
+    const file = await fileRepo.findById(id);
+    if (!file) throw new Error("File doesnt exist or access denied");
+
+    const hasAccess = await folderRepo.canAccessFolder(file.folderId, uid);
+    if (!hasAccess) throw new Error("File doesnt exist or access denied");
 
     const absolutePath = storageService.getFilePath(file.stoName);
 

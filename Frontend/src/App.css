@@ -299,6 +299,9 @@ nav a.active {
 
 .toolbar-actions {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
   gap: 8px;
 }
 
@@ -664,4 +667,193 @@ nav a.active {
 @keyframes slideIn {
   from { opacity: 0; transform: translateX(30px); }
   to { opacity: 1; transform: translateX(0); }
+}
+
+/* Shared folder panels */
+.shared-view-panel {
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 4px;
+}
+
+.shared-folder-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.shared-folder-card h3,
+.folder-requests-container h4,
+.folder-members-container h4 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.shared-folder-card form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.shared-folder-card form .input-field {
+  flex: 1 1 200px;
+  max-width: 320px;
+}
+
+.invite-code-container {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.invite-code-container code {
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
+  color: var(--accent);
+  background: var(--accent-bg);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.error-msg {
+  color: #ef4444;
+  font-size: 13px;
+  margin: 0;
+}
+
+.success-msg {
+  color: #10b981;
+  font-size: 13px;
+  margin: 0;
+}
+
+.shared-loading,
+.shared-empty {
+  font-size: 13px;
+  color: var(--text);
+  margin: 0;
+}
+
+.requests-list,
+.members-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.request-card,
+.member-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.request-card .request-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.status-badge {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--accent);
+  background: var(--accent-bg);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.role-tag {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: #6b7280;
+  background: var(--code-bg);
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.member-card p {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.btn-sm {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.btn-reject:hover {
+  color: #ef4444 !important;
+  border-color: #fecaca !important;
+  background: #fee2e2 !important;
+}
+
+.move-banner {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-border, var(--border));
+  padding: 6px 12px;
+  border-radius: 6px;
+  margin-right: 4px;
+}
+
+.move-banner-text {
+  font-size: 13px;
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.toolbar-actions .btn.active {
+  background: var(--accent-bg);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+@media (max-width: 768px) {
+  .explorer-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .toolbar-actions {
+    justify-content: flex-start;
+  }
+
+  .shared-folder-card form .input-field {
+    max-width: none;
+    flex: 1 1 100%;
+  }
+
+  .request-card,
+  .member-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 }

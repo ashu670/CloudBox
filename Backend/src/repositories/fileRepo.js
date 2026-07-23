@@ -38,6 +38,12 @@ export const findByUserId = async (id, uid) => {
     });
 };
 
+export const findById = async (id) => {
+    return await prisma.file.findUnique({
+        where: { id },
+    });
+};
+
 export const delById = async (id) => {
     return await prisma.file.delete({
         where : {id}

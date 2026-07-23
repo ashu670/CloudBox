@@ -21,7 +21,13 @@ export const authenticate = (req, res, next) => {
 
     try{
        const decode = jwt.verify(token, process.env.JWT_SECRET); // Verifies the received JWT by checking its signature with the secret key (header + payload + secret); if valid, it returns the decoded payload.          or       Uses the server's JWT secret key to verify whether the received JWT is valid, untampered, and not expired. If valid, it returns the decoded payload.
-        req.user = decode;  // abhi jo current m user h jisee authenticate kiya h req.user m ussi ki id and role aayegi 
+        const userId = Number(decode.id);
+
+        if (!Number.isInteger(userId)) {
+            return res.status(401).json({ error: "Invalid token" });
+        }
+
+        req.user = { ...decode, id: userId };  // abhi jo current m user h jisee authenticate kiya h req.user m ussi ki id and role aayegi 
 
         next();
     }catch(error){
