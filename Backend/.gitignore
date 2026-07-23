@@ -12,6 +12,8 @@ frontend/node_modules/
 .env.*
 !.env.example
 
+googleSecrets.json
+
 # ==========================
 # Logs
 # ==========================

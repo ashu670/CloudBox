@@ -44,8 +44,6 @@ model User {
   googleId  String?  @unique
   role      Role     @default(USER)
   createdAt DateTime @default(now())
-
-  createdAt DateTime @default(now()) // default used so that e dont need to give the values
   updatedAt DateTime @updatedAt
 
   folders        Folder[]
