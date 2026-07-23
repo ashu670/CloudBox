@@ -2,13 +2,15 @@ import * as repo from "../repositories/folderRepo.js";
 import generateInviteCode from "../utils/inviteCodeGenerator.js";
 import * as memberRepo from "../repositories/folderMemberRepo.js";
 import * as requestRepo from "../repositories/folderJoinRequestRepo.js";
-
+import { prisma } from "../config/db.js";
 const validateFolder = async (id, uid) => {
     if (!id) return true;
 
-    const folder = await repo.findByIdAndUser(id, uid);
+    const folder = await repo.findById(id);
+    if (!folder) return null;
 
-    return folder;
+    const hasAccess = await repo.canAccessFolder(id, uid);
+    return hasAccess ? folder : null;
 };
 
 export const createFolder = async (name, pid, uid) => {
@@ -102,20 +104,20 @@ export const createSharedFolder = async (name, uid) => {
 };
 
 
-export const joinSharedFolder = async (
-    inviteCode,
-    uid
-) => {
+export const joinSharedFolder = async (inviteCode, uid) => {
+    const userId = Number(uid);
 
-    console.log("\n========== JOIN DEBUG ==========");
+    if (!Number.isInteger(userId)) {
+        throw new Error("Invalid user session.");
+    }
 
-    console.log("UID =", uid);
-    console.log("Invite Code =", inviteCode);
+    const normalizedInviteCode = inviteCode?.trim();
 
-    const folder =
-        await repo.findByInviteCode(inviteCode);
+    if (!normalizedInviteCode) {
+        throw new Error("Invite code is required.");
+    }
 
-    console.log("FULL FOLDER =", folder);
+    const folder = await repo.findByInviteCode(normalizedInviteCode);
 
     if (!folder) {
         throw new Error("Invalid invite code.");
@@ -129,52 +131,39 @@ export const joinSharedFolder = async (
         throw new Error("Invite code is disabled.");
     }
 
-    console.log("Folder ID =", folder.id);
-
-    const member =
-        await memberRepo.findMember(
-            folder.id,
-            uid
-        );
-
-    console.log("MEMBER =", member);
+    const member = await memberRepo.findMember(folder.id, userId);
 
     if (member) {
-        throw new Error(
-            "You are already a member."
-        );
+        return {
+            folderName: folder.name,
+            status: member.role === "OWNER" ? "OWNER" : "MEMBER",
+            message:
+                member.role === "OWNER"
+                    ? "You already own this folder."
+                    : "You are already a member of this folder.",
+        };
     }
 
-    const request =
-        await requestRepo.findRequest(
-            folder.id,
-            uid
-        );
+    const pendingRequest = await requestRepo.findPendingRequest(folder.id, userId);
 
-    console.log("REQUEST =", request);
-
-    if (request) {
-        throw new Error(
-            "Join request already exists."
-        );
+    if (pendingRequest) {
+        return {
+            folderName: folder.name,
+            status: "PENDING",
+            message: "Join request already pending approval.",
+        };
     }
 
     await requestRepo.create({
-
         folderId: folder.id,
-
-        requestedBy: uid
-
+        requestedBy: userId,
     });
-
-    console.log("Join request created successfully.");
-    console.log("=================================\n");
 
     return {
         folderName: folder.name,
-        status: "PENDING"
+        status: "PENDING",
+        message: "Join request sent successfully.",
     };
-
 };
 
 export const getFolderRequests = async (
@@ -209,16 +198,9 @@ export const getFolderRequests = async (
 
     const requests =
         await requestRepo.findByFolderId(
-            folderId
+            folderId,
+            "PENDING"
         );
-
-
-    if (!requests.length) {
-        throw new Error(
-            "No join requests found."
-        );
-    }
-
 
     return requests;
 
@@ -256,15 +238,19 @@ export const approveRequest = async (requestId, uid) => {
         throw new Error("User is already a member of this folder.");
     }
 
-    await requestRepo.updateStatus(
-    request.id,
-    "APPROVED"
-);
+    await prisma.$transaction(async (tx) => {
+        await tx.folderJoinRequest.update({
+            where: { id: request.id },
+            data: { status: "APPROVED" },
+        });
 
-    await memberRepo.create({
-    folderId: request.folderId,
-    userId: request.requestedBy,
-    role: "VIEWER"
+        await tx.folderMember.create({
+            data: {
+                folderId: request.folderId,
+                userId: request.requestedBy,
+                role: "VIEWER",
+            },
+        });
     });
 
     return {

@@ -1,16 +1,49 @@
+import { useState, useEffect } from "react";
 import { useFolderManager } from "../hooks/useFolderManager";
 import { formatBytes, formatDate } from "../utils/formatters";
-import FileIcon from "../components/FileIcon"; // Correct relative import path
+import FileIcon from "../components/FileIcon";
+import CreateSharedFolder from "../components/CreateSharedFolder";
+import JoinSharedFolder from "../components/JoinSharedFolder";
+import FolderRequests from "../components/FolderRequests";
+import FolderMembers from "../components/FolderMembers";
+
 
 export default function FolderView() {
     const {
         folders, files, currentFolderId, history, folderName, setFolderName,
         loading, isUploading, isDragging, setIsDragging, showCreator, setShowCreator,
         editingItem, setEditingItem, renameValue, setRenameValue, movingItem, setMovingItem,
-        toasts, expandedFolders, treeNodes, createFolder, deleteFolder, deleteFile,
+        toasts, expandedFolders, treeNodes, currentFolderInfo,
+        createFolder, deleteFolder, deleteFile,
         downloadFile, handleRenameSubmit, executeMove, handleFileUpload,
-        handleFolderSelect, toggleFolderExpand, goBack
+        handleFolderSelect, toggleFolderExpand, goBack, refreshAfterSharedAction
     } = useFolderManager();
+
+    const [sharedPanel, setSharedPanel] = useState(null);
+
+    const toggleSharedPanel = (panel) => {
+        setSharedPanel((prev) => (prev === panel ? null : panel));
+    };
+
+    const handleSharedFolderCreated = async () => {
+        await refreshAfterSharedAction();
+    };
+
+    const handleSharedFolderJoined = async () => {
+        await refreshAfterSharedAction();
+    };
+
+    const handleRequestHandled = async () => {
+        await refreshAfterSharedAction();
+    };
+
+    const isSharedFolderContext = currentFolderInfo?.isShared === true;
+
+    useEffect(() => {
+        if (!isSharedFolderContext && (sharedPanel === 'requests' || sharedPanel === 'members')) {
+            setSharedPanel(null);
+        }
+    }, [isSharedFolderContext, sharedPanel]);
 
     // Helper to format type labels
     const getFileTypeLabel = (mimeType) => {
@@ -161,22 +194,58 @@ export default function FolderView() {
                         ))}
                     </div>
 
-                    <div className="toolbar-actions" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div className="toolbar-actions">
                         {movingItem && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--accent-bg)', border: '1px solid var(--accent-border)', padding: '6px 12px', borderRadius: '6px', marginRight: '8px' }}>
-                                <span style={{ fontSize: '13px', color: 'var(--accent)', fontWeight: 500 }}>
+                            <div className="move-banner">
+                                <span className="move-banner-text">
                                     Moving <strong>{movingItem.name}</strong>
                                 </span>
-                                <button type="button" className="btn btn-primary" onClick={executeMove} style={{ padding: '4px 10px', fontSize: '12px' }}>Move Here</button>
-                                <button type="button" className="btn btn-secondary" onClick={() => setMovingItem(null)} style={{ padding: '4px 10px', fontSize: '12px' }}>Cancel</button>
+                                <button type="button" className="btn btn-primary btn-sm" onClick={executeMove}>Move Here</button>
+                                <button type="button" className="btn btn-secondary btn-sm" onClick={() => setMovingItem(null)}>Cancel</button>
                             </div>
                         )}
 
-                        <button className="btn btn-secondary" onClick={() => setShowCreator(!showCreator)}>
+                        <button type="button" className="btn btn-secondary" onClick={() => setShowCreator(!showCreator)}>
                             New Folder
                         </button>
 
+                        <button
+                            type="button"
+                            className={`btn btn-secondary ${sharedPanel === 'create' ? 'active' : ''}`}
+                            onClick={() => toggleSharedPanel('create')}
+                        >
+                            Create Shared
+                        </button>
+
+                        <button
+                            type="button"
+                            className={`btn btn-secondary ${sharedPanel === 'join' ? 'active' : ''}`}
+                            onClick={() => toggleSharedPanel('join')}
+                        >
+                            Join Shared
+                        </button>
+
+                        {isSharedFolderContext && (
+                            <>
+                                <button
+                                    type="button"
+                                    className={`btn btn-secondary ${sharedPanel === 'requests' ? 'active' : ''}`}
+                                    onClick={() => toggleSharedPanel('requests')}
+                                >
+                                    Requests
+                                </button>
+                                <button
+                                    type="button"
+                                    className={`btn btn-secondary ${sharedPanel === 'members' ? 'active' : ''}`}
+                                    onClick={() => toggleSharedPanel('members')}
+                                >
+                                    Members
+                                </button>
+                            </>
+                        )}
+
                         <button 
+                            type="button"
                             className="btn btn-primary" 
                             onClick={() => document.getElementById("file-picker").click()}
                             disabled={isUploading}
@@ -196,6 +265,26 @@ export default function FolderView() {
                         />
                     </div>
                 </div>
+
+                {sharedPanel && (
+                    <div className="shared-view-panel">
+                        {sharedPanel === 'create' && (
+                            <CreateSharedFolder onFolderCreated={handleSharedFolderCreated} />
+                        )}
+                        {sharedPanel === 'join' && (
+                            <JoinSharedFolder onJoined={handleSharedFolderJoined} />
+                        )}
+                        {sharedPanel === 'requests' && isSharedFolderContext && (
+                            <FolderRequests
+                                folderId={currentFolderId}
+                                onRequestHandled={handleRequestHandled}
+                            />
+                        )}
+                        {sharedPanel === 'members' && isSharedFolderContext && (
+                            <FolderMembers folderId={currentFolderId} />
+                        )}
+                    </div>
+                )}
 
                 {/* Inline Folder Creator */}
                 {showCreator && (

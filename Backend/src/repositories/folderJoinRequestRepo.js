@@ -6,23 +6,59 @@ export const create = async (data) => {
     });
 };
 
-export const findRequest = async (
-    folderId,
-    requestedBy
-) => {
-    return await prisma.folderJoinRequest.findFirst({
+export const findRequest = async (folderId, requestedBy) => {
+    const normalizedFolderId = Number(folderId);
+    const normalizedRequestedBy = Number(requestedBy);
+
+    if (!Number.isInteger(normalizedFolderId) || !Number.isInteger(normalizedRequestedBy)) {
+        return null;
+    }
+
+    return await prisma.folderJoinRequest.findUnique({
         where: {
-            folderId,
-            requestedBy
-        }
+            folderId_requestedBy: {
+                folderId: normalizedFolderId,
+                requestedBy: normalizedRequestedBy,
+            },
+        },
     });
 };
 
-export const findByFolderId = async (folderId) => {
-    return await prisma.folderJoinRequest.findMany({
+export const findPendingRequest = async (folderId, requestedBy) => {
+    const normalizedFolderId = Number(folderId);
+    const normalizedRequestedBy = Number(requestedBy);
+
+    if (!Number.isInteger(normalizedFolderId) || !Number.isInteger(normalizedRequestedBy)) {
+        return null;
+    }
+
+    return await prisma.folderJoinRequest.findFirst({
         where: {
-            folderId
-        }
+            folderId: normalizedFolderId,
+            requestedBy: normalizedRequestedBy,
+            status: "PENDING",
+        },
+    });
+};
+
+export const findByFolderId = async (folderId, status) => {
+    const where = { folderId };
+    if (status) {
+        where.status = status;
+    }
+
+    return await prisma.folderJoinRequest.findMany({
+        where,
+        include: {
+            user: {
+                select: {
+                    id: true,
+                    name: true,
+                    email: true,
+                },
+            },
+        },
+        orderBy: { requestedAt: "desc" },
     });
 };
 

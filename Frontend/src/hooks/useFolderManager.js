@@ -100,6 +100,12 @@ export function useFolderManager() {
     }, [fetchFolders]);
 
     const handleFolderSelect = useCallback((folder) => {
+        if (folder.id > 0) {
+            setFoldersCache(prev => ({
+                ...prev,
+                [folder.id]: { ...prev[folder.id], ...folder },
+            }));
+        }
         if (folder.id === -1 || folder.id === 0) {
             setCurrentFolderId(-1);
             setHistory([]);
@@ -264,12 +270,23 @@ export function useFolderManager() {
         setCurrentFolderId(temp.length === 0 ? -1 : temp[temp.length - 1].id);
     };
 
+    const refreshAfterSharedAction = useCallback(async () => {
+        await fetchFolders(currentFolderId);
+        await fetchTreeSubfolders(-1);
+        if (currentFolderId > 0) {
+            await fetchTreeSubfolders(currentFolderId);
+        }
+    }, [currentFolderId, fetchFolders, fetchTreeSubfolders]);
+
+    const currentFolderInfo = currentFolderId > 0 ? foldersCache[currentFolderId] : null;
+
     return {
         folders, files, currentFolderId, history, folderName, setFolderName,
         loading, isUploading, isDragging, setIsDragging, showCreator, setShowCreator,
         editingItem, setEditingItem, renameValue, setRenameValue, movingItem, setMovingItem,
-        toasts, expandedFolders, treeNodes, createFolder, deleteFolder, deleteFile,
+        toasts, expandedFolders, treeNodes, foldersCache, currentFolderInfo,
+        createFolder, deleteFolder, deleteFile,
         downloadFile, handleRenameSubmit, executeMove, handleFileUpload,
-        handleFolderSelect, toggleFolderExpand, goBack
+        handleFolderSelect, toggleFolderExpand, goBack, refreshAfterSharedAction
     };
 }

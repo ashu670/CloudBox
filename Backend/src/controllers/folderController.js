@@ -5,7 +5,18 @@ const getErrorStatus = (error) => {
     const msg = error.message ? error.message.toLowerCase() : "";
     if (msg.includes("access denied") || msg.includes("unauthorized")) return 403;
     if (msg.includes("not found") || msg.includes("not exists") || msg.includes("doesn't exists")) return 404;
-    if (msg.includes("required") || msg.includes("invalid") || msg.includes("cannot move")) return 400;
+    if (
+        msg.includes("required") ||
+        msg.includes("invalid") ||
+        msg.includes("cannot move") ||
+        msg.includes("already a member") ||
+        msg.includes("already pending") ||
+        msg.includes("owner of this folder") ||
+        msg.includes("not shared") ||
+        msg.includes("disabled")
+    ) {
+        return 400;
+    }
     return 500;
 };
 
@@ -91,13 +102,14 @@ export const joinSharedFolder = async (req, res) => {
 
         return res.status(200).json({
             success: true,
-            message: "Join request sent successfully.",
+            message: response.message || "Join request sent successfully.",
             data: response
         });
 
     } catch (err) {
+        const status = getErrorStatus(err);
 
-        return res.status(500).json({
+        return res.status(status).json({
             success: false,
             error: err.message
         });
