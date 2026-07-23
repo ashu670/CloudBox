@@ -1,6 +1,6 @@
 import * as repo from "../repositories/userRepo.js";
 
-export const passportService = async (accessToken, refreshToken, profile, done) => {
+export const passportService = async (GoogleAccessToken, GoogleRefreshToken, profile, done) => {
     try{
         const email = profile.emails && profile.emails[0]?.value;
         const googleId = profile.id;
@@ -11,8 +11,8 @@ export const passportService = async (accessToken, refreshToken, profile, done) 
         let user = await repo.findByGoogleId(googleId);
         if(!user) user = await repo.findByEmail(email);
 
-        if(user) repo.updateGoogleId(user.id, googleId);
-        else repo.createWithGoogle({name, email, googleId});
+        if(user) user = await repo.updateGoogleId(user.id, googleId);
+        else user = await repo.createWithGoogle({name, email, googleId});
 
         return done(null, user);
     }catch(err){
