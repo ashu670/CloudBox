@@ -3,6 +3,7 @@ import generateInviteCode from "../utils/inviteCodeGenerator.js";
 import * as memberRepo from "../repositories/folderMemberRepo.js";
 import * as requestRepo from "../repositories/folderJoinRequestRepo.js";
 import { prisma } from "../config/db.js";
+
 const validateFolder = async (id, uid) => {
     if (!id) return true;
 
@@ -14,6 +15,8 @@ const validateFolder = async (id, uid) => {
 };
 
 export const createFolder = async (name, pid, uid) => {
+    if (pid === -1 || pid === 0) pid = null;
+
     const isValid = await validateFolder(pid, uid);
 
     if (!isValid)
@@ -166,14 +169,9 @@ export const joinSharedFolder = async (inviteCode, uid) => {
     };
 };
 
-export const getFolderRequests = async (
-    folderId,
-    uid
-) => {
+export const getFolderRequests = async (folderId, uid) => {
 
-    const folder =
-        await repo.findById(folderId);
-
+    const folder = await repo.findById(folderId);
 
     if (!folder) {
         throw new Error(
@@ -181,20 +179,17 @@ export const getFolderRequests = async (
         );
     }
 
-
     if (folder.uid !== uid) {
         throw new Error(
             "You are not authorized."
         );
     }
 
-
     if (!folder.isShared) {
         throw new Error(
             "This folder is not shared."
         );
     }
-
 
     const requests =
         await requestRepo.findByFolderId(
@@ -203,12 +198,10 @@ export const getFolderRequests = async (
         );
 
     return requests;
-
 };
 
 
 export const approveRequest = async (requestId, uid) => {
-
     const request = await requestRepo.findById(requestId);
 
     if (!request) {

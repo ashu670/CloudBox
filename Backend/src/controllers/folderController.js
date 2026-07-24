@@ -78,12 +78,11 @@ export const createSharedFolder = async (req, res) => {
         });
 
     } catch (err) {
-
-        return res.status(500).json({
+        const status = getErrorStatus(err);
+        return res.status(status).json({
             success: false,
             error: err.message
         });
-
     }
 
 };
