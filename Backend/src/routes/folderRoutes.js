@@ -19,8 +19,8 @@ router.get("/requests/:folderId", folderCon.getFolderRequests);
 router.get("/members/:folderId",checkFolderRole("OWNER"),folderCon.getFolderMembers);
 
 // PATCH Routes
-router.patch("/request/approve",checkFolderRole("OWNER"),folderCon.approveRequest);
-router.patch("/request/reject",checkFolderRole("OWNER"),folderCon.rejectRequest);
+router.patch("/request/approve", folderCon.approveRequest);
+router.patch("/request/reject", folderCon.rejectRequest);
 router.patch('/rename/:id', folderCon.rename);
 router.patch('/move/:id/:pid', folderCon.move);
 
