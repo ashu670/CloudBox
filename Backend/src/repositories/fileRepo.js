@@ -1,11 +1,9 @@
 import { prisma } from "../config/db.js";
 
 export const create = async (data) => {
-
     return await prisma.file.create({
         data
     });
-
 };
 
 export const findByStoName = async (stoName) => {
@@ -64,26 +62,3 @@ export const move = async (id, newPid) => {
         data : data
     });
 };
-
-export const findSharedFile = async (id, uid) => {
-    return await prisma.findFirst({
-        where : {
-            id,
-            OR : [
-                {uid},
-                {
-                    folder : {
-                        members : {
-                            some : {
-                                userId : uid
-                            }
-                        }
-                    }
-                },
-                {visibility : "PUBLIC"},
-                {folder : {visibility : "PUBLIC"}}
-            ],
-            include : {folder : true}
-        }
-    });
-}

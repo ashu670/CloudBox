@@ -123,8 +123,6 @@ export const deleteFolder = async (id) => {
     });
 };
 
-
-
 export const findByInviteCode = async (inviteCode) => {
     return await prisma.folder.findUnique({
         where: {
