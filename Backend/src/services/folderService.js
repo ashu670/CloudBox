@@ -14,6 +14,8 @@ const validateFolder = async (id, uid) => {
     return hasAccess ? folder : null;
 };
 
+
+
 export const createFolder = async (name, pid, uid) => {
     if (pid === -1 || pid === 0) pid = null;
 
@@ -87,7 +89,8 @@ export const createSharedFolder = async (name, uid) => {
         uid,
         isShared: true,
         inviteCode,
-        isInviteActive: true
+        isInviteActive: true,
+        visibility : "PUBLIC"
     });
 
 

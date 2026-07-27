@@ -9,13 +9,11 @@ export const create = async (data) => {
 };
 
 export const findByStoName = async (stoName) => {
-
     return await prisma.file.findFirst({
         where: {
             stoName
         }
     });
-
 };
 
 export const findAllByFolderId = async (folderId) => {
@@ -66,3 +64,26 @@ export const move = async (id, newPid) => {
         data : data
     });
 };
+
+export const findSharedFile = async (id, uid) => {
+    return await prisma.findFirst({
+        where : {
+            id,
+            OR : [
+                {uid},
+                {
+                    folder : {
+                        members : {
+                            some : {
+                                userId : uid
+                            }
+                        }
+                    }
+                },
+                {visibility : "PUBLIC"},
+                {folder : {visibility : "PUBLIC"}}
+            ],
+            include : {folder : true}
+        }
+    });
+}
