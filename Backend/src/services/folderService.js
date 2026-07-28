@@ -1,6 +1,8 @@
 import * as repo from "../repositories/folderRepo.js";
 import * as memberRepo from "../repositories/folderMemberRepo.js";
 import * as requestRepo from "../repositories/folderJoinRequestRepo.js";
+import { fetchByFolderIdAndUserId } from "../repositories/fileRepo.js";
+import storageService from "../storage/storageService.js";
 import generateInviteCode from "../utils/inviteCodeGenerator.js";
 import { validateFolderAccess, FolderAction } from "./permissionService.js";
 
@@ -90,6 +92,11 @@ export const delFolder = async (uid, id) => {
         throw new Error("Folder not found or access denied");
     }
     if (valid.pid) touchFolder(valid.pid);
+
+    const filesToDelete = await fetchByFolderIdAndUserId(id, uid);
+    if(filesToDelete) await filesToDelete.map(m => {
+        storageService.delete(m.stoName);
+    });
 
     return await repo.deleteFolder(id);
 };
