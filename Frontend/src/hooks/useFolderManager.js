@@ -68,7 +68,7 @@ export function useFolderManager() {
                 setFoldersCache(prev => ({ ...prev, [data.children.id]: data.children }));
             }
         } catch (err) {
-            if (err.response?.status === 401 || err.response?.status === 403) {
+            if (err.response?.status === 401) {
                 showToast("Session expired. Please log in again.", "error");
                 navigate("/login");
             } else {
@@ -179,6 +179,7 @@ export function useFolderManager() {
             window.URL.revokeObjectURL(url);
             showToast("Download started successfully", "success");
         } catch (err) {
+            console.error("Download error:", err);
             showToast("Failed to download file", "error");
         }
     };

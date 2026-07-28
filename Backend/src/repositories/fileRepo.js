@@ -1,21 +1,17 @@
 import { prisma } from "../config/db.js";
 
 export const create = async (data) => {
-
     return await prisma.file.create({
         data
     });
-
 };
 
 export const findByStoName = async (stoName) => {
-
     return await prisma.file.findFirst({
         where: {
             stoName
         }
     });
-
 };
 
 export const findAllByFolderId = async (folderId) => {

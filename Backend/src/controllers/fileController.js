@@ -101,3 +101,4 @@ export const download = async (req, res) => {
         return res.status(status).json({error : err.message});
     }
 }
+

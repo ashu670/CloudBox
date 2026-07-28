@@ -5,6 +5,7 @@ import Navbar from "./components/navbar";
 import Signup from "./pages/Signup";
 import Login from "./pages/Login";
 import FolderView from "./pages/Dashboard";
+import AuthSuccess from "./pages/AuthSuccess";
 
 function App() {
   return (
@@ -22,6 +23,11 @@ function App() {
         <Route
           path="/login"
           element={<Login />}
+        />
+
+        <Route
+          path="/auth/success"
+          element={<AuthSuccess />}
         />
 
         <Route
