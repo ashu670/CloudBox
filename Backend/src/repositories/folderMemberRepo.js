@@ -2,7 +2,7 @@ import { prisma } from "../config/db.js";
 
 export const create = async (data) => {
     return await prisma.folderMember.create({
-        data,
+        data
     });
 };
 

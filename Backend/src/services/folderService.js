@@ -84,7 +84,8 @@ export const createSharedFolder = async (name, uid) => {
         uid,
         isShared: true,
         inviteCode,
-        isInviteActive: true
+        isInviteActive: true,
+        visibility : "PUBLIC"
     });
 
 
