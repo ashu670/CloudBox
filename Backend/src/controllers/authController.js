@@ -62,9 +62,8 @@ export const handleGoogleCallback = async (req, res) => {
         const {accessToken, refreshToken} = await authService.googleTokens(data);
 
         res.cookie("refreshToken", refreshToken, COOKIE_OPTIONS);
-        const frontendURL = process.env.FRONTEND_URL;
-        return res.status(200).json({message : "everything works fine bryh"});
-        res.redirect(`${frontendURL}/auth/success?token=${accessToken}`);
+        const frontendURL = process.env.FRONTEND_URL || "http://localhost:5173";
+        return res.redirect(`${frontendURL}/auth/success?token=${accessToken}`);
     }catch(err){
         return res.status(500).json({error : "Failed to generate authentication tokens"});
     }

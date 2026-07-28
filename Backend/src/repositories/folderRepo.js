@@ -1,34 +1,9 @@
 import { prisma } from "../config/db.js";
+import { canAccessFolder as checkAccess, FolderAction } from "../services/permissionService.js";
 
-export const canAccessFolder = async (folderId, uid) => {
-    if (!folderId) return true;
-
-    const folder = await prisma.folder.findUnique({
-        where: { id: folderId },
-        select: { uid: true, pid: true },
-    });
-
-    if (!folder) return false;
-    if (folder.uid === uid) return true;
-
-    let currentId = folderId;
-    while (currentId) {
-        const member = await prisma.folderMember.findUnique({
-            where: {
-                folderId_userId: { folderId: currentId, userId: uid },
-            },
-        });
-        if (member) return true;
-
-        const current = await prisma.folder.findUnique({
-            where: { id: currentId },
-            select: { pid: true },
-        });
-        if (!current?.pid) break;
-        currentId = current.pid;
-    }
-
-    return false;
+// Re-export for compatibility
+export const canAccessFolder = (folderId, uid, command = FolderAction.READ) => {
+    return checkAccess(folderId, uid, command);
 };
 
 export const findByIdAndUser = async (id, uid) => {
@@ -36,7 +11,7 @@ export const findByIdAndUser = async (id, uid) => {
 
     return await prisma.folder.findFirst({
         where: {
-            id,   // returning proper folder
+            id,
             uid
         }
     });
@@ -55,6 +30,24 @@ export const findDuplicate = async (name, pid, uid) => {
 export const create = async (data) => {
     return await prisma.folder.create({
         data
+    });
+};
+
+export const createSharedFolderTx = async (folderData, ownerUid) => {
+    return await prisma.$transaction(async (tx) => {
+        const folder = await tx.folder.create({
+            data: folderData
+        });
+
+        await tx.folderMember.create({
+            data: {
+                folderId: folder.id,
+                userId: ownerUid,
+                role: "OWNER"
+            }
+        });
+
+        return folder;
     });
 };
 
@@ -107,7 +100,7 @@ export const findChildren = async (uid, pid) => {
         return null;
     }
 
-    const hasAccess = await canAccessFolder(pid, uid);
+    const hasAccess = await checkAccess(pid, uid, FolderAction.READ);
     if (!hasAccess) {
         throw new Error("Folder access denied");
     }
@@ -122,8 +115,6 @@ export const deleteFolder = async (id) => {
         }
     });
 };
-
-
 
 export const findByInviteCode = async (inviteCode) => {
     return await prisma.folder.findUnique({
@@ -141,29 +132,27 @@ export const findById = async (id) => {
     });
 };
 
-
 export const renameFolder = async (id, newName) => {
-    const data = {name : newName};
     return await prisma.folder.update({
-        where : {id},
-        data : data
+        where: { id },
+        data: { name: newName }
     });
-}
+};
 
 export const touch = async (id) => {
     return await prisma.folder.update({
-        where : {id},
-        data : {
-            updatedAt : new Date()
+        where: { id },
+        data: {
+            updatedAt: new Date()
         }
     });
 };
 
 export const move = async (id, newPid) => {
     return await prisma.folder.update({
-        where : {id},
-        data : {
-            pid : newPid
+        where: { id },
+        data: {
+            pid: newPid
         }
     });
 };
