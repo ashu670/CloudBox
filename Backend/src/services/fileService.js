@@ -3,6 +3,7 @@ import path from "path";
 import * as fileRepo from "../repositories/fileRepo.js";
 import * as folderRepo from "../repositories/folderRepo.js";
 import { touchFolder } from "./folderService.js";
+import { canAccessFolder, validateFolderAccess, FolderAction } from "./permissionService.js";
 import storageService from "../storage/storageService.js";
 
 const UPLOAD_BASE_DIR = path.resolve("uploads");
@@ -37,7 +38,7 @@ export const uploadFile = async (file, folderId, uid) => {
         throw new Error("Invalid Folder ID.");
     }
 
-    const validFolder = await folderRepo.findByIdAndUser(folderId, uid);
+    const validFolder = await validateFolderAccess(folderId, uid, FolderAction.WRITE);
 
     if (!validFolder) {
         throw new Error("Folder not found or access denied.");
@@ -72,19 +73,18 @@ export const uploadFile = async (file, folderId, uid) => {
 
 export const del = async (id, uid) => {
     const valid = await fileRepo.findByUserId(id, uid);
-    if(!valid) throw new Error("File not exists or access denied");
+    if (!valid) throw new Error("File not exists or access denied");
     touchFolder(valid.folderId);
     await storageService.delete(valid.stoName);
 
     return await fileRepo.delById(id);
-}
+};
 
 export const renameFile = async (id, uid, newOrgName) => {
     if (!newOrgName || !newOrgName.trim()) {
         throw new Error("New file name is required.");
     }
 
-    // 1. Fetch current database record securely using await
     const currentFile = await fileRepo.findByUserId(id, uid);
     if (!currentFile) {
         throw new Error("File does not exist or access denied.");
@@ -92,23 +92,18 @@ export const renameFile = async (id, uid, newOrgName) => {
 
     const oldStoName = currentFile.stoName;
 
-    // 2. Generate a fresh, non-conflicting unique disk filename string
     const newStoName = await generateUniqueStorageName(
         currentFile.uid,
         currentFile.folderId,
         newOrgName
     );
 
-    // 3. Make sure the storage parameters align exactly with the service method signature
-    // Passing (oldName, newName) to match standard fs conventions
     await storageService.rename(oldStoName, newStoName);
 
     try {
-        // 4. Update the database record parameters using your repository update method
         touchFolder(currentFile.folderId);
         return await fileRepo.update(id, newStoName, newOrgName);
     } catch (error) {
-        // 5. Rollback on disk if the Postgres transaction query fails
         await storageService.rename(newStoName, oldStoName);
         throw error;
     }
@@ -116,22 +111,22 @@ export const renameFile = async (id, uid, newOrgName) => {
 
 export const move = async (id, uid, newPid) => {
     const validFile = await fileRepo.findByUserId(id, uid);
-    if(!validFile) throw new Error("File does not exists or access denied");
+    if (!validFile) throw new Error("File does not exists or access denied");
 
-    const validFolder = await folderRepo.findByIdAndUser(newPid, uid);
-    if(!validFolder) throw new Error("Folder doesn't exists or access denied");
+    const validFolder = await validateFolderAccess(newPid, uid, FolderAction.MOVE);
+    if (!validFolder) throw new Error("Folder doesn't exists or access denied");
 
     return await fileRepo.move(id, newPid);
-}
+};
 
 export const download = async (id, uid) => {
     const file = await fileRepo.findById(id);
     if (!file) throw new Error("File doesnt exist or access denied");
 
-    const hasAccess = await folderRepo.canAccessFolder(file.folderId, uid);
+    const hasAccess = await canAccessFolder(file.folderId, uid, FolderAction.READ);
     if (!hasAccess) throw new Error("File doesnt exist or access denied");
 
     const absolutePath = storageService.getFilePath(file.stoName);
 
-    return {absolutePath, orgName : file.orgName};
-}
+    return { absolutePath, orgName: file.orgName };
+};

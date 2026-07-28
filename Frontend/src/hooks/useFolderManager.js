@@ -68,7 +68,7 @@ export function useFolderManager() {
                 setFoldersCache(prev => ({ ...prev, [data.children.id]: data.children }));
             }
         } catch (err) {
-            if (err.response?.status === 401 || err.response?.status === 403) {
+            if (err.response?.status === 401) {
                 showToast("Session expired. Please log in again.", "error");
                 navigate("/login");
             } else {

@@ -80,5 +80,21 @@ export const updateStatus = async (id, status) => {
             status
         }
     });
+};
 
+export const approveJoinRequestTx = async (requestId, folderId, requestedByUserId, role = "VIEWER") => {
+    return await prisma.$transaction(async (tx) => {
+        await tx.folderJoinRequest.update({
+            where: { id: requestId },
+            data: { status: "APPROVED" },
+        });
+
+        await tx.folderMember.create({
+            data: {
+                folderId,
+                userId: requestedByUserId,
+                role,
+            },
+        });
+    });
 };
