@@ -62,3 +62,24 @@ export const move = async (id, newPid) => {
         data : data
     });
 };
+
+export const fetchByFolderIdAndUserId = async (folderId, userId) => {
+    return await prisma.$queryRaw`
+        WITH RECURSIVE FolderTree AS (
+        -- Root folder owned by the user
+        SELECT id FROM "Folder"
+        WHERE id = ${folderId} AND uid = ${userId}
+
+        UNION ALL
+
+        -- Subfolders owned by the user
+        SELECT f.id FROM "Folder" f
+        INNER JOIN FolderTree ft ON f.pid = ft.id
+        WHERE f.uid = ${userId}
+        )
+        -- Files owned by the user across the entire tree
+        SELECT * FROM "File"
+        WHERE "folderId" IN (SELECT id FROM FolderTree)
+        AND uid = ${userId};
+    `;
+}
