@@ -58,9 +58,10 @@ export const fetch = async (req, res) => {
 export const deleteFolder = async (req, res) => {
     const id = Number(req.params.id);
     const uid = req.user.id;
+    const force = req.query.force === "true";
 
     try {
-        const response = await service.delFolder(uid, id);
+        const response = await service.delFolder(uid, id, force);
         return res.status(200).json(response);
     } catch (err) {
         const status = getErrorStatus(err);
