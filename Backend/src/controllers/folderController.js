@@ -31,6 +31,12 @@ export const create = async (req, res) => {
             folder
         });
     } catch (err) {
+        if (err.message === "You don't have permission to create folders.") {
+            return res.status(403).json({
+                success: false,
+                message: "You don't have permission to create folders."
+            });
+        }
         const status = getErrorStatus(err);
         return res.status(status).json({ error: err.message });
     }
@@ -256,5 +262,136 @@ export const move = async (req, res) => {
     } catch (err) {
         const status = getErrorStatus(err);
         return res.status(status).json({error : err.message});
+    }
+};
+
+export const getOwnerPanel = async (req, res) => {
+    const folderId = Number(req.params.folderId);
+    const uid = req.user.id;
+
+    try {
+        const data = await service.getOwnerPanel(folderId, uid);
+        return res.status(200).json({ success: true, data });
+    } catch (err) {
+        const status = getErrorStatus(err);
+        return res.status(status).json({ success: false, error: err.message });
+    }
+};
+
+export const getAdminPanel = async (req, res) => {
+    const folderId = Number(req.params.folderId);
+    const uid = req.user.id;
+
+    try {
+        const data = await service.getAdminPanel(folderId, uid);
+        return res.status(200).json({ success: true, data });
+    } catch (err) {
+        const status = getErrorStatus(err);
+        return res.status(status).json({ success: false, error: err.message });
+    }
+};
+
+export const removeFolderMember = async (req, res) => {
+    const folderId = Number(req.params.folderId);
+    const userId = Number(req.params.userId);
+    const actorUserId = req.user.id;
+
+    try {
+        const response = await service.removeFolderMember(folderId, userId, actorUserId);
+        return res.status(200).json(response);
+    } catch (err) {
+        const status = getErrorStatus(err);
+        return res.status(status).json({ success: false, error: err.message });
+    }
+};
+
+export const updateMemberRole = async (req, res) => {
+    const { folderId, userId, newRole } = req.body;
+    const actorUserId = req.user.id;
+
+    try {
+        const response = await service.updateMemberRole(Number(folderId), Number(userId), newRole, actorUserId);
+        return res.status(200).json(response);
+    } catch (err) {
+        const status = getErrorStatus(err);
+        return res.status(status).json({ success: false, error: err.message });
+    }
+};
+
+export const transferOwnership = async (req, res) => {
+    const { folderId, newOwnerUserId } = req.body;
+    const actorUserId = req.user.id;
+
+    try {
+        const response = await service.transferOwnership(Number(folderId), Number(newOwnerUserId), actorUserId);
+        return res.status(200).json(response);
+    } catch (err) {
+        const status = getErrorStatus(err);
+        return res.status(status).json({ success: false, error: err.message });
+    }
+};
+
+export const regenerateInviteCode = async (req, res) => {
+    const { folderId } = req.body;
+    const actorUserId = req.user.id;
+
+    try {
+        const response = await service.regenerateInviteCode(Number(folderId), actorUserId);
+        return res.status(200).json(response);
+    } catch (err) {
+        const status = getErrorStatus(err);
+        return res.status(status).json({ success: false, error: err.message });
+    }
+};
+
+export const disableInviteCode = async (req, res) => {
+    const { folderId } = req.body;
+    const actorUserId = req.user.id;
+
+    try {
+        const response = await service.setInviteStatus(Number(folderId), false, "Invite Disabled", actorUserId);
+        return res.status(200).json(response);
+    } catch (err) {
+        const status = getErrorStatus(err);
+        return res.status(status).json({ success: false, error: err.message });
+    }
+};
+
+export const enableInviteCode = async (req, res) => {
+    const { folderId } = req.body;
+    const actorUserId = req.user.id;
+
+    try {
+        const response = await service.setInviteStatus(Number(folderId), true, "Invite Enabled", actorUserId);
+        return res.status(200).json(response);
+    } catch (err) {
+        const status = getErrorStatus(err);
+        return res.status(status).json({ success: false, error: err.message });
+    }
+};
+
+export const expireInviteCode = async (req, res) => {
+    const { folderId } = req.body;
+    const actorUserId = req.user.id;
+
+    try {
+        const response = await service.setInviteStatus(Number(folderId), false, "Invite Expired", actorUserId);
+        return res.status(200).json(response);
+    } catch (err) {
+        const status = getErrorStatus(err);
+        return res.status(status).json({ success: false, error: err.message });
+    }
+};
+
+export const getFolderActivities = async (req, res) => {
+    const folderId = Number(req.params.folderId);
+    const uid = req.user.id;
+
+    try {
+        const data = await service.getFolderActivities(folderId, uid);
+        return res.status(200).json({ success: true, data });
+    } catch (err) {
+        const status = getErrorStatus(err);
+        return res.status(status).json({ success: false, error: err.message });
     }
 };

@@ -25,15 +25,17 @@ export const RolePermissions = {
  */
 export const canAccessFolder = async (folderId, userId, action = FolderAction.READ) => {
     if (!folderId) return true;
+    const normalizedFolderId = Number(folderId);
+    if (isNaN(normalizedFolderId)) return false;
 
-    const folder = await folderRepo.findById(folderId);
+    const folder = await folderRepo.findById(normalizedFolderId);
     if (!folder) return false;
 
     // Folder creator/owner has full access
     if (folder.uid === userId) return true;
 
     // Traverse folder tree upwards to find member permissions
-    let currentId = folderId;
+    let currentId = normalizedFolderId;
     while (currentId) {
         const member = await memberRepo.findMember(currentId, userId);
         if (member && RolePermissions[member.role]?.has(action)) {
@@ -53,10 +55,12 @@ export const canAccessFolder = async (folderId, userId, action = FolderAction.RE
  */
 export const validateFolderAccess = async (folderId, userId, action = FolderAction.READ) => {
     if (!folderId) return true;
+    const normalizedFolderId = Number(folderId);
+    if (isNaN(normalizedFolderId)) return null;
 
-    const folder = await folderRepo.findById(folderId);
+    const folder = await folderRepo.findById(normalizedFolderId);
     if (!folder) return null;
 
-    const hasAccess = await canAccessFolder(folderId, userId, action);
+    const hasAccess = await canAccessFolder(normalizedFolderId, userId, action);
     return hasAccess ? folder : null;
 };

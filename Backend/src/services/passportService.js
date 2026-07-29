@@ -7,7 +7,7 @@ export const passportService = async (GoogleAccessToken, GoogleRefreshToken, pro
         const name = profile.displayName || "Google User";
 
         if(!email) return done(new Error("no email found in google profile"), null);
-
+        console.log(googleId);
         let user = await repo.findByGoogleId(googleId);
         if(!user) user = await repo.findByEmail(email);
 

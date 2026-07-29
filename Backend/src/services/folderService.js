@@ -2,7 +2,8 @@ import * as repo from "../repositories/folderRepo.js";
 import * as memberRepo from "../repositories/folderMemberRepo.js";
 import * as requestRepo from "../repositories/folderJoinRequestRepo.js";
 import generateInviteCode from "../utils/inviteCodeGenerator.js";
-import { validateFolderAccess, FolderAction } from "./permissionService.js";
+import { validateFolderAccess, canAccessFolder, FolderAction } from "./permissionService.js";
+import { prisma } from "../config/db.js";
 
 // --- Private Helpers ---
 
@@ -12,6 +13,65 @@ async function generateUniqueInviteCode() {
         const exists = await repo.findByInviteCode(inviteCode);
         if (!exists) return inviteCode;
     }
+}
+
+async function getEffectiveRole(folderId, userId) {
+    const folder = await repo.findById(folderId);
+    if (!folder) return null;
+    if (folder.uid === userId) return "OWNER";
+
+    let currentId = folderId;
+    while (currentId) {
+        const member = await memberRepo.findMember(currentId, userId);
+        if (member) {
+            return member.role;
+        }
+
+        const currentFolder = await repo.findById(currentId);
+        if (!currentFolder?.pid) break;
+        currentId = currentFolder.pid;
+    }
+
+    return null;
+}
+
+async function getMemberRole(folderId, userId) {
+    const folder = await repo.findById(folderId);
+    if (!folder) return null;
+    if (folder.uid === userId) return "OWNER";
+
+    const member = await memberRepo.findMember(folderId, userId);
+    return member ? member.role : null;
+}
+
+async function getFolderStats(folderId) {
+    const folderIds = [folderId];
+    let index = 0;
+    while (index < folderIds.length) {
+        const currentId = folderIds[index];
+        const subfolders = await prisma.folder.findMany({
+            where: { pid: currentId },
+            select: { id: true }
+        });
+        for (const sub of subfolders) {
+            folderIds.push(sub.id);
+        }
+        index++;
+    }
+
+    const files = await prisma.file.findMany({
+        where: {
+            folderId: { in: folderIds }
+        },
+        select: {
+            size: true
+        }
+    });
+
+    const filesCount = files.length;
+    const storageUsed = files.reduce((acc, file) => acc + file.size, 0);
+
+    return { filesCount, storageUsed };
 }
 
 async function getAndVerifyPendingRequest(requestId, uid) {
@@ -27,7 +87,9 @@ async function getAndVerifyPendingRequest(requestId, uid) {
     if (!folder) {
         throw new Error("Folder not found.");
     }
-    if (folder.uid !== uid) {
+    
+    const role = await getMemberRole(folder.id, uid);
+    if (role !== "OWNER" && role !== "ADMIN") {
         throw new Error("You are not authorized to manage requests for this folder.");
     }
 
@@ -47,11 +109,27 @@ const isDescendant = async (parentFolderId, childFolderId, uid) => {
 // --- Exported Service Methods ---
 
 export const createFolder = async (name, pid, uid) => {
-    if (pid === -1 || pid === 0) pid = null;
+    if (pid === -1 || pid === 0 || pid === undefined || pid === null) pid = null;
+    else pid = Number(pid);
 
-    const isValid = await validateFolderAccess(pid, uid, FolderAction.CREATE);
-    if (!isValid) {
-        throw new Error("Parent folder not found or access denied");
+    let isShared = false;
+    let visibility = "PRIVATE";
+
+    if (pid !== null) {
+        const parentFolder = await repo.findById(pid);
+        if (!parentFolder) {
+            throw new Error("Parent folder not found");
+        }
+
+        const hasCreatePermission = await canAccessFolder(pid, uid, FolderAction.CREATE);
+        if (!hasCreatePermission) {
+            throw new Error("You don't have permission to create folders.");
+        }
+
+        if (parentFolder.isShared) {
+            isShared = true;
+            visibility = parentFolder.visibility;
+        }
     }
 
     let uniqueName = name;
@@ -69,7 +147,9 @@ export const createFolder = async (name, pid, uid) => {
     return await repo.create({
         name: uniqueName,
         pid,
-        uid
+        uid,
+        isShared,
+        visibility
     });
 };
 
@@ -81,7 +161,11 @@ export const fetchFolder = async (uid, pid) => {
         throw new Error("Parent folder not found or access denied");
     }
 
-    return await repo.findChildren(uid, pid);
+    const folderDetails = await repo.findChildren(uid, pid);
+    if (pid !== null && pid !== 0 && folderDetails) {
+        folderDetails.userRole = await getEffectiveRole(pid, uid);
+    }
+    return folderDetails;
 };
 
 export const delFolder = async (uid, id) => {
@@ -175,7 +259,8 @@ export const getFolderRequests = async (folderId, uid) => {
     if (!folder) {
         throw new Error("Folder not found.");
     }
-    if (folder.uid !== uid) {
+    const role = await getMemberRole(folderId, uid);
+    if (role !== "OWNER" && role !== "ADMIN") {
         throw new Error("You are not authorized.");
     }
     if (!folder.isShared) {
@@ -196,12 +281,32 @@ export const approveRequest = async (requestId, uid) => {
         throw new Error("User is already a member of this folder.");
     }
 
-    await requestRepo.approveJoinRequestTx(
-        request.id,
-        request.folderId,
-        request.requestedBy,
-        "VIEWER"
-    );
+    const targetUser = await prisma.user.findUnique({ where: { id: request.requestedBy }, select: { name: true } });
+    const actorUser = await prisma.user.findUnique({ where: { id: uid }, select: { name: true } });
+
+    await prisma.$transaction(async (tx) => {
+        await tx.folderJoinRequest.update({
+            where: { id: requestId },
+            data: { status: "APPROVED" },
+        });
+
+        await tx.folderMember.create({
+            data: {
+                folderId: request.folderId,
+                userId: request.requestedBy,
+                role: "VIEWER",
+            },
+        });
+
+        await tx.folderActivity.create({
+            data: {
+                folderId: request.folderId,
+                userId: uid,
+                action: "Join Approved",
+                description: `${actorUser.name} approved join request of ${targetUser.name}.`
+            }
+        });
+    });
 
     return {
         folderId: request.folderId,
@@ -213,7 +318,24 @@ export const approveRequest = async (requestId, uid) => {
 export const rejectRequest = async (requestId, uid) => {
     const { request } = await getAndVerifyPendingRequest(requestId, uid);
 
-    await requestRepo.updateStatus(request.id, "REJECTED");
+    const targetUser = await prisma.user.findUnique({ where: { id: request.requestedBy }, select: { name: true } });
+    const actorUser = await prisma.user.findUnique({ where: { id: uid }, select: { name: true } });
+
+    await prisma.$transaction(async (tx) => {
+        await tx.folderJoinRequest.update({
+            where: { id: requestId },
+            data: { status: "REJECTED" },
+        });
+
+        await tx.folderActivity.create({
+            data: {
+                folderId: request.folderId,
+                userId: uid,
+                action: "Join Rejected",
+                description: `${actorUser.name} rejected join request of ${targetUser.name}.`
+            }
+        });
+    });
 
     return {
         requestId: request.id,
@@ -297,4 +419,409 @@ export const touchFolder = async (id) => {
     } catch (err) {
         console.error("Error in touchFolder:", err);
     }
+};
+
+export const getOwnerPanel = async (folderId, uid) => {
+    const role = await getMemberRole(folderId, uid);
+    if (role !== "OWNER") {
+        throw new Error("Unauthorized: Only Folder Owner can access the Owner Panel.");
+    }
+
+    const folder = await prisma.folder.findUnique({
+        where: { id: folderId },
+        include: {
+            user: {
+                select: { id: true, name: true, email: true }
+            }
+        }
+    });
+
+    if (!folder) {
+        throw new Error("Folder not found.");
+    }
+
+    const allMembers = await prisma.folderMember.findMany({
+        where: { folderId },
+        include: {
+            user: {
+                select: { id: true, name: true, email: true }
+            }
+        }
+    });
+
+    const ownerDetails = folder.user;
+    const admins = allMembers
+        .filter(m => m.role === "ADMIN")
+        .map(m => ({
+            id: m.id,
+            userId: m.user.id,
+            name: m.user.name,
+            email: m.user.email,
+            role: m.role,
+            joinedAt: m.joinedAt
+        }));
+
+    const members = allMembers
+        .filter(m => m.role === "EDITOR" || m.role === "VIEWER")
+        .map(m => ({
+            id: m.id,
+            userId: m.user.id,
+            name: m.user.name,
+            email: m.user.email,
+            role: m.role,
+            joinedAt: m.joinedAt
+        }));
+
+    const pendingRequests = await prisma.folderJoinRequest.findMany({
+        where: { folderId, status: "PENDING" },
+        include: {
+            user: {
+                select: { id: true, name: true, email: true }
+            }
+        }
+    });
+
+    const formattedPendingRequests = pendingRequests.map(r => ({
+        id: r.id,
+        userId: r.user.id,
+        name: r.user.name,
+        email: r.user.email,
+        requestedAt: r.requestedAt
+    }));
+
+    const stats = await getFolderStats(folderId);
+
+    return {
+        folderName: folder.name,
+        inviteCode: folder.inviteCode,
+        isInviteActive: folder.isInviteActive,
+        visibility: folder.visibility,
+        totalMembers: allMembers.length,
+        pendingJoinRequests: formattedPendingRequests.length,
+        filesCount: stats.filesCount,
+        storageUsed: stats.storageUsed,
+        owner: ownerDetails,
+        members,
+        admins,
+        pendingRequests: formattedPendingRequests,
+        currentInviteCode: folder.inviteCode
+    };
+};
+
+export const getAdminPanel = async (folderId, uid) => {
+    const role = await getMemberRole(folderId, uid);
+    if (role !== "OWNER" && role !== "ADMIN") {
+        throw new Error("Unauthorized: Only Folder Owner or Admin can access the Admin Panel.");
+    }
+
+    const folder = await prisma.folder.findUnique({
+        where: { id: folderId },
+        include: {
+            user: {
+                select: { id: true, name: true, email: true }
+            }
+        }
+    });
+
+    if (!folder) {
+        throw new Error("Folder not found.");
+    }
+
+    const allMembers = await prisma.folderMember.findMany({
+        where: { folderId },
+        include: {
+            user: {
+                select: { id: true, name: true, email: true }
+            }
+        }
+    });
+
+    const ownerDetails = folder.user;
+    const admins = allMembers
+        .filter(m => m.role === "ADMIN")
+        .map(m => ({
+            id: m.id,
+            userId: m.user.id,
+            name: m.user.name,
+            email: m.user.email,
+            role: m.role,
+            joinedAt: m.joinedAt
+        }));
+
+    const members = allMembers
+        .filter(m => m.role === "EDITOR" || m.role === "VIEWER")
+        .map(m => ({
+            id: m.id,
+            userId: m.user.id,
+            name: m.user.name,
+            email: m.user.email,
+            role: m.role,
+            joinedAt: m.joinedAt
+        }));
+
+    const pendingRequests = await prisma.folderJoinRequest.findMany({
+        where: { folderId, status: "PENDING" },
+        include: {
+            user: {
+                select: { id: true, name: true, email: true }
+            }
+        }
+    });
+
+    const formattedPendingRequests = pendingRequests.map(r => ({
+        id: r.id,
+        userId: r.user.id,
+        name: r.user.name,
+        email: r.user.email,
+        requestedAt: r.requestedAt
+    }));
+
+    const stats = await getFolderStats(folderId);
+
+    return {
+        folderName: folder.name,
+        visibility: folder.visibility,
+        totalMembers: allMembers.length,
+        pendingJoinRequests: formattedPendingRequests.length,
+        filesCount: stats.filesCount,
+        storageUsed: stats.storageUsed,
+        owner: ownerDetails,
+        members,
+        admins,
+        pendingRequests: formattedPendingRequests
+    };
+};
+
+export const removeFolderMember = async (folderId, targetUserId, actorUserId) => {
+    const actorRole = await getMemberRole(folderId, actorUserId);
+    if (actorRole !== "OWNER" && actorRole !== "ADMIN") {
+        throw new Error("Unauthorized: Only Owner or Admin can remove members.");
+    }
+
+    const targetRole = await getMemberRole(folderId, targetUserId);
+    if (!targetRole) {
+        throw new Error("User is not a member of this folder.");
+    }
+
+    if (actorRole === "OWNER") {
+        if (targetUserId === actorUserId) {
+            throw new Error("Owner cannot remove themselves.");
+        }
+    } else if (actorRole === "ADMIN") {
+        if (targetRole === "OWNER") {
+            throw new Error("Admin cannot remove the Owner.");
+        }
+        if (targetRole === "ADMIN") {
+            throw new Error("Admin cannot remove another Admin.");
+        }
+        if (targetUserId === actorUserId) {
+            throw new Error("Admin cannot remove themselves.");
+        }
+    }
+
+    const targetUser = await prisma.user.findUnique({ where: { id: targetUserId }, select: { name: true } });
+    const actorUser = await prisma.user.findUnique({ where: { id: actorUserId }, select: { name: true } });
+
+    await prisma.$transaction(async (tx) => {
+        await tx.folderMember.delete({
+            where: {
+                folderId_userId: {
+                    folderId,
+                    userId: targetUserId
+                }
+            }
+        });
+
+        await tx.folderActivity.create({
+            data: {
+                folderId,
+                userId: actorUserId,
+                action: "Member Removed",
+                description: `${actorUser.name} removed member ${targetUser.name} from the folder.`
+            }
+        });
+    });
+
+    return { success: true, message: "Member removed successfully." };
+};
+
+export const updateMemberRole = async (folderId, targetUserId, newRole, actorUserId) => {
+    const actorRole = await getMemberRole(folderId, actorUserId);
+    if (actorRole !== "OWNER") {
+        throw new Error("Unauthorized: Only Folder Owner can update member roles.");
+    }
+
+    const targetRole = await getMemberRole(folderId, targetUserId);
+    if (!targetRole) {
+        throw new Error("Target user is not a member of this folder.");
+    }
+
+    if (targetUserId === actorUserId) {
+        throw new Error("Owner cannot update their own role.");
+    }
+
+    if (newRole !== "ADMIN" && newRole !== "EDITOR" && newRole !== "VIEWER") {
+        throw new Error("Invalid role specified.");
+    }
+
+    const targetUser = await prisma.user.findUnique({ where: { id: targetUserId }, select: { name: true } });
+    const actorUser = await prisma.user.findUnique({ where: { id: actorUserId }, select: { name: true } });
+
+    await prisma.$transaction(async (tx) => {
+        await tx.folderMember.update({
+            where: {
+                folderId_userId: {
+                    folderId,
+                    userId: targetUserId
+                }
+            },
+            data: {
+                role: newRole
+            }
+        });
+
+        await tx.folderActivity.create({
+            data: {
+                folderId,
+                userId: actorUserId,
+                action: "Role Changed",
+                description: `${actorUser.name} changed role of ${targetUser.name} from ${targetRole} to ${newRole}.`
+            }
+        });
+    });
+
+    return { success: true, message: "Role updated successfully." };
+};
+
+export const transferOwnership = async (folderId, newOwnerUserId, actorUserId) => {
+    const actorRole = await getMemberRole(folderId, actorUserId);
+    if (actorRole !== "OWNER") {
+        throw new Error("Unauthorized: Only Folder Owner can transfer ownership.");
+    }
+
+    if (newOwnerUserId === actorUserId) {
+        throw new Error("You already own this folder.");
+    }
+
+    const targetRole = await getMemberRole(folderId, newOwnerUserId);
+    if (!targetRole) {
+        throw new Error("New owner must be a member of this folder.");
+    }
+
+    const newOwner = await prisma.user.findUnique({ where: { id: newOwnerUserId }, select: { name: true } });
+    const actorUser = await prisma.user.findUnique({ where: { id: actorUserId }, select: { name: true } });
+
+    await prisma.$transaction(async (tx) => {
+        await tx.folder.update({
+            where: { id: folderId },
+            data: { uid: newOwnerUserId }
+        });
+
+        await tx.folderMember.update({
+            where: { folderId_userId: { folderId, userId: actorUserId } },
+            data: { role: "ADMIN" }
+        });
+
+        await tx.folderMember.update({
+            where: { folderId_userId: { folderId, userId: newOwnerUserId } },
+            data: { role: "OWNER" }
+        });
+
+        await tx.folderActivity.create({
+            data: {
+                folderId,
+                userId: actorUserId,
+                action: "Ownership Transferred",
+                description: `${actorUser.name} transferred folder ownership to ${newOwner.name}.`
+            }
+        });
+    });
+
+    return { success: true, message: "Ownership transferred successfully." };
+};
+
+export const regenerateInviteCode = async (folderId, actorUserId) => {
+    const actorRole = await getMemberRole(folderId, actorUserId);
+    if (actorRole !== "OWNER") {
+        throw new Error("Unauthorized: Only Folder Owner can regenerate the invite code.");
+    }
+
+    const newCode = await generateUniqueInviteCode();
+    const actorUser = await prisma.user.findUnique({ where: { id: actorUserId }, select: { name: true } });
+
+    await prisma.$transaction(async (tx) => {
+        await tx.folder.update({
+            where: { id: folderId },
+            data: {
+                inviteCode: newCode,
+                isInviteActive: true
+            }
+        });
+
+        await tx.folderActivity.create({
+            data: {
+                folderId,
+                userId: actorUserId,
+                action: "Invite Regenerated",
+                description: `${actorUser.name} regenerated the folder invite code.`
+            }
+        });
+    });
+
+    return { success: true, inviteCode: newCode };
+};
+
+export const setInviteStatus = async (folderId, isInviteActive, actionType, actorUserId) => {
+    const actorRole = await getMemberRole(folderId, actorUserId);
+    if (actorRole !== "OWNER") {
+        throw new Error(`Unauthorized: Only Folder Owner can change the invite status.`);
+    }
+
+    const actorUser = await prisma.user.findUnique({ where: { id: actorUserId }, select: { name: true } });
+
+    await prisma.$transaction(async (tx) => {
+        await tx.folder.update({
+            where: { id: folderId },
+            data: {
+                isInviteActive
+            }
+        });
+
+        await tx.folderActivity.create({
+            data: {
+                folderId,
+                userId: actorUserId,
+                action: actionType,
+                description: `${actorUser.name} ${actionType.toLowerCase()} the folder invite code.`
+            }
+        });
+    });
+
+    return { success: true, isInviteActive };
+};
+
+export const getFolderActivities = async (folderId, uid) => {
+    const role = await getMemberRole(folderId, uid);
+    if (role !== "OWNER" && role !== "ADMIN") {
+        throw new Error("Unauthorized: Only Folder Owner or Admin can view activity logs.");
+    }
+    const activities = await prisma.folderActivity.findMany({
+        where: { folderId },
+        include: {
+            user: {
+                select: { id: true, name: true, email: true }
+            }
+        },
+        orderBy: { createdAt: "desc" }
+    });
+
+    return activities.map(a => ({
+        id: a.id,
+        userId: a.user.id,
+        userName: a.user.name,
+        userEmail: a.user.email,
+        action: a.action,
+        description: a.description,
+        createdAt: a.createdAt
+    }));
 };

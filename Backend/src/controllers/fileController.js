@@ -39,6 +39,12 @@ export const uploadFile = async (req, res) => {
         });
 
     } catch (error) {
+        if (error.message === "You don't have permission to upload files.") {
+            return res.status(403).json({
+                success: false,
+                message: "You don't have permission to upload files."
+            });
+        }
         const status = getErrorStatus(error);
         return res.status(status).json({
             success: false,

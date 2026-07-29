@@ -5,8 +5,14 @@ import axios from "../api/axios";
 export function useFolderManager() {
     const [folders, setFolders] = useState([]);
     const [files, setFiles] = useState([]);
-    const [currentFolderId, setCurrentFolderId] = useState(-1);
-    const [history, setHistory] = useState([]);
+    const [currentFolderId, setCurrentFolderId] = useState(() => {
+        const saved = localStorage.getItem("currentFolderId");
+        return saved ? Number(saved) : -1;
+    });
+    const [history, setHistory] = useState(() => {
+        const saved = localStorage.getItem("folderHistory");
+        return saved ? JSON.parse(saved) : [];
+    });
     const [folderName, setFolderName] = useState("");
     const [loading, setLoading] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
@@ -98,6 +104,11 @@ export function useFolderManager() {
     useEffect(() => {
         fetchFolders();
     }, [fetchFolders]);
+
+    useEffect(() => {
+        localStorage.setItem("currentFolderId", currentFolderId);
+        localStorage.setItem("folderHistory", JSON.stringify(history));
+    }, [currentFolderId, history]);
 
     const handleFolderSelect = useCallback((folder) => {
         if (folder.id > 0) {
@@ -288,6 +299,6 @@ export function useFolderManager() {
         toasts, expandedFolders, treeNodes, foldersCache, currentFolderInfo,
         createFolder, deleteFolder, deleteFile,
         downloadFile, handleRenameSubmit, executeMove, handleFileUpload,
-        handleFolderSelect, toggleFolderExpand, goBack, refreshAfterSharedAction
+        handleFolderSelect, toggleFolderExpand, goBack, refreshAfterSharedAction, showToast
     };
 }
