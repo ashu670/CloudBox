@@ -1,6 +1,8 @@
 import * as repo from "../repositories/folderRepo.js";
 import * as memberRepo from "../repositories/folderMemberRepo.js";
 import * as requestRepo from "../repositories/folderJoinRequestRepo.js";
+import { fetchByFolderIdAndUserId } from "../repositories/fileRepo.js";
+import storageService from "../storage/storageService.js";
 import generateInviteCode from "../utils/inviteCodeGenerator.js";
 import { validateFolderAccess, canAccessFolder, FolderAction } from "./permissionService.js";
 import { prisma } from "../config/db.js";
@@ -168,12 +170,23 @@ export const fetchFolder = async (uid, pid) => {
     return folderDetails;
 };
 
-export const delFolder = async (uid, id) => {
+export const delFolder = async (uid, id, force) => {
     const valid = await validateFolderAccess(id, uid, FolderAction.DELETE);
     if (!valid) {
         throw new Error("Folder not found or access denied");
     }
     if (valid.pid) touchFolder(valid.pid);
+
+    const filesToDelete = await fetchByFolderIdAndUserId(id, uid);
+    if(filesToDelete && !force){
+        const error = new Error(`Folder contains ${filesToDelete.length} files ! Do you want to delete ?`);
+        error.requiresConfirmation = true;
+        throw error;
+    }
+
+    if(filesToDelete) await filesToDelete.map(m => {
+        storageService.delete(m.stoName);
+    });
 
     return await repo.deleteFolder(id);
 };

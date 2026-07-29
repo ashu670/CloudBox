@@ -108,6 +108,18 @@ export const findChildren = async (uid, pid) => {
     return folder;
 };
 
+export const subfolders = async (folderId) => {
+
+    return await prisma.$queryRaw`
+        WITH RECURSIVE FolderTree AS (
+        SELECT id FROM "Folder" WHERE id = ${folderId}
+        UNION ALL
+        SELECT f.id FROM "Folder" f
+        INNER JOIN FolderTree ft ON f.pid = ft.id
+        )
+        SELECT id FROM FolderTree;`;
+};
+
 export const deleteFolder = async (id) => {
     return await prisma.folder.delete({
         where: {
