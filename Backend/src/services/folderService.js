@@ -86,7 +86,7 @@ export const fetchFolder = async (uid, pid) => {
     return await repo.findChildren(uid, pid);
 };
 
-export const delFolder = async (uid, id) => {
+export const delFolder = async (uid, id, force) => {
     const valid = await validateFolderAccess(id, uid, FolderAction.DELETE);
     if (!valid) {
         throw new Error("Folder not found or access denied");
@@ -94,6 +94,12 @@ export const delFolder = async (uid, id) => {
     if (valid.pid) touchFolder(valid.pid);
 
     const filesToDelete = await fetchByFolderIdAndUserId(id, uid);
+    if(filesToDelete && !force){
+        const error = new Error(`Folder contains ${filesToDelete.length} files ! Do you want to delete ?`);
+        error.requiresConfirmation = true;
+        throw error;
+    }
+
     if(filesToDelete) await filesToDelete.map(m => {
         storageService.delete(m.stoName);
     });
