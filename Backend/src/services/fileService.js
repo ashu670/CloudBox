@@ -23,7 +23,7 @@ async function generateUniqueStorageName(uid, folderId, originalName) {
             counter++;
             stoName = `${prefix}_${counter}${ext}`;
             targetPath = path.join(UPLOAD_BASE_DIR, stoName);
-        } catch {
+        } catch {                                                                                       
             break;
         }
     }
@@ -38,10 +38,14 @@ export const uploadFile = async (file, folderId, uid) => {
         throw new Error("Invalid Folder ID.");
     }
 
-    const validFolder = await validateFolderAccess(folderId, uid, FolderAction.WRITE);
+    const folderExists = await folderRepo.findById(folderId);
+    if (!folderExists) {
+        throw new Error("Folder not found.");
+    }
 
-    if (!validFolder) {
-        throw new Error("Folder not found or access denied.");
+    const hasWritePermission = await canAccessFolder(folderId, uid, FolderAction.WRITE);
+    if (!hasWritePermission) {
+        throw new Error("You don't have permission to upload files.");
     }
 
     // 1. Generate filename

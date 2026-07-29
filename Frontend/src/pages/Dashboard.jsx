@@ -6,6 +6,9 @@ import CreateSharedFolder from "../components/CreateSharedFolder";
 import JoinSharedFolder from "../components/JoinSharedFolder";
 import FolderRequests from "../components/FolderRequests";
 import FolderMembers from "../components/FolderMembers";
+import OwnerPanel from "../components/OwnerPanel";
+import AdminPanel from "../components/AdminPanel";
+import ActivityLogs from "../components/ActivityLogs";
 
 
 export default function FolderView() {
@@ -16,7 +19,7 @@ export default function FolderView() {
         toasts, expandedFolders, treeNodes, currentFolderInfo,
         createFolder, deleteFolder, deleteFile,
         downloadFile, handleRenameSubmit, executeMove, handleFileUpload,
-        handleFolderSelect, toggleFolderExpand, goBack, refreshAfterSharedAction
+        handleFolderSelect, toggleFolderExpand, goBack, refreshAfterSharedAction, showToast
     } = useFolderManager();
 
     const [sharedPanel, setSharedPanel] = useState(null);
@@ -192,6 +195,11 @@ export default function FolderView() {
                                 </span>
                             </span>
                         ))}
+                        {isSharedFolderContext && currentFolderInfo?.inviteCode && (
+                            <span className="invite-badge-inline" style={{ marginLeft: '16px', background: 'var(--accent-bg)', border: '1px solid var(--accent-border)', color: 'var(--accent)', padding: '2px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: '500', whiteSpace: 'nowrap' }}>
+                                Invite Code: <strong>{currentFolderInfo.inviteCode}</strong> ({currentFolderInfo.isInviteActive ? 'Active' : 'Disabled'})
+                            </span>
+                        )}
                     </div>
 
                     <div className="toolbar-actions">
@@ -227,6 +235,33 @@ export default function FolderView() {
 
                         {isSharedFolderContext && (
                             <>
+                                {currentFolderInfo?.userRole === 'OWNER' && (
+                                    <button
+                                        type="button"
+                                        className={`btn btn-secondary ${sharedPanel === 'owner-panel' ? 'active' : ''}`}
+                                        onClick={() => toggleSharedPanel('owner-panel')}
+                                    >
+                                        Owner Panel
+                                    </button>
+                                )}
+                                {currentFolderInfo?.userRole === 'ADMIN' && (
+                                    <button
+                                        type="button"
+                                        className={`btn btn-secondary ${sharedPanel === 'admin-panel' ? 'active' : ''}`}
+                                        onClick={() => toggleSharedPanel('admin-panel')}
+                                    >
+                                        Admin Panel
+                                    </button>
+                                )}
+                                {(currentFolderInfo?.userRole === 'OWNER' || currentFolderInfo?.userRole === 'ADMIN') && (
+                                    <button
+                                        type="button"
+                                        className={`btn btn-secondary ${sharedPanel === 'activities' ? 'active' : ''}`}
+                                        onClick={() => toggleSharedPanel('activities')}
+                                    >
+                                        Activity Logs
+                                    </button>
+                                )}
                                 <button
                                     type="button"
                                     className={`btn btn-secondary ${sharedPanel === 'requests' ? 'active' : ''}`}
@@ -274,10 +309,30 @@ export default function FolderView() {
                         {sharedPanel === 'join' && (
                             <JoinSharedFolder onJoined={handleSharedFolderJoined} />
                         )}
+                        {sharedPanel === 'owner-panel' && isSharedFolderContext && (
+                            <OwnerPanel
+                                folderId={currentFolderId}
+                                onNotify={(msg, type) => showToast(msg, type)}
+                                onRefresh={refreshAfterSharedAction}
+                            />
+                        )}
+                        {sharedPanel === 'admin-panel' && isSharedFolderContext && (
+                            <AdminPanel
+                                folderId={currentFolderId}
+                                onNotify={(msg, type) => showToast(msg, type)}
+                                onRefresh={refreshAfterSharedAction}
+                            />
+                        )}
+                        {sharedPanel === 'activities' && isSharedFolderContext && (
+                            <ActivityLogs
+                                folderId={currentFolderId}
+                            />
+                        )}
                         {sharedPanel === 'requests' && isSharedFolderContext && (
                             <FolderRequests
                                 folderId={currentFolderId}
                                 onRequestHandled={handleRequestHandled}
+                                onNotify={(msg, type) => showToast(msg, type)}
                             />
                         )}
                         {sharedPanel === 'members' && isSharedFolderContext && (
@@ -384,7 +439,14 @@ export default function FolderView() {
                                                 <button type="button" className="btn btn-secondary" onClick={() => setEditingItem(null)}>Cancel</button>
                                             </form>
                                         ) : (
-                                            <span>{folder.name}</span>
+                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                                                <span>{folder.name}</span>
+                                                {folder.isShared && folder.inviteCode && (
+                                                    <span className="folder-list-invite-tag" style={{ background: 'var(--accent-bg)', border: '1px solid var(--accent-border)', color: 'var(--accent)', padding: '1px 6px', borderRadius: '8px', fontSize: '10px', fontWeight: '500' }}>
+                                                        Code: {folder.inviteCode}
+                                                    </span>
+                                                )}
+                                            </span>
                                         )}
                                     </div>
                                     <div className="file-size">-</div>
