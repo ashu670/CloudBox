@@ -1,4 +1,6 @@
 import { prisma } from "../config/db.js";
+import * as activityRepo from "./activityRepo.js";
+import { ActivityType, TargetType } from "../validations/activityValidation.js";
 
 export const create = async (data) => {
     return await prisma.folderJoinRequest.create({
@@ -70,7 +72,6 @@ export const findById = async (id) => {
     });
 };
 
-
 export const updateStatus = async (id, status) => {
     return await prisma.folderJoinRequest.update({
         where: {
@@ -82,16 +83,13 @@ export const updateStatus = async (id, status) => {
     });
 };
 
-import * as activityRepo from "./activityRepo.js";
-import { ActivityType, TargetType } from "../validations/activityValidation.js";
-
 export const approveJoinRequestTx = async (requestId, folderId, requestedByUserId, role = "VIEWER", actorUserId, actorName, targetName) => {
     return await prisma.$transaction(async (tx) => {
         await tx.folderJoinRequest.update({
             where: { id: requestId },
             data: { status: "APPROVED" },
         });
-
+        
         await tx.folderMember.create({
             data: {
                 folderId,
