@@ -1,11 +1,13 @@
 import * as repo from "../repositories/folderRepo.js";
 import * as memberRepo from "../repositories/folderMemberRepo.js";
 import * as requestRepo from "../repositories/folderJoinRequestRepo.js";
+import * as userRepo from "../repositories/userRepo.js";
+import * as activityService from "./activityService.js";
+import { ActivityType, TargetType } from "../validations/activityValidation.js";
 import { fetchByFolderIdAndUserId } from "../repositories/fileRepo.js";
 import storageService from "../storage/storageService.js";
 import generateInviteCode from "../utils/inviteCodeGenerator.js";
 import { validateFolderAccess, canAccessFolder, FolderAction } from "./permissionService.js";
-import { prisma } from "../config/db.js";
 
 // --- Private Helpers ---
 
@@ -44,36 +46,6 @@ async function getMemberRole(folderId, userId) {
 
     const member = await memberRepo.findMember(folderId, userId);
     return member ? member.role : null;
-}
-
-async function getFolderStats(folderId) {
-    const folderIds = [folderId];
-    let index = 0;
-    while (index < folderIds.length) {
-        const currentId = folderIds[index];
-        const subfolders = await prisma.folder.findMany({
-            where: { pid: currentId },
-            select: { id: true }
-        });
-        for (const sub of subfolders) {
-            folderIds.push(sub.id);
-        }
-        index++;
-    }
-
-    const files = await prisma.file.findMany({
-        where: {
-            folderId: { in: folderIds }
-        },
-        select: {
-            size: true
-        }
-    });
-
-    const filesCount = files.length;
-    const storageUsed = files.reduce((acc, file) => acc + file.size, 0);
-
-    return { filesCount, storageUsed };
 }
 
 async function getAndVerifyPendingRequest(requestId, uid) {
@@ -146,13 +118,26 @@ export const createFolder = async (name, pid, uid) => {
 
     touchFolder(pid);
 
-    return await repo.create({
+    const folder = await repo.create({
         name: uniqueName,
         pid,
         uid,
         isShared,
         visibility
     });
+
+    if (pid) {
+        await activityService.log({
+            folderId: pid,
+            userId: uid,
+            action: ActivityType.CREATE_FOLDER,
+            target: TargetType.FOLDER,
+            targetId: folder.id,
+            message: `Created subfolder "${uniqueName}"`
+        });
+    }
+
+    return folder;
 };
 
 export const fetchFolder = async (uid, pid) => {
@@ -178,17 +163,32 @@ export const delFolder = async (uid, id, force) => {
     if (valid.pid) touchFolder(valid.pid);
 
     const filesToDelete = await fetchByFolderIdAndUserId(id, uid);
-    if(filesToDelete && !force){
+    if (filesToDelete && filesToDelete.length > 0 && !force) {
         const error = new Error(`Folder contains ${filesToDelete.length} files ! Do you want to delete ?`);
         error.requiresConfirmation = true;
         throw error;
     }
 
-    if(filesToDelete) await filesToDelete.map(m => {
-        storageService.delete(m.stoName);
-    });
+    if (filesToDelete) {
+        filesToDelete.forEach(m => {
+            storageService.delete(m.stoName);
+        });
+    }
 
-    return await repo.deleteFolder(id);
+    const deletedFolder = await repo.deleteFolder(id);
+
+    if (valid.pid) {
+        await activityService.log({
+            folderId: valid.pid,
+            userId: uid,
+            action: ActivityType.DELETE_FOLDER,
+            target: TargetType.FOLDER,
+            targetId: id,
+            message: `Deleted folder "${valid.name}"`
+        });
+    }
+
+    return deletedFolder;
 };
 
 export const createSharedFolder = async (name, uid) => {
@@ -204,6 +204,15 @@ export const createSharedFolder = async (name, uid) => {
     };
 
     const folder = await repo.createSharedFolderTx(folderData, uid);
+
+    await activityService.log({
+        folderId: folder.id,
+        userId: uid,
+        action: ActivityType.SHARE_FOLDER,
+        target: TargetType.FOLDER,
+        targetId: folder.id,
+        message: `Created shared folder "${folder.name}"`
+    });
 
     return {
         folderId: folder.id,
@@ -260,6 +269,15 @@ export const joinSharedFolder = async (inviteCode, uid) => {
         requestedBy: userId,
     });
 
+    await activityService.log({
+        folderId: folder.id,
+        userId,
+        action: ActivityType.JOIN_REQUEST,
+        target: TargetType.FOLDER,
+        targetId: folder.id,
+        message: `Requested to join folder "${folder.name}"`
+    });
+
     return {
         folderName: folder.name,
         status: "PENDING",
@@ -294,32 +312,18 @@ export const approveRequest = async (requestId, uid) => {
         throw new Error("User is already a member of this folder.");
     }
 
-    const targetUser = await prisma.user.findUnique({ where: { id: request.requestedBy }, select: { name: true } });
-    const actorUser = await prisma.user.findUnique({ where: { id: uid }, select: { name: true } });
+    const targetUser = await userRepo.findNameById(request.requestedBy);
+    const actorUser = await userRepo.findNameById(uid);
 
-    await prisma.$transaction(async (tx) => {
-        await tx.folderJoinRequest.update({
-            where: { id: requestId },
-            data: { status: "APPROVED" },
-        });
-
-        await tx.folderMember.create({
-            data: {
-                folderId: request.folderId,
-                userId: request.requestedBy,
-                role: "VIEWER",
-            },
-        });
-
-        await tx.folderActivity.create({
-            data: {
-                folderId: request.folderId,
-                userId: uid,
-                action: "Join Approved",
-                description: `${actorUser.name} approved join request of ${targetUser.name}.`
-            }
-        });
-    });
+    await requestRepo.approveJoinRequestTx(
+        request.id,
+        request.folderId,
+        request.requestedBy,
+        "VIEWER",
+        uid,
+        actorUser?.name || "User",
+        targetUser?.name || "User"
+    );
 
     return {
         folderId: request.folderId,
@@ -331,24 +335,16 @@ export const approveRequest = async (requestId, uid) => {
 export const rejectRequest = async (requestId, uid) => {
     const { request } = await getAndVerifyPendingRequest(requestId, uid);
 
-    const targetUser = await prisma.user.findUnique({ where: { id: request.requestedBy }, select: { name: true } });
-    const actorUser = await prisma.user.findUnique({ where: { id: uid }, select: { name: true } });
+    const targetUser = await userRepo.findNameById(request.requestedBy);
+    const actorUser = await userRepo.findNameById(uid);
 
-    await prisma.$transaction(async (tx) => {
-        await tx.folderJoinRequest.update({
-            where: { id: requestId },
-            data: { status: "REJECTED" },
-        });
-
-        await tx.folderActivity.create({
-            data: {
-                folderId: request.folderId,
-                userId: uid,
-                action: "Join Rejected",
-                description: `${actorUser.name} rejected join request of ${targetUser.name}.`
-            }
-        });
-    });
+    await requestRepo.rejectJoinRequestTx(
+        request.id,
+        request.folderId,
+        uid,
+        actorUser?.name || "User",
+        targetUser?.name || "User"
+    );
 
     return {
         requestId: request.id,
@@ -389,7 +385,18 @@ export const rename = async (id, uid, newName) => {
     }
     if (valid.pid) touchFolder(valid.pid);
 
-    return await repo.renameFolder(id, newName);
+    const renamedFolder = await repo.renameFolder(id, newName);
+
+    await activityService.log({
+        folderId: id,
+        userId: uid,
+        action: ActivityType.RENAME_FOLDER,
+        target: TargetType.FOLDER,
+        targetId: id,
+        message: `Renamed folder to "${newName}"`
+    });
+
+    return renamedFolder;
 };
 
 export const move = async (id, uid, newPid) => {
@@ -419,7 +426,20 @@ export const move = async (id, uid, newPid) => {
     if (validCurr.pid) touchFolder(validCurr.pid);
     if (newPid) touchFolder(newPid);
 
-    return await repo.move(id, newPid);
+    const movedFolder = await repo.move(id, newPid);
+
+    if (newPid) {
+        await activityService.log({
+            folderId: newPid,
+            userId: uid,
+            action: ActivityType.MOVE_FOLDER,
+            target: TargetType.FOLDER,
+            targetId: id,
+            message: `Moved folder into this directory`
+        });
+    }
+
+    return movedFolder;
 };
 
 export const touchFolder = async (id) => {
@@ -440,29 +460,14 @@ export const getOwnerPanel = async (folderId, uid) => {
         throw new Error("Unauthorized: Only Folder Owner can access the Owner Panel.");
     }
 
-    const folder = await prisma.folder.findUnique({
-        where: { id: folderId },
-        include: {
-            user: {
-                select: { id: true, name: true, email: true }
-            }
-        }
-    });
-
+    const folder = await repo.findFolderWithOwnerDetails(folderId);
     if (!folder) {
         throw new Error("Folder not found.");
     }
 
-    const allMembers = await prisma.folderMember.findMany({
-        where: { folderId },
-        include: {
-            user: {
-                select: { id: true, name: true, email: true }
-            }
-        }
-    });
-
+    const allMembers = await memberRepo.getFolderMembers(folderId);
     const ownerDetails = folder.user;
+
     const admins = allMembers
         .filter(m => m.role === "ADMIN")
         .map(m => ({
@@ -485,14 +490,7 @@ export const getOwnerPanel = async (folderId, uid) => {
             joinedAt: m.joinedAt
         }));
 
-    const pendingRequests = await prisma.folderJoinRequest.findMany({
-        where: { folderId, status: "PENDING" },
-        include: {
-            user: {
-                select: { id: true, name: true, email: true }
-            }
-        }
-    });
+    const pendingRequests = await requestRepo.findByFolderId(folderId, "PENDING");
 
     const formattedPendingRequests = pendingRequests.map(r => ({
         id: r.id,
@@ -502,7 +500,7 @@ export const getOwnerPanel = async (folderId, uid) => {
         requestedAt: r.requestedAt
     }));
 
-    const stats = await getFolderStats(folderId);
+    const stats = await repo.getFolderStats(folderId);
 
     return {
         folderName: folder.name,
@@ -527,29 +525,14 @@ export const getAdminPanel = async (folderId, uid) => {
         throw new Error("Unauthorized: Only Folder Owner or Admin can access the Admin Panel.");
     }
 
-    const folder = await prisma.folder.findUnique({
-        where: { id: folderId },
-        include: {
-            user: {
-                select: { id: true, name: true, email: true }
-            }
-        }
-    });
-
+    const folder = await repo.findFolderWithOwnerDetails(folderId);
     if (!folder) {
         throw new Error("Folder not found.");
     }
 
-    const allMembers = await prisma.folderMember.findMany({
-        where: { folderId },
-        include: {
-            user: {
-                select: { id: true, name: true, email: true }
-            }
-        }
-    });
-
+    const allMembers = await memberRepo.getFolderMembers(folderId);
     const ownerDetails = folder.user;
+
     const admins = allMembers
         .filter(m => m.role === "ADMIN")
         .map(m => ({
@@ -572,14 +555,7 @@ export const getAdminPanel = async (folderId, uid) => {
             joinedAt: m.joinedAt
         }));
 
-    const pendingRequests = await prisma.folderJoinRequest.findMany({
-        where: { folderId, status: "PENDING" },
-        include: {
-            user: {
-                select: { id: true, name: true, email: true }
-            }
-        }
-    });
+    const pendingRequests = await requestRepo.findByFolderId(folderId, "PENDING");
 
     const formattedPendingRequests = pendingRequests.map(r => ({
         id: r.id,
@@ -589,7 +565,7 @@ export const getAdminPanel = async (folderId, uid) => {
         requestedAt: r.requestedAt
     }));
 
-    const stats = await getFolderStats(folderId);
+    const stats = await repo.getFolderStats(folderId);
 
     return {
         folderName: folder.name,
@@ -632,28 +608,16 @@ export const removeFolderMember = async (folderId, targetUserId, actorUserId) =>
         }
     }
 
-    const targetUser = await prisma.user.findUnique({ where: { id: targetUserId }, select: { name: true } });
-    const actorUser = await prisma.user.findUnique({ where: { id: actorUserId }, select: { name: true } });
+    const targetUser = await userRepo.findNameById(targetUserId);
+    const actorUser = await userRepo.findNameById(actorUserId);
 
-    await prisma.$transaction(async (tx) => {
-        await tx.folderMember.delete({
-            where: {
-                folderId_userId: {
-                    folderId,
-                    userId: targetUserId
-                }
-            }
-        });
-
-        await tx.folderActivity.create({
-            data: {
-                folderId,
-                userId: actorUserId,
-                action: "Member Removed",
-                description: `${actorUser.name} removed member ${targetUser.name} from the folder.`
-            }
-        });
-    });
+    await memberRepo.removeMemberTx(
+        folderId,
+        targetUserId,
+        actorUserId,
+        actorUser?.name || "User",
+        targetUser?.name || "User"
+    );
 
     return { success: true, message: "Member removed successfully." };
 };
@@ -677,31 +641,18 @@ export const updateMemberRole = async (folderId, targetUserId, newRole, actorUse
         throw new Error("Invalid role specified.");
     }
 
-    const targetUser = await prisma.user.findUnique({ where: { id: targetUserId }, select: { name: true } });
-    const actorUser = await prisma.user.findUnique({ where: { id: actorUserId }, select: { name: true } });
+    const targetUser = await userRepo.findNameById(targetUserId);
+    const actorUser = await userRepo.findNameById(actorUserId);
 
-    await prisma.$transaction(async (tx) => {
-        await tx.folderMember.update({
-            where: {
-                folderId_userId: {
-                    folderId,
-                    userId: targetUserId
-                }
-            },
-            data: {
-                role: newRole
-            }
-        });
-
-        await tx.folderActivity.create({
-            data: {
-                folderId,
-                userId: actorUserId,
-                action: "Role Changed",
-                description: `${actorUser.name} changed role of ${targetUser.name} from ${targetRole} to ${newRole}.`
-            }
-        });
-    });
+    await memberRepo.updateRoleTx(
+        folderId,
+        targetUserId,
+        newRole,
+        actorUserId,
+        actorUser?.name || "User",
+        targetUser?.name || "User",
+        targetRole
+    );
 
     return { success: true, message: "Role updated successfully." };
 };
@@ -721,34 +672,16 @@ export const transferOwnership = async (folderId, newOwnerUserId, actorUserId) =
         throw new Error("New owner must be a member of this folder.");
     }
 
-    const newOwner = await prisma.user.findUnique({ where: { id: newOwnerUserId }, select: { name: true } });
-    const actorUser = await prisma.user.findUnique({ where: { id: actorUserId }, select: { name: true } });
+    const newOwner = await userRepo.findNameById(newOwnerUserId);
+    const actorUser = await userRepo.findNameById(actorUserId);
 
-    await prisma.$transaction(async (tx) => {
-        await tx.folder.update({
-            where: { id: folderId },
-            data: { uid: newOwnerUserId }
-        });
-
-        await tx.folderMember.update({
-            where: { folderId_userId: { folderId, userId: actorUserId } },
-            data: { role: "ADMIN" }
-        });
-
-        await tx.folderMember.update({
-            where: { folderId_userId: { folderId, userId: newOwnerUserId } },
-            data: { role: "OWNER" }
-        });
-
-        await tx.folderActivity.create({
-            data: {
-                folderId,
-                userId: actorUserId,
-                action: "Ownership Transferred",
-                description: `${actorUser.name} transferred folder ownership to ${newOwner.name}.`
-            }
-        });
-    });
+    await repo.transferOwnershipTx(
+        folderId,
+        newOwnerUserId,
+        actorUserId,
+        actorUser?.name || "User",
+        newOwner?.name || "User"
+    );
 
     return { success: true, message: "Ownership transferred successfully." };
 };
@@ -760,26 +693,15 @@ export const regenerateInviteCode = async (folderId, actorUserId) => {
     }
 
     const newCode = await generateUniqueInviteCode();
-    const actorUser = await prisma.user.findUnique({ where: { id: actorUserId }, select: { name: true } });
+    const actorUser = await userRepo.findNameById(actorUserId);
 
-    await prisma.$transaction(async (tx) => {
-        await tx.folder.update({
-            where: { id: folderId },
-            data: {
-                inviteCode: newCode,
-                isInviteActive: true
-            }
-        });
-
-        await tx.folderActivity.create({
-            data: {
-                folderId,
-                userId: actorUserId,
-                action: "Invite Regenerated",
-                description: `${actorUser.name} regenerated the folder invite code.`
-            }
-        });
-    });
+    await repo.updateInviteCodeTx(
+        folderId,
+        { inviteCode: newCode, isInviteActive: true },
+        actorUserId,
+        actorUser?.name || "User",
+        "Invite Regenerated"
+    );
 
     return { success: true, inviteCode: newCode };
 };
@@ -787,54 +709,22 @@ export const regenerateInviteCode = async (folderId, actorUserId) => {
 export const setInviteStatus = async (folderId, isInviteActive, actionType, actorUserId) => {
     const actorRole = await getMemberRole(folderId, actorUserId);
     if (actorRole !== "OWNER") {
-        throw new Error(`Unauthorized: Only Folder Owner can change the invite status.`);
+        throw new Error("Unauthorized: Only Folder Owner can change the invite status.");
     }
 
-    const actorUser = await prisma.user.findUnique({ where: { id: actorUserId }, select: { name: true } });
+    const actorUser = await userRepo.findNameById(actorUserId);
 
-    await prisma.$transaction(async (tx) => {
-        await tx.folder.update({
-            where: { id: folderId },
-            data: {
-                isInviteActive
-            }
-        });
-
-        await tx.folderActivity.create({
-            data: {
-                folderId,
-                userId: actorUserId,
-                action: actionType,
-                description: `${actorUser.name} ${actionType.toLowerCase()} the folder invite code.`
-            }
-        });
-    });
+    await repo.updateInviteCodeTx(
+        folderId,
+        { isInviteActive },
+        actorUserId,
+        actorUser?.name || "User",
+        actionType
+    );
 
     return { success: true, isInviteActive };
 };
 
 export const getFolderActivities = async (folderId, uid) => {
-    const role = await getMemberRole(folderId, uid);
-    if (role !== "OWNER" && role !== "ADMIN") {
-        throw new Error("Unauthorized: Only Folder Owner or Admin can view activity logs.");
-    }
-    const activities = await prisma.folderActivity.findMany({
-        where: { folderId },
-        include: {
-            user: {
-                select: { id: true, name: true, email: true }
-            }
-        },
-        orderBy: { createdAt: "desc" }
-    });
-
-    return activities.map(a => ({
-        id: a.id,
-        userId: a.user.id,
-        userName: a.user.name,
-        userEmail: a.user.email,
-        action: a.action,
-        description: a.description,
-        createdAt: a.createdAt
-    }));
+    return await activityService.getFolderActivities(folderId, uid);
 };

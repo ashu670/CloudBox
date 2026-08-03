@@ -17,6 +17,7 @@ const getErrorStatus = (error) => {
     ) {
         return 400;
     }
+    if(msg.includes("contains")) return 409;
     return 500;
 };
 

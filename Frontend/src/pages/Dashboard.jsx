@@ -10,7 +10,6 @@ import OwnerPanel from "../components/OwnerPanel";
 import AdminPanel from "../components/AdminPanel";
 import ActivityLogs from "../components/ActivityLogs";
 
-
 export default function FolderView() {
     const {
         folders, files, currentFolderId, history, folderName, setFolderName,
@@ -18,11 +17,13 @@ export default function FolderView() {
         editingItem, setEditingItem, renameValue, setRenameValue, movingItem, setMovingItem,
         toasts, expandedFolders, treeNodes, currentFolderInfo,
         createFolder, deleteFolder, deleteFile,
-        downloadFile, handleRenameSubmit, executeMove, handleFileUpload,
+        downloadFile, handleRenameSubmit, executeMove, moveItemToFolder, handleFileUpload,
         handleFolderSelect, toggleFolderExpand, goBack, refreshAfterSharedAction, showToast
     } = useFolderManager();
 
     const [sharedPanel, setSharedPanel] = useState(null);
+    const [draggedItem, setDraggedItem] = useState(null);
+    const [dropTargetId, setDropTargetId] = useState(null);
 
     const toggleSharedPanel = (panel) => {
         setSharedPanel((prev) => (prev === panel ? null : panel));
@@ -48,6 +49,66 @@ export default function FolderView() {
         }
     }, [isSharedFolderContext, sharedPanel]);
 
+    // Drag & Drop event handlers
+    const handleDragStartItem = (e, item) => {
+        setDraggedItem(item);
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("application/json", JSON.stringify(item));
+    };
+
+    const handleDragEndItem = () => {
+        setDraggedItem(null);
+        setDropTargetId(null);
+    };
+
+    const handleDragOverTarget = (e, targetFolderId) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setDropTargetId(targetFolderId);
+        if (draggedItem) {
+            e.dataTransfer.dropEffect = "move";
+        }
+    };
+
+    const handleDragLeaveTarget = (e, targetFolderId) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (dropTargetId === targetFolderId) {
+            setDropTargetId(null);
+        }
+    };
+
+    const handleDropOnTarget = (e, targetFolderId) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setDropTargetId(null);
+
+        // Check if external file upload drop
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0 && !draggedItem) {
+            if (targetFolderId > 0) {
+                handleFileUpload(e.dataTransfer.files[0], targetFolderId);
+            } else {
+                showToast("Files cannot be uploaded to Root level.", "error");
+            }
+            return;
+        }
+
+        let item = draggedItem;
+        if (!item) {
+            try {
+                const rawData = e.dataTransfer.getData("application/json");
+                if (rawData) item = JSON.parse(rawData);
+            } catch {
+                item = null;
+            }
+        }
+
+        if (item) {
+            moveItemToFolder(item, targetFolderId);
+            setDraggedItem(null);
+        }
+    };
+
     // Helper to format type labels
     const getFileTypeLabel = (mimeType) => {
         if (!mimeType) return "File";
@@ -64,14 +125,21 @@ export default function FolderView() {
     const renderTreeNode = (node, depth = 0) => {
         const isExpanded = expandedFolders[node.id];
         const isActive = currentFolderId === node.id;
+        const isTarget = dropTargetId === node.id;
         const children = treeNodes[node.id];
 
         return (
             <div key={node.id} className="tree-node-wrapper">
                 <div 
-                    className={`tree-node ${isActive ? 'active' : ''}`}
+                    className={`tree-node ${isActive ? 'active' : ''} ${isTarget ? 'drag-over-target' : ''}`}
                     style={{ paddingLeft: `${12 + depth * 12}px` }}
                     onClick={() => handleFolderSelect(node)}
+                    draggable={true}
+                    onDragStart={(e) => handleDragStartItem(e, { type: 'folder', id: node.id, name: node.name })}
+                    onDragEnd={handleDragEndItem}
+                    onDragOver={(e) => handleDragOverTarget(e, node.id)}
+                    onDragLeave={(e) => handleDragLeaveTarget(e, node.id)}
+                    onDrop={(e) => handleDropOnTarget(e, node.id)}
                 >
                     <svg 
                         className={`tree-chevron ${isExpanded ? 'expanded' : ''}`}
@@ -110,13 +178,17 @@ export default function FolderView() {
     const renderRootNode = () => {
         const isExpanded = expandedFolders[-1];
         const isActive = currentFolderId === -1 || currentFolderId === 0;
+        const isTarget = dropTargetId === -1;
         const rootChildren = treeNodes[-1];
 
         return (
             <div className="tree-node-wrapper">
                 <div 
-                    className={`tree-node ${isActive ? 'active' : ''}`}
+                    className={`tree-node ${isActive ? 'active' : ''} ${isTarget ? 'drag-over-target' : ''}`}
                     onClick={() => handleFolderSelect({ id: -1, name: "Root", pid: null })}
+                    onDragOver={(e) => handleDragOverTarget(e, -1)}
+                    onDragLeave={(e) => handleDragLeaveTarget(e, -1)}
+                    onDrop={(e) => handleDropOnTarget(e, -1)}
                 >
                     <svg 
                         className={`tree-chevron ${isExpanded ? 'expanded' : ''}`}
@@ -170,7 +242,7 @@ export default function FolderView() {
                 onDrop={(e) => {
                     e.preventDefault();
                     setIsDragging(false);
-                    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                    if (e.dataTransfer.files && e.dataTransfer.files[0] && !draggedItem) {
                         handleFileUpload(e.dataTransfer.files[0]);
                     }
                 }}
@@ -179,8 +251,11 @@ export default function FolderView() {
                 <div className="explorer-header">
                     <div className="breadcrumbs">
                         <span 
-                            className={`breadcrumb-item ${currentFolderId === -1 ? 'active' : ''}`}
+                            className={`breadcrumb-item ${currentFolderId === -1 ? 'active' : ''} ${dropTargetId === -1 ? 'drag-over-target' : ''}`}
                             onClick={() => handleFolderSelect({ id: -1, name: "Root" })}
+                            onDragOver={(e) => handleDragOverTarget(e, -1)}
+                            onDragLeave={(e) => handleDragLeaveTarget(e, -1)}
+                            onDrop={(e) => handleDropOnTarget(e, -1)}
                         >
                             Root
                         </span>
@@ -188,8 +263,11 @@ export default function FolderView() {
                             <span key={folder.id} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
                                 <span className="breadcrumb-separator">/</span>
                                 <span 
-                                    className={`breadcrumb-item ${index === history.length - 1 ? 'active' : ''}`}
+                                    className={`breadcrumb-item ${index === history.length - 1 ? 'active' : ''} ${dropTargetId === folder.id ? 'drag-over-target' : ''}`}
                                     onClick={() => handleFolderSelect(folder)}
+                                    onDragOver={(e) => handleDragOverTarget(e, folder.id)}
+                                    onDragLeave={(e) => handleDragLeaveTarget(e, folder.id)}
+                                    onDrop={(e) => handleDropOnTarget(e, folder.id)}
                                 >
                                     {folder.name}
                                 </span>
@@ -378,7 +456,7 @@ export default function FolderView() {
                 {currentFolderId > 0 && (
                     <div className={`upload-dropzone ${isDragging ? 'dragover' : ''}`}>
                         <div className="upload-dropzone-inner">
-                            <span className="upload-dropzone-text">Drag & drop files here to upload</span>
+                            <span className="upload-dropzone-text">Drag & drop files or folders onto tree/items to move or upload</span>
                         </div>
                     </div>
                 )}
@@ -411,11 +489,18 @@ export default function FolderView() {
                         {/* Folders List */}
                         {folders.map(folder => {
                             const isEditing = editingItem && editingItem.type === 'folder' && editingItem.id === folder.id;
+                            const isTarget = dropTargetId === folder.id;
                             return (
                                 <div 
                                     key={`folder-${folder.id}`} 
-                                    className="file-row clickable-row"
+                                    className={`file-row clickable-row ${isTarget ? 'drag-over-target' : ''}`}
                                     onClick={() => !isEditing && handleFolderSelect(folder)}
+                                    draggable={!isEditing}
+                                    onDragStart={(e) => handleDragStartItem(e, { type: 'folder', id: folder.id, name: folder.name })}
+                                    onDragEnd={handleDragEndItem}
+                                    onDragOver={(e) => handleDragOverTarget(e, folder.id)}
+                                    onDragLeave={(e) => handleDragLeaveTarget(e, folder.id)}
+                                    onDrop={(e) => handleDropOnTarget(e, folder.id)}
                                 >
                                     <div className="item-icon-col">
                                         <svg className="folder-svg" viewBox="0 0 24 24" width="20" height="20" style={{ fill: '#ffb020' }}>
@@ -469,7 +554,13 @@ export default function FolderView() {
                         {files.map(file => {
                             const isEditing = editingItem && editingItem.type === 'file' && editingItem.id === file.id;
                             return (
-                                <div key={`file-${file.id}`} className="file-row">
+                                <div 
+                                    key={`file-${file.id}`} 
+                                    className="file-row"
+                                    draggable={!isEditing}
+                                    onDragStart={(e) => handleDragStartItem(e, { type: 'file', id: file.id, name: file.orgName })}
+                                    onDragEnd={handleDragEndItem}
+                                >
                                     <div className="item-icon-col">
                                         <FileIcon mimeType={file.mimeType} />
                                     </div>

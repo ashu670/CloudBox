@@ -5,6 +5,8 @@ import * as folderRepo from "../repositories/folderRepo.js";
 import { touchFolder } from "./folderService.js";
 import { canAccessFolder, validateFolderAccess, FolderAction } from "./permissionService.js";
 import storageService from "../storage/storageService.js";
+import * as activityService from "./activityService.js";
+import { ActivityType, TargetType } from "../validations/activityValidation.js";
 
 const UPLOAD_BASE_DIR = path.resolve("uploads");
 
@@ -23,7 +25,7 @@ async function generateUniqueStorageName(uid, folderId, originalName) {
             counter++;
             stoName = `${prefix}_${counter}${ext}`;
             targetPath = path.join(UPLOAD_BASE_DIR, stoName);
-        } catch {                                                                                       
+        } catch {
             break;
         }
     }
@@ -67,7 +69,18 @@ export const uploadFile = async (file, folderId, uid) => {
 
         touchFolder(folderId);
 
-        return await fileRepo.create(data);   // Saving in Database
+        const createdFile = await fileRepo.create(data);
+
+        await activityService.log({
+            folderId,
+            userId: uid,
+            action: ActivityType.UPLOAD_FILE,
+            target: TargetType.FILE,
+            targetId: createdFile.id,
+            message: `Uploaded file "${file.originalname}"`
+        });
+
+        return createdFile;
     } catch (error) {
         // 4. Rollback: delete the uploaded file from disk if DB insertion fails
         await storageService.delete(stoName);
@@ -81,7 +94,18 @@ export const del = async (id, uid) => {
     touchFolder(valid.folderId);
     await storageService.delete(valid.stoName);
 
-    return await fileRepo.delById(id);
+    const deleted = await fileRepo.delById(id);
+
+    await activityService.log({
+        folderId: valid.folderId,
+        userId: uid,
+        action: ActivityType.DELETE_FILE,
+        target: TargetType.FILE,
+        targetId: id,
+        message: `Deleted file "${valid.orgName}"`
+    });
+
+    return deleted;
 };
 
 export const renameFile = async (id, uid, newOrgName) => {
@@ -106,7 +130,18 @@ export const renameFile = async (id, uid, newOrgName) => {
 
     try {
         touchFolder(currentFile.folderId);
-        return await fileRepo.update(id, newStoName, newOrgName);
+        const updatedFile = await fileRepo.update(id, newStoName, newOrgName);
+
+        await activityService.log({
+            folderId: currentFile.folderId,
+            userId: uid,
+            action: ActivityType.RENAME_FILE,
+            target: TargetType.FILE,
+            targetId: id,
+            message: `Renamed file to "${newOrgName}"`
+        });
+
+        return updatedFile;
     } catch (error) {
         await storageService.rename(newStoName, oldStoName);
         throw error;
@@ -120,7 +155,20 @@ export const move = async (id, uid, newPid) => {
     const validFolder = await validateFolderAccess(newPid, uid, FolderAction.MOVE);
     if (!validFolder) throw new Error("Folder doesn't exists or access denied");
 
-    return await fileRepo.move(id, newPid);
+    const movedFile = await fileRepo.move(id, newPid);
+
+    if (newPid > 0) {
+        await activityService.log({
+            folderId: newPid,
+            userId: uid,
+            action: ActivityType.MOVE_FILE,
+            target: TargetType.FILE,
+            targetId: id,
+            message: `Moved file into this folder`
+        });
+    }
+
+    return movedFile;
 };
 
 export const download = async (id, uid) => {

@@ -34,6 +34,39 @@ enum Provider{
   GOOGLE
 }
 
+enum ActivityType {
+    CREATE_FOLDER
+    DELETE_FOLDER
+    RENAME_FOLDER
+    MOVE_FOLDER
+
+    UPLOAD_FILE
+    DELETE_FILE
+    RENAME_FILE
+    MOVE_FILE
+
+    SHARE_FOLDER
+    JOIN_REQUEST
+    APPROVE_REQUEST
+    REJECT_REQUEST
+
+    ROLE_CHANGED
+    MEMBER_REMOVED
+    OWNER_TRANSFERRED
+
+    CREATE_PR
+    APPROVE_PR
+    REJECT_PR
+    MERGE_PR
+}
+
+enum TargetType {
+    FOLDER
+    FILE
+    MEMBER
+    PULL_REQUEST
+}
+
 model User {
   id        Int      @id @default(autoincrement())
   name      String
@@ -51,7 +84,7 @@ model User {
 
   sharedFolders FolderMember[]
   joinRequests  FolderJoinRequest[]
-  activities    FolderActivity[]
+  activities    ActivityLogs[]
 }
 
 model Folder {
@@ -74,7 +107,7 @@ model Folder {
 
   members    FolderMember[]
   requests   FolderJoinRequest[]
-  activities FolderActivity[]
+  activities ActivityLogs[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -114,21 +147,6 @@ model FolderJoinRequest {
   @@unique([folderId, requestedBy])
 }
 
-model FolderActivity {
-  id Int @id @default(autoincrement())
-
-  folderId Int
-  folder   Folder @relation(fields: [folderId], references: [id], onDelete: Cascade)
-
-  userId Int
-  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  action      String
-  description String
-
-  createdAt DateTime @default(now())
-}
-
 model File {
   id        Int      @id @default(autoincrement())
   orgName   String
@@ -149,4 +167,20 @@ model File {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model ActivityLogs {
+  id      Int      @id @default(autoincrement())
+
+  folderId  Int
+  folder    Folder  @relation(fields : [folderId], references: [id], onDelete : Cascade)
+
+  userId  Int
+  user    User      @relation(fields : [userId], references: [id], onDelete : Cascade)
+
+  action  ActivityType
+  target  TargetType
+  targetId  Int?
+  message   String?
+  createdAt DateTime  @default(now())
 }

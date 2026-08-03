@@ -82,7 +82,10 @@ export const updateStatus = async (id, status) => {
     });
 };
 
-export const approveJoinRequestTx = async (requestId, folderId, requestedByUserId, role = "VIEWER") => {
+import * as activityRepo from "./activityRepo.js";
+import { ActivityType, TargetType } from "../validations/activityValidation.js";
+
+export const approveJoinRequestTx = async (requestId, folderId, requestedByUserId, role = "VIEWER", actorUserId, actorName, targetName) => {
     return await prisma.$transaction(async (tx) => {
         await tx.folderJoinRequest.update({
             where: { id: requestId },
@@ -96,5 +99,36 @@ export const approveJoinRequestTx = async (requestId, folderId, requestedByUserI
                 role,
             },
         });
+
+        if (actorUserId && actorName && targetName) {
+            await activityRepo.create({
+                folderId,
+                userId: actorUserId,
+                action: ActivityType.APPROVE_REQUEST,
+                target: TargetType.MEMBER,
+                targetId: requestedByUserId,
+                message: `${actorName} approved join request of ${targetName}.`
+            }, tx);
+        }
+    });
+};
+
+export const rejectJoinRequestTx = async (requestId, folderId, actorUserId, actorName, targetName) => {
+    return await prisma.$transaction(async (tx) => {
+        const request = await tx.folderJoinRequest.update({
+            where: { id: requestId },
+            data: { status: "REJECTED" },
+        });
+
+        if (actorUserId && actorName && targetName) {
+            await activityRepo.create({
+                folderId,
+                userId: actorUserId,
+                action: ActivityType.REJECT_REQUEST,
+                target: TargetType.MEMBER,
+                targetId: request.requestedBy,
+                message: `${actorName} rejected join request of ${targetName}.`
+            }, tx);
+        }
     });
 };
