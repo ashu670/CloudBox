@@ -10,6 +10,7 @@ import cookieParser from "cookie-parser";
 import authRoutes from "./routes/authRoutes.js";
 import folderRoutes from "./routes/folderRoutes.js";
 import fileRoutes from "./routes/fileRoutes.js";
+import activityRoutes from "./routes/activityRoutes.js";
 import passport from './config/passport.js';
 
 const app = express();
@@ -58,6 +59,9 @@ app.use("/api/folder", folderRoutes);
 
 // File Routes
 app.use("/api/file", fileRoutes);
+
+// Activity Log Routes
+app.use("/api/activity", activityRoutes);
 
 /* ---------------------- 404 Handler ---------------------- */
 

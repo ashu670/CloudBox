@@ -211,29 +211,33 @@ export function useFolderManager() {
         }
     };
 
-    const executeMove = async () => {
-        if (!movingItem) return;
-        if (movingItem.type === 'file' && currentFolderId <= 0) {
-            showToast("Files cannot be moved to root.", "error");
+    const moveItemToFolder = async (item, targetFolderId) => {
+        if (!item || !item.id || !item.type) return;
+
+        const targetPid = (targetFolderId === -1 || targetFolderId === 0) ? 0 : Number(targetFolderId);
+
+        if (item.type === 'file' && targetPid === 0) {
+            showToast("Files cannot be moved to Root folder.", "error");
             return;
         }
-        if (movingItem.type === 'folder' && movingItem.id === currentFolderId) {
+
+        if (item.type === 'folder' && item.id === targetPid) {
             showToast("Cannot move a folder into itself.", "error");
             return;
         }
+
         try {
             const token = localStorage.getItem("accessToken");
-            const targetPid = currentFolderId === -1 ? 0 : currentFolderId;
-            const endpoint = movingItem.type === 'folder' 
-                ? `api/folder/move/${movingItem.id}/${targetPid}` 
-                : `api/file/move/${movingItem.id}/${targetPid}`;
+            const endpoint = item.type === 'folder' 
+                ? `api/folder/move/${item.id}/${targetPid}` 
+                : `api/file/move/${item.id}/${targetPid}`;
             
             await axios.patch(endpoint, {}, { headers: { Authorization: `Bearer ${token}` } });
-            showToast("Item moved successfully", "success");
-            if (movingItem.type === 'folder') {
-                fetchTreeSubfolders(-1);
-                fetchTreeSubfolders(currentFolderId);
-            }
+            showToast(`Moved "${item.name || 'item'}" successfully`, "success");
+            
+            fetchTreeSubfolders(-1);
+            if (currentFolderId > 0) fetchTreeSubfolders(currentFolderId);
+            if (targetFolderId > 0 && targetFolderId !== currentFolderId) fetchTreeSubfolders(targetFolderId);
             setMovingItem(null);
             fetchFolders();
         } catch (err) {
@@ -241,17 +245,22 @@ export function useFolderManager() {
         }
     };
 
-    const handleFileUpload = async (file) => {
+    const executeMove = async () => {
+        if (!movingItem) return;
+        await moveItemToFolder(movingItem, currentFolderId);
+    };
+
+    const handleFileUpload = async (file, targetFolderId = null) => {
         if (!file) return;
-        setIsUploading(true);
-        if (currentFolderId <= 0) {
+        const destId = targetFolderId || currentFolderId;
+        if (destId <= 0) {
             showToast("Please open a folder first.", "error");
-            setIsUploading(false);
             return;
         }
+        setIsUploading(true);
         const formData = new FormData();
         formData.append("file", file);
-        formData.append("folderId", currentFolderId);
+        formData.append("folderId", destId);
         try {
             const token = localStorage.getItem("accessToken");
             await axios.post("api/file/upload", formData, {
@@ -298,7 +307,7 @@ export function useFolderManager() {
         editingItem, setEditingItem, renameValue, setRenameValue, movingItem, setMovingItem,
         toasts, expandedFolders, treeNodes, foldersCache, currentFolderInfo,
         createFolder, deleteFolder, deleteFile,
-        downloadFile, handleRenameSubmit, executeMove, handleFileUpload,
+        downloadFile, handleRenameSubmit, executeMove, moveItemToFolder, handleFileUpload,
         handleFolderSelect, toggleFolderExpand, goBack, refreshAfterSharedAction, showToast
     };
 }

@@ -18,6 +18,14 @@ export const findById = async (id) => {
     })
 }
 
+export const findNameById = async (id) => {
+    const user = await prisma.user.findUnique({
+        where: { id },
+        select: { id: true, name: true, email: true }
+    });
+    return user;
+}
+
 export const findByGoogleId = async (googleId) => {
     return await prisma.user.findUnique({
         where : {googleId}

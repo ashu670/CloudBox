@@ -168,3 +168,95 @@ export const move = async (id, newPid) => {
         }
     });
 };
+
+export const findFolderWithOwnerDetails = async (folderId) => {
+    return await prisma.folder.findUnique({
+        where: { id: folderId },
+        include: {
+            user: {
+                select: { id: true, name: true, email: true }
+            }
+        }
+    });
+};
+
+export const getFolderStats = async (folderId) => {
+    const folderIds = [folderId];
+    let index = 0;
+    while (index < folderIds.length) {
+        const currentId = folderIds[index];
+        const subfolders = await prisma.folder.findMany({
+            where: { pid: currentId },
+            select: { id: true }
+        });
+        for (const sub of subfolders) {
+            folderIds.push(sub.id);
+        }
+        index++;
+    }
+
+    const files = await prisma.file.findMany({
+        where: {
+            folderId: { in: folderIds }
+        },
+        select: {
+            size: true
+        }
+    });
+
+    const filesCount = files.length;
+    const storageUsed = files.reduce((acc, file) => acc + file.size, 0);
+
+    return { filesCount, storageUsed };
+};
+
+import * as activityRepo from "./activityRepo.js";
+import { ActivityType, TargetType } from "../validations/activityValidation.js";
+
+export const transferOwnershipTx = async (folderId, newOwnerUserId, actorUserId, actorName, newOwnerName) => {
+    return await prisma.$transaction(async (tx) => {
+        await tx.folder.update({
+            where: { id: folderId },
+            data: { uid: newOwnerUserId }
+        });
+
+        await tx.folderMember.update({
+            where: { folderId_userId: { folderId, userId: actorUserId } },
+            data: { role: "ADMIN" }
+        });
+
+        await tx.folderMember.update({
+            where: { folderId_userId: { folderId, userId: newOwnerUserId } },
+            data: { role: "OWNER" }
+        });
+
+        await activityRepo.create({
+            folderId,
+            userId: actorUserId,
+            action: ActivityType.OWNER_TRANSFERRED,
+            target: TargetType.MEMBER,
+            targetId: newOwnerUserId,
+            message: `${actorName} transferred folder ownership to ${newOwnerName}.`
+        }, tx);
+    });
+};
+
+export const updateInviteCodeTx = async (folderId, inviteCodeData, actorUserId, actorName, actionName) => {
+    return await prisma.$transaction(async (tx) => {
+        const folder = await tx.folder.update({
+            where: { id: folderId },
+            data: inviteCodeData
+        });
+
+        await activityRepo.create({
+            folderId,
+            userId: actorUserId,
+            action: ActivityType.SHARE_FOLDER,
+            target: TargetType.FOLDER,
+            targetId: folderId,
+            message: `${actorName} ${actionName.toLowerCase()} the folder invite code.`
+        }, tx);
+
+        return folder;
+    });
+};
