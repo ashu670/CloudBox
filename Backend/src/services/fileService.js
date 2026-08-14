@@ -8,26 +8,18 @@ import storageService from "../storage/storageService.js";
 import * as activityService from "./activityService.js";
 import { ActivityType, TargetType } from "../validations/activityValidation.js";
 
-const UPLOAD_BASE_DIR = path.resolve("uploads");
-
 async function generateUniqueStorageName(uid, folderId, originalName) {
     const ext = path.extname(originalName);
     const baseName = path.basename(originalName, ext);
-    const prefix = `${uid}_${folderId}_${baseName}`;
+    const timestamp = Date.now();
+    const prefix = `${uid}_${folderId}_${timestamp}_${baseName}`;
 
     let counter = 0;
     let stoName = `${prefix}${ext}`;
-    let targetPath = path.join(UPLOAD_BASE_DIR, stoName);
 
-    while (true) {
-        try {
-            await fs.access(targetPath);
-            counter++;
-            stoName = `${prefix}_${counter}${ext}`;
-            targetPath = path.join(UPLOAD_BASE_DIR, stoName);
-        } catch {
-            break;
-        }
+    while (await storageService.exists(stoName)) {
+        counter++;
+        stoName = `${prefix}_${counter}${ext}`;
     }
 
     return stoName;
@@ -178,7 +170,13 @@ export const download = async (id, uid) => {
     const hasAccess = await canAccessFolder(file.folderId, uid, FolderAction.READ);
     if (!hasAccess) throw new Error("File doesnt exist or access denied");
 
-    const absolutePath = storageService.getFilePath(file.stoName);
+    // const absolutePath = storageService.getFilePath(file.stoName);
+    const stream = await storageService.download(file.stoName);
 
-    return { absolutePath, orgName: file.orgName };
+    return {
+        stream,
+        orgName: file.orgName,
+        mimeType: file.mimeType,
+        size: file.size
+    };
 };

@@ -9,7 +9,7 @@ const COOKIE_OPTIONS = {
 
 export const signup = async (req, res) => {
     try{
-        const {name, email, password} = req.body;   //validation will be done before this
+        const {name, email, password} = req.body;   //validation will be done before this   
         const {user, accessToken, refreshToken} = await authService.registerUser(name, email, password);
         res.cookie('refreshToken', refreshToken, COOKIE_OPTIONS);
         return res.status(201).json({user, accessToken});
@@ -44,7 +44,7 @@ export const refresh = async (req, res) => {
 
 export const logout = (req, res) => {
     res.clearCookie('refreshToken', {...COOKIE_OPTIONS, maxAge : 0});
-    return res.status(200).json({message : 'Logout succesfull'});
+    return res.status(200).json({message : 'Logout successful'});
 };
 
 export const getProfile = (req, res) => {

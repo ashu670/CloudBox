@@ -1,19 +1,7 @@
-// src/storage/storageService.js
-import fs from 'fs/promises';
-import path from 'path';
+import minioClient from '../config/minio.js';
+import { Readable } from 'stream';
 
-const UPLOAD_BASE_DIR = path.resolve("uploads");
-
-/**
- * Ensures the destination storage folder exists on the host machine.
- */
-async function ensureDirectoryExists(dirPath) {
-    try {
-        await fs.mkdir(dirPath, { recursive: true });
-    } catch (error) {
-        if (error.code !== 'EEXIST') throw error;
-    }
-}
+const bucket = process.env.MINIO_BUCKET;
 
 const storageService = {
     async store(file, storageName) {
@@ -21,39 +9,75 @@ const storageService = {
             throw new Error('Invalid file object: Missing memory buffer data chunks');
         }
 
-        await ensureDirectoryExists(UPLOAD_BASE_DIR);
+        const mimeType = file.mimetype || 'application/octet-stream';
 
-        const targetPath = path.join(UPLOAD_BASE_DIR, storageName);
-
-        // Write the decoupled raw memory buffer straight to the disk hardware allocation
-        await fs.writeFile(targetPath, file.buffer);
+        await minioClient.putObject(
+            bucket,
+            storageName,
+            file.buffer,
+            file.size,
+            {
+                "Content-Type": mimeType
+            }
+        );
 
         return {
             success: true,
-            path: targetPath,
             stoName: storageName
         };
     },
 
-    async delete(storageName) {
-        const targetPath = path.join(UPLOAD_BASE_DIR, storageName);
+    async exists(storageName) {
         try {
-            await fs.unlink(targetPath);
+            await minioClient.statObject(bucket, storageName);
+            return true;
         } catch (error) {
-            if (error.code !== 'ENOENT') {
-                throw error;
+            if (error.code === 'NotFound' || error.code === 'NoSuchKey') {
+                return false;
             }
+            return false;
         }
     },
-
-    async rename(oldName, newName) {
-        const oldPath = path.join(UPLOAD_BASE_DIR, oldName);
-        const newPath = path.join(UPLOAD_BASE_DIR, newName);
-        await fs.rename(oldPath, newPath);
+    async delete(storageName) {
+        try {
+            await minioClient.removeObject(bucket, storageName);
+            return { success: true };
+        } catch (error) {
+            console.error("Storage delete error:", error);
+            throw error;
+        }
     },
+    async rename(oldName, newName) {
+        await minioClient.copyObject(
+            bucket,
+            newName,
+            `/${bucket}/${oldName}`
+        );
 
-    getFilePath(stoName){
-        return path.join(UPLOAD_BASE_DIR, stoName);
+        await minioClient.removeObject(bucket, oldName);
+
+        return {
+            success: true,
+            stoName: newName
+        };
+    },
+    async download(storageName) {
+        const stream = await minioClient.getObject(
+            bucket,
+            storageName
+        );
+
+        if (typeof stream.pipe === "function") {
+            return stream;
+        }
+        if (typeof stream.getReader === "function") {
+            return Readable.fromWeb(stream);
+        }
+        if (typeof stream[Symbol.asyncIterator] === "function") {
+            return Readable.from(stream);
+        }
+
+        throw new Error("Unsupported stream returned by MinIO");
     }
 };
 

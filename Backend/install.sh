@@ -12,7 +12,8 @@ redis \
 kafkajs \
 minio \
 prom-client \
-passport passport-google-oauth20 jsonwebtoken
+passport passport-google-oauth20 jsonwebtoken \
+minio
 
 npm install -D \
 prisma \

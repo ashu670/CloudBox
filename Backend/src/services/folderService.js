@@ -169,10 +169,8 @@ export const delFolder = async (uid, id, force) => {
         throw error;
     }
 
-    if (filesToDelete) {
-        filesToDelete.forEach(m => {
-            storageService.delete(m.stoName);
-        });
+    if (filesToDelete && filesToDelete.length > 0) {
+        await Promise.all(filesToDelete.map(m => storageService.delete(m.stoName)));
     }
 
     const deletedFolder = await repo.deleteFolder(id);
