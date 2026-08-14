@@ -9,12 +9,14 @@ import FolderMembers from "../components/FolderMembers";
 import OwnerPanel from "../components/OwnerPanel";
 import AdminPanel from "../components/AdminPanel";
 import ActivityLogs from "../components/ActivityLogs";
+import FilePreviewModal from "../components/FilePreviewModal";
 
 export default function FolderView() {
     const {
         folders, files, currentFolderId, history, folderName, setFolderName,
         loading, isUploading, isDragging, setIsDragging, showCreator, setShowCreator,
         editingItem, setEditingItem, renameValue, setRenameValue, movingItem, setMovingItem,
+        previewItem, previewFile, closePreview,
         toasts, expandedFolders, treeNodes, currentFolderInfo,
         createFolder, deleteFolder, deleteFile,
         downloadFile, handleRenameSubmit, executeMove, moveItemToFolder, handleFileUpload,
@@ -541,7 +543,6 @@ export default function FolderView() {
                                         {!isEditing && (
                                             <>
                                                 <button className="action-btn" onClick={(e) => { e.stopPropagation(); setEditingItem({ type: 'folder', id: folder.id }); setRenameValue(folder.name); }}>Rename</button>
-                                                <button className="action-btn" onClick={(e) => { e.stopPropagation(); setMovingItem({ type: 'folder', id: folder.id, name: folder.name }); }}>Move</button>
                                                 <button className="action-btn btn-delete" onClick={(e) => deleteFolder(e, folder.id)}>Delete</button>
                                             </>
                                         )}
@@ -589,9 +590,9 @@ export default function FolderView() {
                                     <div className="row-actions">
                                         {!isEditing && (
                                             <>
+                                                <button className="action-btn" onClick={(e) => previewFile(e, file)}>Preview</button>
                                                 <button className="action-btn" onClick={(e) => downloadFile(e, file.id, file.orgName)}>Download</button>
                                                 <button className="action-btn" onClick={(e) => { e.stopPropagation(); setEditingItem({ type: 'file', id: file.id }); setRenameValue(file.orgName); }}>Rename</button>
-                                                <button className="action-btn" onClick={(e) => { e.stopPropagation(); setMovingItem({ type: 'file', id: file.id, name: file.orgName }); }}>Move</button>
                                                 <button className="action-btn btn-delete" onClick={(e) => deleteFile(e, file.id)}>Delete</button>
                                             </>
                                         )}
@@ -602,6 +603,13 @@ export default function FolderView() {
                     </div>
                 )}
             </main>
+
+            {/* File Preview Modal */}
+            <FilePreviewModal
+                previewItem={previewItem}
+                onClose={closePreview}
+                onDownload={downloadFile}
+            />
 
             {/* Toast Container */}
             <div className="toast-container">

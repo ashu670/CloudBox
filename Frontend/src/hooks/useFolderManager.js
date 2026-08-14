@@ -172,8 +172,33 @@ export function useFolderManager() {
         }
     };
 
+    const [previewItem, setPreviewItem] = useState(null);
+
+    const previewFile = async (e, file) => {
+        if (e) e.stopPropagation();
+        try {
+            const token = localStorage.getItem("accessToken");
+            const response = await axios.get(`api/file/download/${file.id}`, {
+                headers: { Authorization: `Bearer ${token}` },
+                responseType: "blob"
+            });
+            const url = window.URL.createObjectURL(new Blob([response.data], { type: file.mimeType }));
+            setPreviewItem({ file, url, mimeType: file.mimeType });
+        } catch (err) {
+            console.error("Preview error:", err);
+            showToast("Failed to load file preview", "error");
+        }
+    };
+
+    const closePreview = () => {
+        if (previewItem?.url) {
+            window.URL.revokeObjectURL(previewItem.url);
+        }
+        setPreviewItem(null);
+    };
+
     const downloadFile = async (e, fileId, orgName) => {
-        e.stopPropagation();
+        if (e) e.stopPropagation();
         try {
             const token = localStorage.getItem("accessToken");
             const response = await axios.get(`api/file/download/${fileId}`, {
@@ -305,6 +330,7 @@ export function useFolderManager() {
         folders, files, currentFolderId, history, folderName, setFolderName,
         loading, isUploading, isDragging, setIsDragging, showCreator, setShowCreator,
         editingItem, setEditingItem, renameValue, setRenameValue, movingItem, setMovingItem,
+        previewItem, previewFile, closePreview,
         toasts, expandedFolders, treeNodes, foldersCache, currentFolderInfo,
         createFolder, deleteFolder, deleteFile,
         downloadFile, handleRenameSubmit, executeMove, moveItemToFolder, handleFileUpload,

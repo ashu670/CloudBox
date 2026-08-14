@@ -12,18 +12,14 @@ import folderRoutes from "./routes/folderRoutes.js";
 import fileRoutes from "./routes/fileRoutes.js";
 import activityRoutes from "./routes/activityRoutes.js";
 import passport from './config/passport.js';
+import minioClient from "./config/minio.js";
 
 const app = express();
 
 /* ---------------------- Middleware ---------------------- */
 
-// Security headers
 app.use(helmet());
-
-// Compress responses
 app.use(compression());
-
-// Allow frontend requests
 app.use(
     cors({
         origin: "http://localhost:5173",
@@ -31,36 +27,22 @@ app.use(
     })
 );
 
-// Parse JSON request body
 app.use(express.json());
-
-// Parse URL encoded data
 app.use(express.urlencoded({ extended: true }));
-
-// Parse Cookies
 app.use(cookieParser());
-
 app.use(passport.initialize());
 
 /* ---------------------- Routes ---------------------- */
 
-// Health Check Route
 app.get("/", (req, res) => {
     return res.status(200).json({
         message: "CloudBox Backend Running",
     });
 });
 
-// Authentication Routes
 app.use("/api/auth", authRoutes);
-
-// Folder Routes
 app.use("/api/folder", folderRoutes);
-
-// File Routes
 app.use("/api/file", fileRoutes);
-
-// Activity Log Routes
 app.use("/api/activity", activityRoutes);
 
 /* ---------------------- 404 Handler ---------------------- */

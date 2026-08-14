@@ -97,14 +97,24 @@ export const download = async (req, res) => {
     const id = Number(req.params.id);
     const uid = req.user.id;
 
-    try{
-        const {absolutePath, orgName} = await fileService.download(id, uid);
-        return res.download(absolutePath, orgName, (err) => {
-            if(!res.headersSent) return res.status(500).json({error : "could not download the file"});
-        })
-    }catch(err){
-        const status = getErrorStatus(err);
-        return res.status(status).json({error : err.message});
-    }
-}
+    try {
+        const { stream, orgName, mimeType, size
+        } = await fileService.download(id, uid);
 
+        res.setHeader("Content-Type", mimeType);
+        res.setHeader("Content-Length", size);
+        res.setHeader(
+            "Content-Disposition",
+            `attachment; filename="${orgName}"`
+        );
+
+        stream.pipe(res);
+
+    } catch (err) {
+        const status = getErrorStatus(err);
+        console.log("Download error", err);
+        return res.status(status).json({
+            error: err.message
+        });
+    }
+};
