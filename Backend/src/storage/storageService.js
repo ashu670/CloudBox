@@ -1,7 +1,4 @@
-import minioClient from '../config/minio.js';
-import { Readable } from 'stream';
-
-const bucket = process.env.MINIO_BUCKET;
+import bucket from '../config/firebase.js';
 
 const storageService = {
     async store(file, storageName) {
@@ -10,74 +7,96 @@ const storageService = {
         }
 
         const mimeType = file.mimetype || 'application/octet-stream';
+        const blob = bucket.file(storageName);
 
-        await minioClient.putObject(
-            bucket,
-            storageName,
-            file.buffer,
-            file.size,
-            {
-                "Content-Type": mimeType
-            }
-        );
+        await blob.save(file.buffer, {
+            metadata: {
+                contentType: mimeType
+            },
+            resumable: false
+        });
 
         return {
             success: true,
             stoName: storageName
         };
     },
-
+    async uploadFile(file, storageName) {
+        return this.store(file, storageName);
+    },
     async exists(storageName) {
         try {
-            await minioClient.statObject(bucket, storageName);
-            return true;
+            const [fileExists] = await bucket.file(storageName).exists();
+            return fileExists;
         } catch (error) {
-            if (error.code === 'NotFound' || error.code === 'NoSuchKey') {
-                return false;
-            }
+            console.error("Firebase Storage exists check error:", error.message);
             return false;
         }
     },
     async delete(storageName) {
         try {
-            await minioClient.removeObject(bucket, storageName);
+            await bucket.file(storageName).delete({ ignoreNotFound: true });
             return { success: true };
         } catch (error) {
-            console.error("Storage delete error:", error);
+            console.error("Firebase Storage delete error:", error.message);
             throw error;
         }
     },
+    async deleteFile(storageName) {
+        return this.delete(storageName);
+    },
     async rename(oldName, newName) {
-        await minioClient.copyObject(
-            bucket,
-            newName,
-            `/${bucket}/${oldName}`
-        );
+        try {
+            const srcFile = bucket.file(oldName);
+            const destFile = bucket.file(newName);
 
-        await minioClient.removeObject(bucket, oldName);
+            await srcFile.copy(destFile);
+            await srcFile.delete({ ignoreNotFound: true });
 
-        return {
-            success: true,
-            stoName: newName
-        };
+            return {
+                success: true,
+                stoName: newName
+            };
+        } catch (error) {
+            console.error("Firebase Storage rename error:", error.message);
+            throw error;
+        }
     },
     async download(storageName) {
-        const stream = await minioClient.getObject(
-            bucket,
-            storageName
-        );
+        try {
+            const file = bucket.file(storageName);
+            const [fileExists] = await file.exists();
+            if (!fileExists) {
+                throw new Error(`File "${storageName}" not found in Firebase Storage.`);
+            }
+            return file.createReadStream();
+        } catch (error) {
+            console.error("Firebase Storage download stream error:", error.message);
+            throw error;
+        }
+    },
+    async downloadFile(storageName) {
+        return this.download(storageName);
+    },
 
-        if (typeof stream.pipe === "function") {
-            return stream;
+    async getFileStream(storageName) {
+        return this.download(storageName);
+    },
+    async getSignedUrl(storageName, expiresMinutes = 60) {
+        try {
+            const file = bucket.file(storageName);
+            const [url] = await file.getSignedUrl({
+                action: 'read',
+                expires: Date.now() + expiresMinutes * 60 * 1000
+            });
+            return url;
+        } catch (error) {
+            console.error("Firebase Storage getSignedUrl error:", error.message);
+            throw error;
         }
-        if (typeof stream.getReader === "function") {
-            return Readable.fromWeb(stream);
-        }
-        if (typeof stream[Symbol.asyncIterator] === "function") {
-            return Readable.from(stream);
-        }
-
-        throw new Error("Unsupported stream returned by MinIO");
+    },
+    async getPresignedUrl(storageName, expiresMinutes = 60) {
+        return this.getSignedUrl(storageName, expiresMinutes);
     }
 };
 
