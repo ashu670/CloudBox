@@ -1,0 +1,61 @@
+services:
+  - type: web
+    name: cloudbox-backend
+    runtime: docker
+
+    # Path is relative to the repository root.
+    # If you connect the whole CloudBox repo to Render, these paths are correct.
+    dockerfilePath: ./Backend/Dockerfile
+    dockerContext:  ./Backend
+
+    # Singapore is the closest Render region to your Supabase instance
+    # (aws-0-ap-southeast-2 = Sydney, AU).
+    region: singapore
+
+    plan: free
+
+    # healthCheckPath tells Render to probe this route after each deploy.
+    # The backend already returns 200 on GET /
+    healthCheckPath: /
+
+    envVars:
+      # ── Server ──────────────────────────────────────────────────────────
+      - key: PORT
+        value: "3000"
+      - key: NODE_ENV
+        value: production
+
+      # ── Database (Supabase) ─────────────────────────────────────────────
+      # Set these manually in the Render Dashboard → Environment tab.
+      - key: DATABASE_URL
+        sync: false          # Transaction Pooler (port 6543) — app runtime
+      - key: DIRECT_URL
+        sync: false          # Session Pooler  (port 5432)  — prisma CLI / migrations
+
+      # ── JWT ─────────────────────────────────────────────────────────────
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_SECRET_REF
+        sync: false
+
+      # ── Google OAuth ────────────────────────────────────────────────────
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SEC
+        sync: false
+      # Must be: https://<your-render-service>.onrender.com/api/auth/google/callback
+      - key: GOOGLE_CALLBACK_URL
+        sync: false
+
+      # ── CORS / Frontend ─────────────────────────────────────────────────
+      # Must be your Vercel frontend URL, e.g. https://cloudbox.vercel.app
+      - key: FRONTEND_URL
+        sync: false
+
+      # ── Firebase Storage ─────────────────────────────────────────────────
+      - key: FIREBASE_STORAGE_BUCKET
+        value: cloudbox-cec26.firebasestorage.app
+      # Paste the ENTIRE JSON content of serviceAccKey.json as the value.
+      # See deployment guide for exact instructions.
+      - key: FIREBASE_SERVICE_ACCOUNT_KEY
+        sync: false

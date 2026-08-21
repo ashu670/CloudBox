@@ -1,0 +1,42 @@
+# ── Dependencies ──────────────────────────────────────────
+node_modules
+
+# ── Environment & Secrets ─────────────────────────────────
+.env
+.env.*
+!.env.example
+serviceAccKey.json
+googleSecrets.json
+
+# ── Uploads (ephemeral, should never be in the image) ─────
+uploads/
+src/uploads/
+
+# ── Docker (no nested docker configs needed) ──────────────
+docker/
+
+# ── Dev / Test only ───────────────────────────────────────
+tests/
+test.js
+install.sh
+docs/
+
+# ── Build artifacts ───────────────────────────────────────
+dist/
+build/
+coverage/
+
+# ── Version control & editor ──────────────────────────────
+.git
+.gitignore
+.vscode
+
+# ── OS junk ───────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Logs ──────────────────────────────────────────────────
+*.log
+
+# ── Misc ──────────────────────────────────────────────────
+README.md
