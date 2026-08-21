@@ -22,19 +22,12 @@ app.use(compression());
 app.use(
     cors({
         origin: (origin, callback) => {
-            if (!origin) return callback(null, true);
-            const cleanOrigin = origin.replace(/\/+$/, "");
-            if (
-                cleanOrigin.includes("localhost") ||
-                cleanOrigin.endsWith(".vercel.app") ||
-                cleanOrigin.endsWith(".onrender.com") ||
-                (process.env.FRONTEND_URL && cleanOrigin === process.env.FRONTEND_URL.replace(/\/+$/, ""))
-            ) {
-                return callback(null, true);
-            }
-            return callback(null, false);
+            // Dynamically reflect origin to satisfy CORS with credentials for all frontends
+            return callback(null, true);
         },
         credentials: true,
+        methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept"],
     })
 );
 
