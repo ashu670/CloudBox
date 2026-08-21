@@ -26,7 +26,7 @@ export default function Login() {
             localStorage.setItem("accessToken", res.data.accessToken);
             navigate("/dashboard");
         } catch (err) {
-            setError(err.response?.data?.error || "Login failed. Please verify credentials.");
+            setError(err.response?.data?.error || err.response?.data?.message || "Login failed. Please verify credentials.");
         }
     };
 
