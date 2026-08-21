@@ -294,7 +294,7 @@ export function useFolderManager() {
             showToast(`File "${file.name}" uploaded successfully`, "success");
             fetchFolders();
         } catch (err) {
-            showToast(err.response?.data?.error || "File upload failed", "error");
+            showToast(err.response?.data?.error || err.response?.data?.message || "File upload failed", "error");
         } finally {
             setIsUploading(false);
         }

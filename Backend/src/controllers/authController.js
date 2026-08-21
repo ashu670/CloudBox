@@ -1,9 +1,11 @@
 import * as authService from '../services/authService.js';
 
+const isProduction = process.env.NODE_ENV === "production";
+
 const COOKIE_OPTIONS = {
     httpOnly : true,
-    secure : process.env.NODE_ENV === "production",
-    sameSite : 'strict',
+    secure : isProduction,
+    sameSite : isProduction ? 'none' : 'strict',
     maxAge : 7 * 24 * 60 * 60 * 1000
 };
 
@@ -62,7 +64,7 @@ export const handleGoogleCallback = async (req, res) => {
         const {accessToken, refreshToken} = await authService.googleTokens(data);
 
         res.cookie("refreshToken", refreshToken, COOKIE_OPTIONS);
-        const frontendURL = process.env.FRONTEND_URL || "http://localhost:5173";
+        const frontendURL = (process.env.FRONTEND_URL || "http://localhost:5173").replace(/\/+$/, "");
         return res.redirect(`${frontendURL}/auth/success?token=${accessToken}`);
     }catch(err){
         return res.status(500).json({error : "Failed to generate authentication tokens"});

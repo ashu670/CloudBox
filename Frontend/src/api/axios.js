@@ -8,6 +8,9 @@ export const API_BASE_URL = rawBaseUrl.endsWith("/api")
     ? rawBaseUrl.slice(0, -4)
     : rawBaseUrl;
 
+// Alias so both import patterns work
+export const getApiBaseUrl = () => API_BASE_URL;
+
 const api = axios.create({
     baseURL: API_BASE_URL,
     withCredentials: true,
