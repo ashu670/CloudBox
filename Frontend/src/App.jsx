@@ -3,7 +3,7 @@ import "./App.css";
 
 import Navbar from "./components/navbar";
 import Signup from "./pages/signup";
-import Login from "./pages/Login";
+import Login from "./pages/login";
 import FolderView from "./pages/Dashboard";
 import AuthSuccess from "./pages/AuthSuccess";
 
