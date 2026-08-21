@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useFolderManager } from "../hooks/useFolderManager";
 import { formatBytes, formatDate } from "../utils/formatters";
-import FileIcon from "../components/FileIcon";
+import FileIcon from "../components/fileIcon";
 import CreateSharedFolder from "../components/CreateSharedFolder";
 import JoinSharedFolder from "../components/JoinSharedFolder";
 import FolderRequests from "../components/FolderRequests";
