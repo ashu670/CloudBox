@@ -13,7 +13,8 @@ kafkajs \
 minio \
 prom-client \
 passport passport-google-oauth20 jsonwebtoken \
-minio
+minio \
+firebase-admin
 
 npm install -D \
 prisma \

@@ -12,7 +12,6 @@ import folderRoutes from "./routes/folderRoutes.js";
 import fileRoutes from "./routes/fileRoutes.js";
 import activityRoutes from "./routes/activityRoutes.js";
 import passport from './config/passport.js';
-import minioClient from "./config/minio.js";
 
 const app = express();
 
