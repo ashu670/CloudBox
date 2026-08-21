@@ -1,5 +1,5 @@
 import { useState } from "react";
-import axios from "../api/axios";
+import axios, { API_BASE_URL } from "../api/axios";
 import { useNavigate, Link } from "react-router-dom";
 
 export default function Signup() {
@@ -87,7 +87,7 @@ export default function Signup() {
                 </div>
 
                 <a
-                    href="http://localhost:3000/api/auth/google"
+                    href={`${API_BASE_URL}/api/auth/google`}
                     className="btn btn-secondary"
                     style={{
                         display: "flex",
