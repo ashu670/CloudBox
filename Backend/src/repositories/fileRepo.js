@@ -82,4 +82,16 @@ export const fetchByFolderIdAndUserId = async (folderId, userId) => {
         WHERE "folderId" IN (SELECT id FROM FolderTree)
         AND uid = ${userId};
     `;
-}
+};
+
+export const findAllByUserId = async (userId) => {
+    return await prisma.file.findMany({
+        where: {
+            uid: Number(userId)
+        },
+        select: {
+            mimeType: true,
+            size: true
+        }
+    });
+};

@@ -195,3 +195,27 @@ export const download = async (id, uid) => {
         size: file.size
     };
 };
+
+export const getStorageBreakdown = async (uid) => {
+    const files = await fileRepo.findAllByUserId(uid);
+    const stats = { image: 0, video: 0, audio: 0, document: 0 };
+
+    files.forEach(file => {
+        const mime = file.mimeType || "";
+        const size = file.size || 0;
+        if (mime.startsWith("image/")) stats.image += size;
+        else if (mime.startsWith("video/")) stats.video += size;
+        else if (mime.startsWith("audio/")) stats.audio += size;
+        else stats.document += size;
+    });
+
+    const { usedSize, limit } = await getAvailableStorageDet(uid);
+    const usedStorageNumber = Number(usedSize);
+    const storageLimitNumber = Number(limit);
+
+    return {
+        stats,
+        usedStorage: usedStorageNumber,
+        storageLimit: storageLimitNumber
+    };
+};
