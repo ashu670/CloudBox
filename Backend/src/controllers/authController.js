@@ -1,4 +1,6 @@
 import * as authService from '../services/authService.js';
+import * as userRepo from '../repositories/userRepo.js';
+import { formatUserForResponse } from '../utils/userFormatter.js';
 
 const isProduction = process.env.NODE_ENV === "production";
 
@@ -49,9 +51,15 @@ export const logout = (req, res) => {
     return res.status(200).json({message : 'Logout successful'});
 };
 
-export const getProfile = (req, res) => {
-    return res.status(200).json({user : req.user});
-}
+export const getProfile = async (req, res) => {
+    try {
+        const user = await userRepo.findById(req.user.id);
+        if (!user) return res.status(404).json({ error: "User not found" });
+        return res.status(200).json({ user: formatUserForResponse(user) });
+    } catch (err) {
+        return res.status(500).json({ error: err.message });
+    }
+};
 
 export const handleGoogleCallback = async (req, res) => {
     const data = {

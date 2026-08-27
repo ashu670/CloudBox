@@ -2,6 +2,7 @@ import * as repo from "../repositories/folderRepo.js";
 import * as memberRepo from "../repositories/folderMemberRepo.js";
 import * as requestRepo from "../repositories/folderJoinRequestRepo.js";
 import * as userRepo from "../repositories/userRepo.js";
+import { getAvailableStorageDet, updateStorageSize } from "../repositories/userRepo.js";
 import * as activityService from "./activityService.js";
 import { ActivityType, TargetType } from "../validations/activityValidation.js";
 import { fetchByFolderIdAndUserId } from "../repositories/fileRepo.js";
@@ -171,6 +172,12 @@ export const delFolder = async (uid, id, force) => {
 
     if (filesToDelete && filesToDelete.length > 0) {
         await Promise.all(filesToDelete.map(m => storageService.delete(m.stoName)));
+        const totalDeletedSize = filesToDelete.reduce((sum, f) => sum + BigInt(f.size), 0n);
+        if (totalDeletedSize > 0n) {
+            const { usedSize } = await getAvailableStorageDet(uid);
+            const newUsedStorage = usedSize - totalDeletedSize;
+            await updateStorageSize(uid, newUsedStorage < 0n ? 0n : newUsedStorage);
+        }
     }
 
     const deletedFolder = await repo.deleteFolder(id);

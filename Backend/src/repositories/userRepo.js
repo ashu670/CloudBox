@@ -47,3 +47,20 @@ export const createWithGoogle = async (data) => {
         data : {...data, provider : "GOOGLE"}
     })
 }
+
+export const getAvailableStorageDet = async (id) => {
+    const user = await prisma.user.findUnique({
+        where : {id}
+    });
+
+    const {usedStorage, storageLimit} = user;
+
+    return {usedSize : usedStorage, limit : storageLimit};
+}
+
+export const updateStorageSize = async (id, size) => {
+    return await prisma.user.update({
+        where : {id},
+        data : {usedStorage : size}
+    });
+}

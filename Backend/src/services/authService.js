@@ -2,6 +2,7 @@ import {prisma} from '../config/db.js';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import * as repo from '../repositories/userRepo.js';
+import { formatUserForResponse } from '../utils/userFormatter.js';
 
 const salt = 10;
 
@@ -41,8 +42,7 @@ export const registerUser = async (name, email, password) => {
 
     const tokens = generateTokens(newUser);
 
-    const {password : _, ...rest} = newUser;
-    return {user : rest, ...tokens};
+    return {user : formatUserForResponse(newUser), ...tokens};
 };
 
 export const loginUser = async (email, password) => {
@@ -53,8 +53,7 @@ export const loginUser = async (email, password) => {
     if(!isMatch) throw new Error('Invalid Password');
 
     const tokens = generateTokens(user);
-    const {password : _, ...rest} = user;
-    return {user : rest, ...tokens};
+    return {user : formatUserForResponse(user), ...tokens};
 }
 
 export const refreshAccessTokens = async (refreshToken) => {
