@@ -118,3 +118,19 @@ export const download = async (req, res) => {
         });
     }
 };
+
+export const getStorageBreakdown = async (req, res) => {
+    try {
+        const uid = req.user.id;
+        const data = await fileService.getStorageBreakdown(uid);
+        return res.status(200).json({
+            success: true,
+            data
+        });
+    } catch (err) {
+        return res.status(500).json({
+            success: false,
+            error: err.message
+        });
+    }
+};

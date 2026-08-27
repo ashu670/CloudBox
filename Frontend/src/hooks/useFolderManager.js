@@ -5,6 +5,9 @@ import axios from "../api/axios";
 export function useFolderManager() {
     const [folders, setFolders] = useState([]);
     const [files, setFiles] = useState([]);
+    const [userProfile, setUserProfile] = useState(null);
+    const [storageBreakdown, setStorageBreakdown] = useState({ image: 0, video: 0, audio: 0, document: 0 });
+    const [searchQuery, setSearchQuery] = useState("");
     const [currentFolderId, setCurrentFolderId] = useState(() => {
         const saved = localStorage.getItem("currentFolderId");
         return saved ? Number(saved) : -1;
@@ -36,6 +39,37 @@ export function useFolderManager() {
         }, 4000);
     }, []);
 
+    const fetchStorageBreakdown = useCallback(async () => {
+        try {
+            const token = localStorage.getItem("accessToken");
+            if (!token) return;
+            const { data } = await axios.get("api/file/storage-breakdown", {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            if (data.data && data.data.stats) {
+                setStorageBreakdown(data.data.stats);
+            }
+        } catch (err) {
+            console.error("Failed to fetch storage breakdown:", err);
+        }
+    }, []);
+
+    const fetchUserProfile = useCallback(async () => {
+        try {
+            const token = localStorage.getItem("accessToken");
+            if (!token) return;
+            const { data } = await axios.get("api/auth/profile", {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            if (data.user) {
+                setUserProfile(data.user);
+            }
+            fetchStorageBreakdown();
+        } catch (err) {
+            console.error("Failed to fetch user profile:", err);
+        }
+    }, [fetchStorageBreakdown]);
+
     const addToCache = useCallback((folderList) => {
         if (!folderList || !Array.isArray(folderList)) return;
         setFoldersCache(prev => {
@@ -53,12 +87,20 @@ export function useFolderManager() {
                 headers: { Authorization: `Bearer ${token}` }
             });
             const fetchedChildren = data.children?.children || [];
+            const fetchedFiles = data.children?.files || [];
             addToCache(fetchedChildren);
-            setTreeNodes(prev => ({ ...prev, [folderId]: fetchedChildren }));
+            setTreeNodes(prev => ({
+                ...prev,
+                [folderId]: {
+                    subfolders: fetchedChildren,
+                    files: fetchedFiles
+                }
+            }));
         } catch (err) {
             console.error("Error fetching tree subfolders:", err);
         }
     }, [addToCache]);
+
 
     const fetchFolders = useCallback(async (id = currentFolderId) => {
         setLoading(true);
@@ -73,6 +115,7 @@ export function useFolderManager() {
             if (data.children && data.children.id !== null) {
                 setFoldersCache(prev => ({ ...prev, [data.children.id]: data.children }));
             }
+            fetchUserProfile();
         } catch (err) {
             if (err.response?.status === 401) {
                 showToast("Session expired. Please log in again.", "error");
@@ -83,7 +126,7 @@ export function useFolderManager() {
         } finally {
             setLoading(false);
         }
-    }, [currentFolderId, navigate, addToCache, showToast]);
+    }, [currentFolderId, navigate, addToCache, showToast, fetchUserProfile]);
 
     const rebuildHistory = useCallback((folderId) => {
         const path = [];
@@ -98,8 +141,9 @@ export function useFolderManager() {
     }, [foldersCache]);
 
     useEffect(() => {
+        fetchUserProfile();
         fetchTreeSubfolders(-1);
-    }, [fetchTreeSubfolders]);
+    }, [fetchUserProfile, fetchTreeSubfolders]);
 
     useEffect(() => {
         fetchFolders();
@@ -154,6 +198,7 @@ export function useFolderManager() {
             showToast("Folder deleted successfully", "success");
             fetchFolders();
             fetchTreeSubfolders(currentFolderId);
+            fetchUserProfile();
         } catch (err) {
             showToast(err.response?.data?.error || "Failed to delete folder", "error");
         }
@@ -167,6 +212,7 @@ export function useFolderManager() {
             await axios.delete(`api/file/delete/${fileId}`, { headers: { Authorization: `Bearer ${token}` } });
             showToast("File deleted successfully", "success");
             fetchFolders();
+            fetchUserProfile();
         } catch (err) {
             showToast(err.response?.data?.error || "Failed to delete file", "error");
         }
@@ -293,6 +339,7 @@ export function useFolderManager() {
             });
             showToast(`File "${file.name}" uploaded successfully`, "success");
             fetchFolders();
+            fetchUserProfile();
         } catch (err) {
             showToast(err.response?.data?.error || err.response?.data?.message || "File upload failed", "error");
         } finally {
@@ -322,12 +369,23 @@ export function useFolderManager() {
         if (currentFolderId > 0) {
             await fetchTreeSubfolders(currentFolderId);
         }
-    }, [currentFolderId, fetchFolders, fetchTreeSubfolders]);
+        fetchUserProfile();
+    }, [currentFolderId, fetchFolders, fetchTreeSubfolders, fetchUserProfile]);
 
     const currentFolderInfo = currentFolderId > 0 ? foldersCache[currentFolderId] : null;
 
+    // Filter files and folders based on searchQuery
+    const filteredFolders = searchQuery.trim() 
+        ? folders.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase()))
+        : folders;
+
+    const filteredFiles = searchQuery.trim()
+        ? files.filter(f => f.orgName.toLowerCase().includes(searchQuery.toLowerCase()))
+        : files;
+
     return {
-        folders, files, currentFolderId, history, folderName, setFolderName,
+        folders, files, filteredFolders, filteredFiles, userProfile, storageBreakdown, searchQuery, setSearchQuery,
+        currentFolderId, history, folderName, setFolderName,
         loading, isUploading, isDragging, setIsDragging, showCreator, setShowCreator,
         editingItem, setEditingItem, renameValue, setRenameValue, movingItem, setMovingItem,
         previewItem, previewFile, closePreview,

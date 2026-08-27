@@ -44,8 +44,8 @@ export default function FilePreviewModal({ previewItem, onClose, onDownload }) {
 
         if (mimeType === "application/pdf") {
             return (
-                <div className="preview-pdf-container">
-                    <iframe src={url} title={file.orgName} className="preview-iframe" />
+                <div className="preview-pdf-container" style={{ width: "100%", height: "60vh" }}>
+                    <iframe src={url} title={file.orgName} className="preview-iframe" style={{ width: "100%", height: "100%", border: "none" }} />
                 </div>
             );
         }
@@ -77,24 +77,24 @@ export default function FilePreviewModal({ previewItem, onClose, onDownload }) {
             mimeType.includes("xml")
         ) {
             return (
-                <div className="preview-text-container">
+                <div className="preview-text-container" style={{ width: "100%", maxHeight: "50vh", overflowY: "auto" }}>
                     {loadingText ? (
                         <div className="loading-container"><div className="spinner"></div></div>
                     ) : (
-                        <pre className="preview-code-block"><code>{textContent}</code></pre>
+                        <pre className="preview-code-block" style={{ padding: "16px", borderRadius: "8px", backgroundColor: "var(--bg-app)", border: "1px solid var(--border-color)", overflowX: "auto" }}><code>{textContent}</code></pre>
                     )}
                 </div>
             );
         }
 
         return (
-            <div className="preview-fallback">
+            <div className="preview-fallback" style={{ textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: "12px" }}>
                 <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                     <polyline points="14 2 14 8 20 8" />
                 </svg>
                 <p>Preview not available for this file type.</p>
-                <button className="btn btn-primary" onClick={() => onDownload(null, file.id, file.orgName)}>
+                <button className="btn btn-primary btn-sm" onClick={() => onDownload(null, file.id, file.orgName)}>
                     Download to View
                 </button>
             </div>
@@ -102,16 +102,16 @@ export default function FilePreviewModal({ previewItem, onClose, onDownload }) {
     };
 
     return (
-        <div className="modal-overlay" onClick={onClose}>
-            <div className="preview-modal-card" onClick={(e) => e.stopPropagation()}>
-                <div className="preview-modal-header">
-                    <div className="preview-title-group">
-                        <span className="preview-file-name">{file.orgName}</span>
-                        <span className="preview-file-meta">
+        <div className="file-preview-modal-backdrop" onClick={onClose}>
+            <div className="file-preview-modal-card" onClick={(e) => e.stopPropagation()}>
+                <div className="preview-header">
+                    <div className="preview-title-group" style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                        <span className="preview-title">{file.orgName}</span>
+                        <span className="preview-file-meta" style={{ fontSize: "12px", color: "var(--text-muted)" }}>
                             {formatBytes(file.size)} • {mimeType}
                         </span>
                     </div>
-                    <div className="preview-header-actions">
+                    <div className="preview-header-actions" style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                         <button className="btn btn-secondary btn-sm" onClick={() => onDownload(null, file.id, file.orgName)}>
                             Download
                         </button>
@@ -120,7 +120,7 @@ export default function FilePreviewModal({ previewItem, onClose, onDownload }) {
                         </button>
                     </div>
                 </div>
-                <div className="preview-modal-body">{renderPreviewBody()}</div>
+                <div className="preview-body">{renderPreviewBody()}</div>
             </div>
         </div>
     );
