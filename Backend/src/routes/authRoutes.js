@@ -21,6 +21,8 @@ router.post('/login', authCon.login);
 router.post('/logout', authCon.logout);
 router.post('/refresh', authCon.refresh);
 
+router.get('/health', authCon.healthCheck);
+
 router.get('/profile', authenticate, authCon.getProfile);
 
 
