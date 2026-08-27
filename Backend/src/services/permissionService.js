@@ -20,9 +20,6 @@ export const RolePermissions = {
     VIEWER: new Set(["r"])
 };
 
-/**
- * Checks if a user has authorization to perform a specific action on a folder.
- */
 export const canAccessFolder = async (folderId, userId, action = FolderAction.READ) => {
     if (!folderId) return true;
     const normalizedFolderId = Number(folderId);
@@ -31,10 +28,8 @@ export const canAccessFolder = async (folderId, userId, action = FolderAction.RE
     const folder = await folderRepo.findById(normalizedFolderId);
     if (!folder) return false;
 
-    // Folder creator/owner has full access
     if (folder.uid === userId) return true;
 
-    // Traverse folder tree upwards to find member permissions
     let currentId = normalizedFolderId;
     while (currentId) {
         const member = await memberRepo.findMember(currentId, userId);
@@ -50,9 +45,6 @@ export const canAccessFolder = async (folderId, userId, action = FolderAction.RE
     return false;
 };
 
-/**
- * Validates folder authorization and returns the folder object or throws.
- */
 export const validateFolderAccess = async (folderId, userId, action = FolderAction.READ) => {
     if (!folderId) return true;
     const normalizedFolderId = Number(folderId);

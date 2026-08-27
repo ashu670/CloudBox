@@ -2,6 +2,7 @@ import fs from "fs/promises";
 import path from "path";
 import * as fileRepo from "../repositories/fileRepo.js";
 import * as folderRepo from "../repositories/folderRepo.js";
+import { getAvailableStorageDet, updateStorageSize } from "../repositories/userRepo.js";
 import { touchFolder } from "./folderService.js";
 import { canAccessFolder, validateFolderAccess, FolderAction } from "./permissionService.js";
 import storageService from "../storage/storageService.js";
@@ -35,6 +36,14 @@ export const uploadFile = async (file, folderId, uid) => {
     const folderExists = await folderRepo.findById(folderId);
     if (!folderExists) {
         throw new Error("Folder not found.");
+    }
+
+    const filesize = BigInt(file.size);
+    const {usedSize, limit} = await getAvailableStorageDet(uid);
+    const avlSize = limit - usedSize;
+
+    if(filesize > avlSize){
+        throw new Error("Not enough storage available");
     }
 
     const hasWritePermission = await canAccessFolder(folderId, uid, FolderAction.WRITE);
@@ -72,10 +81,13 @@ export const uploadFile = async (file, folderId, uid) => {
             message: `Uploaded file "${file.originalname}"`
         });
 
+        await updateStorageSize(uid, usedSize + filesize);
+
         return createdFile;
     } catch (error) {
         // 4. Rollback: delete the uploaded file from disk if DB insertion fails
         await storageService.delete(stoName);
+        await updateStorageSize(uid, usedSize);
         throw error;
     }
 };
@@ -85,6 +97,9 @@ export const del = async (id, uid) => {
     if (!valid) throw new Error("File not exists or access denied");
     touchFolder(valid.folderId);
     await storageService.delete(valid.stoName);
+    const {usedSize} = await getAvailableStorageDet(uid);
+    const newUsedStorage = usedSize - BigInt(valid.size);
+    await updateStorageSize(uid, newUsedStorage < 0n ? 0n : newUsedStorage);
 
     const deleted = await fileRepo.delById(id);
 

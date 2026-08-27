@@ -68,10 +68,12 @@ enum TargetType {
 }
 
 model User {
-  id        Int      @id @default(autoincrement())
-  name      String
-  email     String   @unique
-  password  String?
+  id            Int      @id @default(autoincrement())
+  name          String
+  email         String   @unique
+  password      String?
+  usedStorage   BigInt  @default(0)
+  storageLimit  BigInt  @default(524288000)
 
   provider  Provider @default(LOCAL)
   googleId  String?  @unique
