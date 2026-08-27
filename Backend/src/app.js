@@ -21,8 +21,13 @@ app.use(helmet());
 app.use(compression());
 app.use(
     cors({
-        origin: "http://localhost:5173",
+        origin: (origin, callback) => {
+            // Dynamically reflect origin to satisfy CORS with credentials for all frontends
+            return callback(null, true);
+        },
         credentials: true,
+        methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept"],
     })
 );
 
