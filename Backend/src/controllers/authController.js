@@ -68,3 +68,7 @@ export const handleGoogleCallback = async (req, res) => {
         return res.status(500).json({error : "Failed to generate authentication tokens"});
     }
 }
+
+export const healthCheck = (req, res) => {
+    return res.status(200).json({health : "OK"});
+}

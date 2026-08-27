@@ -1,0 +1,16 @@
+name: Keep CloudBox Alive
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Ping CloudBox backend
+        run: |
+          curl -f https://cloudbox-uttr.onrender.com/api/auth/health
