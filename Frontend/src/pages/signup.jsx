@@ -27,7 +27,7 @@ export default function Signup() {
             localStorage.setItem("accessToken", res.data.accessToken);
             navigate("/dashboard");
         } catch (err) {
-            setError(err.response?.data?.error || "Signup failed. Please try again.");
+            setError(err.response?.data?.error || err.response?.data?.message || "Signup failed. Please try again.");
         }
     };
 
