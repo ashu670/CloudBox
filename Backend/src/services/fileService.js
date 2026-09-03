@@ -1,4 +1,3 @@
-import fs from "fs/promises";
 import path from "path";
 import * as fileRepo from "../repositories/fileRepo.js";
 import * as folderRepo from "../repositories/folderRepo.js";
@@ -51,44 +50,36 @@ export const uploadFile = async (file, folderId, uid) => {
         throw new Error("You don't have permission to upload files.");
     }
 
-    // 1. Generate filename
-    const stoName = await generateUniqueStorageName(uid, folderId, file.originalname);
+    const stoName = await generateUniqueStorageName(uid, folderId, file.name);
+    const signedUrl = await storageService.getSignedUploadUrl(stoName, file.mimeType);
 
-    // 2. Store file
-    await storageService.store(file, stoName);
+    return {signedUrl, stoName};
+};
+
+export const uploadComplete = async (stoName, uid) => {
+    if(uid !== Number(stoName.split("_")[0])) throw new Error("Access denied");
+    const response = await storageService.getMetadata(stoName);
+    if(!response) throw new Error("unable to fetch metadata");
+    
+    const data = {
+        orgName : stoName.split("_").slice(3).join("_"),
+        stoName,
+        mimeType : response.contentType,
+        folderId : Number(stoName.split("_")[1]),
+        uid,
+        size : Number(response.size)
+    };
 
     try {
-        // 3. Insert metadata to DB
-        const data = {
-            orgName: file.originalname,
-            stoName: stoName,
-            mimeType: file.mimetype,
-            size: file.size,
-            folderId: folderId,
-            uid: uid
-        };
-
-        touchFolder(folderId);
-
-        const createdFile = await fileRepo.create(data);
-
-        await activityService.log({
-            folderId,
-            userId: uid,
-            action: ActivityType.UPLOAD_FILE,
-            target: TargetType.FILE,
-            targetId: createdFile.id,
-            message: `Uploaded file "${file.originalname}"`
-        });
-
-        await updateStorageSize(uid, usedSize + filesize);
-
-        return createdFile;
-    } catch (error) {
-        // 4. Rollback: delete the uploaded file from disk if DB insertion fails
+        const file = await fileRepo.create(data);
+        const { usedSize } = await getAvailableStorageDet(uid);
+        const newUsedStorage = usedSize + BigInt(data.size);
+        await updateStorageSize(uid, newUsedStorage);
+        return file;
+    } catch(err) {
         await storageService.delete(stoName);
-        await updateStorageSize(uid, usedSize);
-        throw error;
+        console.error("Upload complete error:", err.message);
+        throw err;
     }
 };
 
@@ -125,34 +116,20 @@ export const renameFile = async (id, uid, newOrgName) => {
         throw new Error("File does not exist or access denied.");
     }
 
-    const oldStoName = currentFile.stoName;
+    const trimmedName = newOrgName.trim();
+    touchFolder(currentFile.folderId);
+    const updatedFile = await fileRepo.update(id, currentFile.stoName, trimmedName);
 
-    const newStoName = await generateUniqueStorageName(
-        currentFile.uid,
-        currentFile.folderId,
-        newOrgName
-    );
+    await activityService.log({
+        folderId: currentFile.folderId,
+        userId: uid,
+        action: ActivityType.RENAME_FILE,
+        target: TargetType.FILE,
+        targetId: id,
+        message: `Renamed file to "${trimmedName}"`
+    });
 
-    await storageService.rename(oldStoName, newStoName);
-
-    try {
-        touchFolder(currentFile.folderId);
-        const updatedFile = await fileRepo.update(id, newStoName, newOrgName);
-
-        await activityService.log({
-            folderId: currentFile.folderId,
-            userId: uid,
-            action: ActivityType.RENAME_FILE,
-            target: TargetType.FILE,
-            targetId: id,
-            message: `Renamed file to "${newOrgName}"`
-        });
-
-        return updatedFile;
-    } catch (error) {
-        await storageService.rename(newStoName, oldStoName);
-        throw error;
-    }
+    return updatedFile;
 };
 
 export const move = async (id, uid, newPid) => {
@@ -218,4 +195,4 @@ export const getStorageBreakdown = async (uid) => {
         usedStorage: usedStorageNumber,
         storageLimit: storageLimitNumber
     };
-};
+};
