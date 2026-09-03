@@ -26,6 +26,10 @@ export default function Signup() {
         try {
             const res = await axios.post("api/auth/signup", form);
             localStorage.setItem("accessToken", res.data.accessToken);
+            if (res.data.root) {
+                localStorage.setItem("rootFolderId", res.data.root);
+                localStorage.setItem("currentFolderId", res.data.root);
+            }
             navigate("/dashboard");
         } catch (err) {
             setError(err.response?.data?.error || err.response?.data?.message || "Signup failed. Please try again.");

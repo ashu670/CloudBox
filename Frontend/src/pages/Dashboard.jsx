@@ -18,7 +18,7 @@ import { DownloadIcon, MoveIcon, RenameIcon, DeleteIcon } from "../components/Ac
 export default function FolderView() {
     const {
         folders, files, filteredFolders, filteredFiles, userProfile, storageBreakdown, searchQuery, setSearchQuery,
-        currentFolderId, history, folderName, setFolderName,
+        rootFolderId, currentFolderId, history, folderName, setFolderName,
         loading, isUploading, isDragging, setIsDragging, showCreator, setShowCreator,
         editingItem, setEditingItem, renameValue, setRenameValue, movingItem, setMovingItem,
         previewItem, previewFile, closePreview,
@@ -208,7 +208,7 @@ export default function FolderView() {
 
         return (
             <div key={node.id} className="tree-node-wrapper">
-                <div 
+                <div
                     className={`tree-node ${isActive ? 'active' : ''} ${isTarget ? 'drag-over-target' : ''}`}
                     style={{ paddingLeft: `${12 + depth * 14}px` }}
                     onClick={() => handleFolderSelect(node)}
@@ -219,7 +219,7 @@ export default function FolderView() {
                     onDragLeave={(e) => handleDragLeaveTarget(e, node.id)}
                     onDrop={(e) => handleDropOnTarget(e, node.id)}
                 >
-                    <svg 
+                    <svg
                         className={`tree-chevron ${isExpanded ? 'expanded' : ''}`}
                         onClick={(e) => toggleFolderExpand(node.id, e)}
                         viewBox="0 0 24 24"
@@ -243,7 +243,7 @@ export default function FolderView() {
                                 <>
                                     {subfolders.map(child => renderTreeNode(child, depth + 1))}
                                     {nodeFiles.map(file => (
-                                        <div 
+                                        <div
                                             key={`tree-file-${file.id}`}
                                             className="tree-node tree-file-node"
                                             style={{ paddingLeft: `${28 + depth * 14}px` }}
@@ -270,26 +270,29 @@ export default function FolderView() {
     };
 
     const renderRootNode = () => {
-        const isExpanded = expandedFolders[-1];
-        const isActive = currentFolderId === -1 || currentFolderId === 0;
-        const isTarget = dropTargetId === -1;
-        const rootData = treeNodes[-1];
+        const rootIdKey = rootFolderId !== -1 ? rootFolderId : -1;
+        const isExpanded = expandedFolders[rootIdKey] !== undefined 
+            ? expandedFolders[rootIdKey] 
+            : (expandedFolders[-1] !== undefined ? expandedFolders[-1] : true);
+        const isActive = currentFolderId === rootFolderId || currentFolderId === -1 || currentFolderId === 0;
+        const isTarget = dropTargetId === -1 || dropTargetId === rootFolderId;
+        const rootData = treeNodes[rootIdKey] || treeNodes[-1];
         const rootSubfolders = rootData?.subfolders || (Array.isArray(rootData) ? rootData : []);
         const rootFiles = rootData?.files || [];
         const hasRootContent = rootSubfolders.length > 0 || rootFiles.length > 0;
 
         return (
             <div className="tree-node-wrapper">
-                <div 
+                <div
                     className={`tree-node ${isActive ? 'active' : ''} ${isTarget ? 'drag-over-target' : ''}`}
-                    onClick={() => handleFolderSelect({ id: -1, name: "Root", pid: null })}
-                    onDragOver={(e) => handleDragOverTarget(e, -1)}
-                    onDragLeave={(e) => handleDragLeaveTarget(e, -1)}
-                    onDrop={(e) => handleDropOnTarget(e, -1)}
+                    onClick={() => handleFolderSelect({ id: rootFolderId !== -1 ? rootFolderId : -1, name: "Root", pid: null })}
+                    onDragOver={(e) => handleDragOverTarget(e, rootFolderId !== -1 ? rootFolderId : -1)}
+                    onDragLeave={(e) => handleDragLeaveTarget(e, rootFolderId !== -1 ? rootFolderId : -1)}
+                    onDrop={(e) => handleDropOnTarget(e, rootFolderId !== -1 ? rootFolderId : -1)}
                 >
-                    <svg 
+                    <svg
                         className={`tree-chevron ${isExpanded ? 'expanded' : ''}`}
-                        onClick={(e) => toggleFolderExpand(-1, e)}
+                        onClick={(e) => toggleFolderExpand(rootFolderId !== -1 ? rootFolderId : -1, e)}
                         viewBox="0 0 24 24"
                     >
                         <path d="M8.59,16.59L13.17,12L8.59,7.41L10,6L16,12L10,18L8.59,16.59Z" />
@@ -311,7 +314,7 @@ export default function FolderView() {
                                 <>
                                     {rootSubfolders.map(child => renderTreeNode(child, 0))}
                                     {rootFiles.map(file => (
-                                        <div 
+                                        <div
                                             key={`tree-file-${file.id}`}
                                             className="tree-node tree-file-node"
                                             style={{ paddingLeft: '28px' }}
@@ -346,7 +349,7 @@ export default function FolderView() {
     return (
         <div className="app-container">
             {/* Header Topbar Navigation */}
-            <Navbar 
+            <Navbar
                 searchQuery={searchQuery}
                 setSearchQuery={setSearchQuery}
                 userProfile={userProfile}
@@ -376,9 +379,9 @@ export default function FolderView() {
                     {/* Navigation Menu */}
                     <div className="sidebar-section">
                         <div className="sidebar-section-title">Main Menu</div>
-                        <div 
-                            className={`sidebar-nav-item ${currentFolderId === -1 ? 'active' : ''}`}
-                            onClick={() => handleFolderSelect({ id: -1, name: "Root", pid: null })}
+                        <div
+                            className={`sidebar-nav-item ${(currentFolderId === -1 || currentFolderId === rootFolderId) ? 'active' : ''}`}
+                            onClick={() => handleFolderSelect({ id: rootFolderId !== -1 ? rootFolderId : -1, name: "Root", pid: null })}
                         >
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                 <rect x="3" y="3" width="7" height="7" rx="1" />
@@ -421,7 +424,7 @@ export default function FolderView() {
                 </aside>
 
                 {/* Main Workspace Content */}
-                <main 
+                <main
                     className="main-content"
                     onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
                     onDragLeave={() => setIsDragging(false)}
@@ -439,7 +442,7 @@ export default function FolderView() {
                             <h2>Welcome Back, {userProfile?.name || "User"}</h2>
                             <p>Manage your cloud files, shared directories, and storage effortlessly.</p>
                         </div>
-                        
+
                         <div className="quick-action-buttons">
                             <button type="button" className="btn btn-secondary" onClick={() => setShowCreator(!showCreator)}>
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -449,9 +452,9 @@ export default function FolderView() {
                                 <span>Create Folder</span>
                             </button>
 
-                            <button 
+                            <button
                                 type="button"
-                                className="btn btn-primary" 
+                                className="btn btn-primary"
                                 onClick={() => document.getElementById("file-picker").click()}
                                 disabled={isUploading}
                             >
@@ -463,7 +466,7 @@ export default function FolderView() {
                                 <span>{isUploading ? "Uploading..." : "Upload File"}</span>
                             </button>
 
-                            <input 
+                            <input
                                 id="file-picker"
                                 type="file"
                                 style={{ display: "none" }}
@@ -479,19 +482,19 @@ export default function FolderView() {
                     {/* Toolbar & Shared Action Buttons */}
                     <div className="explorer-toolbar">
                         <div className="breadcrumbs">
-                            <span 
-                                className={`breadcrumb-item ${currentFolderId === -1 ? 'active' : ''} ${dropTargetId === -1 ? 'drag-over-target' : ''}`}
-                                onClick={() => handleFolderSelect({ id: -1, name: "Root" })}
-                                onDragOver={(e) => handleDragOverTarget(e, -1)}
-                                onDragLeave={(e) => handleDragLeaveTarget(e, -1)}
-                                onDrop={(e) => handleDropOnTarget(e, -1)}
+                            <span
+                                className={`breadcrumb-item ${(currentFolderId === -1 || currentFolderId === rootFolderId) ? 'active' : ''} ${(dropTargetId === -1 || dropTargetId === rootFolderId) ? 'drag-over-target' : ''}`}
+                                onClick={() => handleFolderSelect({ id: rootFolderId !== -1 ? rootFolderId : -1, name: "Root" })}
+                                onDragOver={(e) => handleDragOverTarget(e, rootFolderId !== -1 ? rootFolderId : -1)}
+                                onDragLeave={(e) => handleDragLeaveTarget(e, rootFolderId !== -1 ? rootFolderId : -1)}
+                                onDrop={(e) => handleDropOnTarget(e, rootFolderId !== -1 ? rootFolderId : -1)}
                             >
                                 Root
                             </span>
                             {history.map((folder, index) => (
                                 <span key={folder.id} className="breadcrumb-wrapper">
                                     <span className="breadcrumb-separator">/</span>
-                                    <span 
+                                    <span
                                         className={`breadcrumb-item ${index === history.length - 1 ? 'active' : ''} ${dropTargetId === folder.id ? 'drag-over-target' : ''}`}
                                         onClick={() => handleFolderSelect(folder)}
                                         onDragOver={(e) => handleDragOverTarget(e, folder.id)}
@@ -636,8 +639,8 @@ export default function FolderView() {
                                 autoFocus
                             />
                             <button type="submit" className="btn btn-primary btn-sm">Create</button>
-                            <button 
-                                type="button" 
+                            <button
+                                type="button"
                                 className="btn btn-secondary btn-sm"
                                 onClick={() => {
                                     setFolderName("");
@@ -650,7 +653,7 @@ export default function FolderView() {
                     )}
 
                     {/* Back button */}
-                    {currentFolderId !== -1 && currentFolderId !== 0 && (
+                    {currentFolderId !== -1 && currentFolderId !== 0 && currentFolderId !== rootFolderId && (
                         <div className="back-button-bar">
                             <button onClick={goBack} className="btn btn-secondary btn-sm">
                                 &larr; Back
@@ -667,7 +670,7 @@ export default function FolderView() {
                                     const isEditing = editingItem && editingItem.type === 'folder' && editingItem.id === folder.id;
                                     const isTarget = dropTargetId === folder.id;
                                     return (
-                                        <div 
+                                        <div
                                             key={`grid-folder-${folder.id}`}
                                             className={`folder-card ${isTarget ? 'drag-over-target' : ''}`}
                                             onClick={() => !isEditing && handleFolderSelect(folder)}
@@ -685,8 +688,8 @@ export default function FolderView() {
 
                                                 <div className="folder-card-actions">
                                                     {!isEditing && (
-                                                        <button 
-                                                            type="button" 
+                                                        <button
+                                                            type="button"
                                                             className="action-dots-btn"
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
@@ -708,15 +711,15 @@ export default function FolderView() {
                                             </div>
 
                                             {isEditing ? (
-                                                <form 
-                                                    onSubmit={(e) => handleRenameSubmit(e, folder.id, 'folder')} 
+                                                <form
+                                                    onSubmit={(e) => handleRenameSubmit(e, folder.id, 'folder')}
                                                     onClick={(e) => e.stopPropagation()}
                                                     className="folder-rename-form"
                                                 >
-                                                    <input 
-                                                        value={renameValue} 
-                                                        onChange={(e) => setRenameValue(e.target.value)} 
-                                                        className="input-field input-field-sm" 
+                                                    <input
+                                                        value={renameValue}
+                                                        onChange={(e) => setRenameValue(e.target.value)}
+                                                        className="input-field input-field-sm"
                                                         autoFocus
                                                     />
                                                     <button type="submit" className="btn btn-primary btn-sm">Save</button>
@@ -738,7 +741,7 @@ export default function FolderView() {
                     )}
 
                     {/* Overall Storage Breakdown Bar (Only shown on main Dashboard / Root) */}
-                    {(currentFolderId === -1 || currentFolderId === 0) && (
+                    {(currentFolderId === -1 || currentFolderId === 0 || currentFolderId === rootFolderId) && (
                         <div className="category-breakdown-card">
                             <div className="category-header">
                                 <span className="category-title">Storage Breakdown</span>
@@ -748,29 +751,29 @@ export default function FolderView() {
                                 {totalStorageUsed > 0 ? (
                                     <>
                                         {categoryStats.image > 0 && (
-                                            <div 
-                                                className="cat-fill cat-image" 
+                                            <div
+                                                className="cat-fill cat-image"
                                                 style={{ width: `${(categoryStats.image / totalStorageUsed) * 100}%` }}
                                                 title={`Images: ${formatBytes(categoryStats.image)}`}
                                             ></div>
                                         )}
                                         {categoryStats.document > 0 && (
-                                            <div 
-                                                className="cat-fill cat-document" 
+                                            <div
+                                                className="cat-fill cat-document"
                                                 style={{ width: `${(categoryStats.document / totalStorageUsed) * 100}%` }}
                                                 title={`Documents: ${formatBytes(categoryStats.document)}`}
                                             ></div>
                                         )}
                                         {categoryStats.video > 0 && (
-                                            <div 
-                                                className="cat-fill cat-video" 
+                                            <div
+                                                className="cat-fill cat-video"
                                                 style={{ width: `${(categoryStats.video / totalStorageUsed) * 100}%` }}
                                                 title={`Videos: ${formatBytes(categoryStats.video)}`}
                                             ></div>
                                         )}
                                         {categoryStats.audio > 0 && (
-                                            <div 
-                                                className="cat-fill cat-audio" 
+                                            <div
+                                                className="cat-fill cat-audio"
                                                 style={{ width: `${(categoryStats.audio / totalStorageUsed) * 100}%` }}
                                                 title={`Audio: ${formatBytes(categoryStats.audio)}`}
                                             ></div>
@@ -805,14 +808,14 @@ export default function FolderView() {
                         ) : filteredFolders.length === 0 && filteredFiles.length === 0 ? (
                             <div className="empty-state">
                                 <svg className="empty-state-svg" viewBox="0 0 24 24" width="48" height="48">
-                                    <path fill="currentColor" d="M19.35,10.03C18.67,6.59 15.64,4 12,4C9.11,4 6.6,5.64 5.35,8.03C2.34,8.36 0,10.9 0,14C0,17.1 2.9,20 6,20H19C21.76,20 24,17.76 24,15C24,12.36 21.95,10.22 19.35,10.03Z" opacity="0.3"/>
+                                    <path fill="currentColor" d="M19.35,10.03C18.67,6.59 15.64,4 12,4C9.11,4 6.6,5.64 5.35,8.03C2.34,8.36 0,10.9 0,14C0,17.1 2.9,20 6,20H19C21.76,20 24,17.76 24,15C24,12.36 21.95,10.22 19.35,10.03Z" opacity="0.3" />
                                 </svg>
                                 <h3 className="empty-state-title">
                                     {searchQuery ? "No matching files or folders found" : "This folder is empty"}
                                 </h3>
                                 <p className="empty-state-text">
-                                    {currentFolderId <= 0 
-                                        ? "Create a folder to start organizing your files." 
+                                    {currentFolderId <= 0
+                                        ? "Create a folder to start organizing your files."
                                         : "Upload a file or create a subfolder here."}
                                 </p>
                             </div>
@@ -833,8 +836,8 @@ export default function FolderView() {
                                         const isEditing = editingItem && editingItem.type === 'folder' && editingItem.id === folder.id;
                                         const isTarget = dropTargetId === folder.id;
                                         return (
-                                            <div 
-                                                key={`row-folder-${folder.id}`} 
+                                            <div
+                                                key={`row-folder-${folder.id}`}
                                                 className={`table-row clickable-row ${isTarget ? 'drag-over-target' : ''}`}
                                                 onClick={() => !isEditing && handleFolderSelect(folder)}
                                                 draggable={!isEditing}
@@ -852,15 +855,15 @@ export default function FolderView() {
 
                                                 <div className="col-name">
                                                     {isEditing ? (
-                                                        <form 
-                                                            onSubmit={(e) => handleRenameSubmit(e, folder.id, 'folder')} 
+                                                        <form
+                                                            onSubmit={(e) => handleRenameSubmit(e, folder.id, 'folder')}
                                                             onClick={(e) => e.stopPropagation()}
                                                             className="row-rename-form"
                                                         >
-                                                            <input 
-                                                                value={renameValue} 
-                                                                onChange={(e) => setRenameValue(e.target.value)} 
-                                                                className="input-field input-field-sm" 
+                                                            <input
+                                                                value={renameValue}
+                                                                onChange={(e) => setRenameValue(e.target.value)}
+                                                                className="input-field input-field-sm"
                                                                 autoFocus
                                                             />
                                                             <button type="submit" className="btn btn-primary btn-sm">Save</button>
@@ -882,8 +885,8 @@ export default function FolderView() {
 
                                                 <div className="col-actions">
                                                     {!isEditing && (
-                                                        <button 
-                                                            type="button" 
+                                                        <button
+                                                            type="button"
                                                             className="action-dots-btn"
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
@@ -907,8 +910,8 @@ export default function FolderView() {
                                     {filteredFiles.map(file => {
                                         const isEditing = editingItem && editingItem.type === 'file' && editingItem.id === file.id;
                                         return (
-                                            <div 
-                                                key={`row-file-${file.id}`} 
+                                            <div
+                                                key={`row-file-${file.id}`}
                                                 className="table-row clickable-row"
                                                 onClick={(e) => {
                                                     if (e.target.closest('.col-actions') || e.target.closest('form')) return;
@@ -930,14 +933,14 @@ export default function FolderView() {
 
                                                 <div className="col-name">
                                                     {isEditing ? (
-                                                        <form 
+                                                        <form
                                                             onSubmit={(e) => handleRenameSubmit(e, file.id, 'file')}
                                                             className="row-rename-form"
                                                         >
-                                                            <input 
-                                                                value={renameValue} 
-                                                                onChange={(e) => setRenameValue(e.target.value)} 
-                                                                className="input-field input-field-sm" 
+                                                            <input
+                                                                value={renameValue}
+                                                                onChange={(e) => setRenameValue(e.target.value)}
+                                                                className="input-field input-field-sm"
                                                                 autoFocus
                                                             />
                                                             <button type="submit" className="btn btn-primary btn-sm">Save</button>
@@ -954,8 +957,8 @@ export default function FolderView() {
 
                                                 <div className="col-actions">
                                                     {!isEditing && (
-                                                        <button 
-                                                            type="button" 
+                                                        <button
+                                                            type="button"
                                                             className="action-dots-btn"
                                                             onClick={(e) => {
                                                                 e.stopPropagation();

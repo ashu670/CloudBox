@@ -3,13 +3,17 @@ import axios from "../api/axios";
 import { BackArrowIcon, MoveIcon } from "./ActionIcons";
 
 export default function DirectoryMoveModal({ movingItem, onClose, onMoveSuccess, showToast }) {
+    const rootFolderId = Number(localStorage.getItem("rootFolderId")) || -1;
 
-    const [pickerFolderId, setPickerFolderId] = useState(-1);
+    const [pickerFolderId, setPickerFolderId] = useState(() => {
+        const saved = localStorage.getItem("rootFolderId");
+        return saved ? Number(saved) : -1;
+    });
     const [history, setHistory] = useState([]);
     const [currentFolderName, setCurrentFolderName] = useState("Root Drive");
     const [subfolders, setSubfolders] = useState([]);
     const [loading, setLoading] = useState(false);
-    
+
     // Inline folder creation
     const [showCreateForm, setShowCreateForm] = useState(false);
     const [newFolderName, setNewFolderName] = useState("");
@@ -20,15 +24,15 @@ export default function DirectoryMoveModal({ movingItem, onClose, onMoveSuccess,
     const fetchSubfolders = useCallback(async (folderId) => {
         setLoading(true);
         try {
-            const fetchId = folderId === -1 ? -1 : folderId;
+            const fetchId = (folderId === -1 && rootFolderId !== -1) ? rootFolderId : folderId;
             const res = await axios.get(`api/folder/fetch/${fetchId}`, {
                 headers: { Authorization: `Bearer ${token()}` }
             });
             const children = res.data.children?.children || [];
             setSubfolders(children);
             if (res.data.children && res.data.children.name) {
-                setCurrentFolderName(res.data.children.name);
-            } else if (folderId === -1) {
+                setCurrentFolderName(res.data.children.name === "root" ? "Root Drive" : res.data.children.name);
+            } else if (folderId === -1 || folderId === rootFolderId) {
                 setCurrentFolderName("Root Drive");
             }
         } catch (err) {
@@ -37,7 +41,7 @@ export default function DirectoryMoveModal({ movingItem, onClose, onMoveSuccess,
         } finally {
             setLoading(false);
         }
-    }, [showToast]);
+    }, [showToast, rootFolderId]);
 
     useEffect(() => {
         fetchSubfolders(pickerFolderId);
@@ -58,14 +62,14 @@ export default function DirectoryMoveModal({ movingItem, onClose, onMoveSuccess,
         const newHist = [...history];
         newHist.pop();
         setHistory(newHist);
-        const prevId = newHist.length === 0 ? -1 : newHist[newHist.length - 1].id;
+        const prevId = newHist.length === 0 ? (rootFolderId !== -1 ? rootFolderId : -1) : newHist[newHist.length - 1].id;
         setPickerFolderId(prevId);
     };
 
     const handleBreadcrumbClick = (index) => {
         if (index === -1) {
             setHistory([]);
-            setPickerFolderId(-1);
+            setPickerFolderId(rootFolderId !== -1 ? rootFolderId : -1);
             return;
         }
         const newHist = history.slice(0, index + 1);
@@ -78,9 +82,10 @@ export default function DirectoryMoveModal({ movingItem, onClose, onMoveSuccess,
         if (!newFolderName.trim()) return;
         setCreating(true);
         try {
+            const targetPid = (pickerFolderId === -1 || pickerFolderId === 0) ? (rootFolderId !== -1 ? rootFolderId : null) : pickerFolderId;
             await axios.post("api/folder/create", {
                 name: newFolderName.trim(),
-                pid: pickerFolderId === -1 ? null : pickerFolderId
+                pid: targetPid
             }, {
                 headers: { Authorization: `Bearer ${token()}` }
             });
@@ -97,7 +102,7 @@ export default function DirectoryMoveModal({ movingItem, onClose, onMoveSuccess,
 
     const handleMoveHere = async () => {
         if (!movingItem) return;
-        const targetPid = pickerFolderId === -1 ? 0 : pickerFolderId;
+        const targetPid = (pickerFolderId === -1 || pickerFolderId === 0) ? (rootFolderId !== -1 ? rootFolderId : 0) : pickerFolderId;
 
         if (movingItem.type === 'file' && targetPid === 0) {
             showToast?.("Files cannot be moved to Root level", "error");
@@ -115,7 +120,7 @@ export default function DirectoryMoveModal({ movingItem, onClose, onMoveSuccess,
     if (!movingItem) return null;
 
     // Filter subfolders so moving folder itself is omitted
-    const validSubfolders = movingItem.type === 'folder' 
+    const validSubfolders = movingItem.type === 'folder'
         ? subfolders.filter(f => f.id !== movingItem.id)
         : subfolders;
 
@@ -134,7 +139,7 @@ export default function DirectoryMoveModal({ movingItem, onClose, onMoveSuccess,
                 {/* Directory Navigation & Toolbar */}
                 <div className="move-modal-toolbar">
                     <div className="move-breadcrumbs">
-                        <span 
+                        <span
                             className={`move-crumb ${pickerFolderId === -1 ? 'active' : ''}`}
                             onClick={() => handleBreadcrumbClick(-1)}
                         >
@@ -143,7 +148,7 @@ export default function DirectoryMoveModal({ movingItem, onClose, onMoveSuccess,
                         {history.map((h, idx) => (
                             <React.Fragment key={h.id}>
                                 <span className="move-crumb-sep">/</span>
-                                <span 
+                                <span
                                     className={`move-crumb ${idx === history.length - 1 ? 'active' : ''}`}
                                     onClick={() => handleBreadcrumbClick(idx)}
                                 >
@@ -153,8 +158,8 @@ export default function DirectoryMoveModal({ movingItem, onClose, onMoveSuccess,
                         ))}
                     </div>
 
-                    <button 
-                        type="button" 
+                    <button
+                        type="button"
                         className="btn btn-secondary btn-sm"
                         onClick={() => setShowCreateForm(!showCreateForm)}
                     >
@@ -204,8 +209,8 @@ export default function DirectoryMoveModal({ movingItem, onClose, onMoveSuccess,
                         </div>
                     ) : (
                         validSubfolders.map((folder) => (
-                            <div 
-                                key={folder.id} 
+                            <div
+                                key={folder.id}
                                 className="move-folder-item"
                                 onClick={() => handleOpenFolder(folder)}
                             >

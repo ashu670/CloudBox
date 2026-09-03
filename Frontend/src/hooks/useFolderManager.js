@@ -8,9 +8,16 @@ export function useFolderManager() {
     const [userProfile, setUserProfile] = useState(null);
     const [storageBreakdown, setStorageBreakdown] = useState({ image: 0, video: 0, audio: 0, document: 0 });
     const [searchQuery, setSearchQuery] = useState("");
+    const [rootFolderId, setRootFolderId] = useState(() => {
+        const saved = localStorage.getItem("rootFolderId");
+        return saved ? Number(saved) : -1;
+    });
+
     const [currentFolderId, setCurrentFolderId] = useState(() => {
         const saved = localStorage.getItem("currentFolderId");
-        return saved ? Number(saved) : -1;
+        if (saved && Number(saved) !== -1) return Number(saved);
+        const rootSaved = localStorage.getItem("rootFolderId");
+        return rootSaved ? Number(rootSaved) : -1;
     });
     const [history, setHistory] = useState(() => {
         const saved = localStorage.getItem("folderHistory");
@@ -63,6 +70,12 @@ export function useFolderManager() {
             });
             if (data.user) {
                 setUserProfile(data.user);
+                const rId = data.user.rootFolderId || data.root;
+                if (rId) {
+                    setRootFolderId(rId);
+                    localStorage.setItem("rootFolderId", rId);
+                    setCurrentFolderId(prev => (prev === -1 || prev === 0 ? rId : prev));
+                }
             }
             fetchStorageBreakdown();
         } catch (err) {
@@ -82,7 +95,7 @@ export function useFolderManager() {
     const fetchTreeSubfolders = useCallback(async (folderId) => {
         try {
             const token = localStorage.getItem("accessToken");
-            const fetchId = folderId === -1 ? -1 : folderId;
+            const fetchId = (folderId === -1 && rootFolderId !== -1) ? rootFolderId : folderId;
             const { data } = await axios.get(`api/folder/fetch/${fetchId}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
@@ -94,19 +107,26 @@ export function useFolderManager() {
                 [folderId]: {
                     subfolders: fetchedChildren,
                     files: fetchedFiles
-                }
+                },
+                ...(fetchId !== folderId ? {
+                    [fetchId]: {
+                        subfolders: fetchedChildren,
+                        files: fetchedFiles
+                    }
+                } : {})
             }));
         } catch (err) {
             console.error("Error fetching tree subfolders:", err);
         }
-    }, [addToCache]);
+    }, [addToCache, rootFolderId]);
 
 
     const fetchFolders = useCallback(async (id = currentFolderId) => {
         setLoading(true);
         try {
             const token = localStorage.getItem("accessToken");
-            const { data } = await axios.get(`api/folder/fetch/${id}`, {
+            const fetchId = (id === -1 && rootFolderId !== -1) ? rootFolderId : id;
+            const { data } = await axios.get(`api/folder/fetch/${fetchId}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setFolders(data.children?.children || []);
@@ -125,19 +145,19 @@ export function useFolderManager() {
         } finally {
             setLoading(false);
         }
-    }, [currentFolderId, navigate, addToCache, showToast]);
+    }, [currentFolderId, rootFolderId, navigate, addToCache, showToast]);
 
     const rebuildHistory = useCallback((folderId) => {
         const path = [];
         let currentId = folderId;
-        while (currentId && currentId !== -1 && currentId !== 0) {
+        while (currentId && currentId !== -1 && currentId !== 0 && currentId !== rootFolderId) {
             const folder = foldersCache[currentId];
-            if (!folder) break;
+            if (!folder || folder.isRoot) break;
             path.unshift({ id: folder.id, name: folder.name, pid: folder.pid });
             currentId = folder.pid;
         }
         return path;
-    }, [foldersCache]);
+    }, [foldersCache, rootFolderId]);
 
     useEffect(() => {
         fetchUserProfile();
@@ -154,35 +174,37 @@ export function useFolderManager() {
     }, [currentFolderId, history]);
 
     const handleFolderSelect = useCallback((folder) => {
-        if (folder.id > 0) {
+        const targetId = (folder.id === -1 || folder.id === 0) ? (rootFolderId !== -1 ? rootFolderId : -1) : folder.id;
+        if (targetId > 0) {
             setFoldersCache(prev => ({
                 ...prev,
-                [folder.id]: { ...prev[folder.id], ...folder },
+                [targetId]: { ...prev[targetId], ...folder, id: targetId },
             }));
         }
-        if (folder.id === -1 || folder.id === 0) {
-            setCurrentFolderId(-1);
+        if (targetId === -1 || targetId === rootFolderId) {
+            setCurrentFolderId(targetId);
             setHistory([]);
         } else {
-            setCurrentFolderId(folder.id);
-            setHistory(rebuildHistory(folder.id));
+            setCurrentFolderId(targetId);
+            setHistory(rebuildHistory(targetId));
         }
-    }, [rebuildHistory]);
+    }, [rebuildHistory, rootFolderId]);
 
     const createFolder = async (e) => {
         e.preventDefault();
         if (!folderName.trim()) return;
         try {
             const token = localStorage.getItem("accessToken");
+            const targetPid = (currentFolderId === -1 || currentFolderId === 0) ? (rootFolderId !== -1 ? rootFolderId : null) : currentFolderId;
             await axios.post("api/folder/create", {
                 name: folderName,
-                pid: currentFolderId === -1 ? null : currentFolderId
+                pid: targetPid
             }, { headers: { Authorization: `Bearer ${token}` } });
             showToast("Folder created successfully", "success");
             setFolderName("");
             setShowCreator(false);
             fetchFolders();
-            fetchTreeSubfolders(currentFolderId);
+            fetchTreeSubfolders(targetPid || -1);
         } catch (err) {
             showToast(err.response?.data?.message || err.response?.data?.error || "Failed to create folder", "error");
         }
@@ -284,7 +306,7 @@ export function useFolderManager() {
     const moveItemToFolder = async (item, targetFolderId) => {
         if (!item || !item.id || !item.type) return;
 
-        const targetPid = (targetFolderId === -1 || targetFolderId === 0) ? 0 : Number(targetFolderId);
+        let targetPid = (targetFolderId === -1 || targetFolderId === 0) ? (rootFolderId !== -1 ? rootFolderId : 0) : Number(targetFolderId);
 
         if (item.type === 'file' && targetPid === 0) {
             showToast("Files cannot be moved to Root folder.", "error");
@@ -336,7 +358,10 @@ export function useFolderManager() {
 
     const handleFileUpload = async (file, targetFolderId = null) => {
         if (!file) return;
-        const destId = targetFolderId || currentFolderId;
+        let destId = targetFolderId || currentFolderId;
+        if (destId === -1 || destId === 0) {
+            destId = rootFolderId !== -1 ? rootFolderId : -1;
+        }
         setIsUploading(true);
         const uploadData = {
             'fileName' : file.name,
@@ -366,19 +391,35 @@ export function useFolderManager() {
     };
 
     const toggleFolderExpand = useCallback(async (folderId, e) => {
-        e.stopPropagation();
-        const isExpanded = expandedFolders[folderId];
-        setExpandedFolders(prev => ({ ...prev, [folderId]: !isExpanded }));
-        if (!isExpanded && !treeNodes[folderId]) {
-            await fetchTreeSubfolders(folderId);
+        if (e && typeof e.stopPropagation === 'function') {
+            e.stopPropagation();
         }
-    }, [expandedFolders, treeNodes, fetchTreeSubfolders]);
+        const rootIdKey = rootFolderId !== -1 ? rootFolderId : -1;
+        const isRootTarget = folderId === -1 || folderId === 0 || folderId === rootIdKey;
+        const targetId = isRootTarget ? rootIdKey : folderId;
+        
+        const currentVal = expandedFolders[targetId] !== undefined 
+            ? expandedFolders[targetId] 
+            : (expandedFolders[-1] !== undefined ? expandedFolders[-1] : isRootTarget);
+        const newVal = !currentVal;
+
+        setExpandedFolders(prev => ({
+            ...prev,
+            [targetId]: newVal,
+            ...(isRootTarget ? { "-1": newVal } : {})
+        }));
+
+        if (newVal && !treeNodes[targetId]) {
+            await fetchTreeSubfolders(targetId);
+        }
+    }, [expandedFolders, treeNodes, fetchTreeSubfolders, rootFolderId]);
 
     const goBack = () => {
         const temp = [...history];
         temp.pop();
         setHistory(temp);
-        setCurrentFolderId(temp.length === 0 ? -1 : temp[temp.length - 1].id);
+        const targetId = temp.length === 0 ? (rootFolderId !== -1 ? rootFolderId : -1) : temp[temp.length - 1].id;
+        setCurrentFolderId(targetId);
     };
 
     const refreshAfterSharedAction = useCallback(async () => {
@@ -403,7 +444,7 @@ export function useFolderManager() {
 
     return {
         folders, files, filteredFolders, filteredFiles, userProfile, storageBreakdown, searchQuery, setSearchQuery,
-        currentFolderId, history, folderName, setFolderName,
+        rootFolderId, currentFolderId, history, folderName, setFolderName,
         loading, isUploading, isDragging, setIsDragging, showCreator, setShowCreator,
         editingItem, setEditingItem, renameValue, setRenameValue, movingItem, setMovingItem,
         previewItem, previewFile, closePreview,

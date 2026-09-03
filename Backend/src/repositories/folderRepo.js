@@ -51,8 +51,35 @@ export const createSharedFolderTx = async (folderData, ownerUid) => {
     });
 };
 
+export const findRootFolder = async (uid) => {
+    let rootFolder = await prisma.folder.findFirst({
+        where: {
+            uid,
+            isRoot: true
+        }
+    });
+
+    if (!rootFolder) {
+        rootFolder = await prisma.folder.findFirst({
+            where: {
+                uid,
+                pid: null
+            }
+        });
+    }
+
+    return rootFolder;
+};
+
 export const findChildren = async (uid, pid) => {
-    if (pid === null || pid === 0) {
+    if (pid === null || pid === 0 || pid === -1) {
+        const rootFolder = await findRootFolder(uid);
+        if (rootFolder) {
+            pid = rootFolder.id;
+        }
+    }
+
+    if (pid === null || pid === 0 || pid === -1) {
         const ownedChildren = await prisma.folder.findMany({
             where: {
                 pid: null,

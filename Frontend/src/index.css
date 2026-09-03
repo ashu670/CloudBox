@@ -7,10 +7,10 @@
   --bg-card: #ffffff;
   --bg-hover: #f1f5f9;
   --bg-active: #e2e8f0;
-  
+
   --border-color: #e2e8f0;
   --border-subtle: #f1f5f9;
-  
+
   --text-main: #0f172a;
   --text-muted: #64748b;
   --text-inverse: #ffffff;
@@ -19,7 +19,7 @@
   --accent-hover: #2563eb;
   --accent-light: #eff6ff;
   --accent-border: #bfdbfe;
-  
+
   --danger: #ef4444;
   --danger-light: #fef2f2;
   --danger-border: #fecaca;
@@ -53,10 +53,10 @@
   --bg-card: #151c2c;
   --bg-hover: #1e293b;
   --bg-active: #334155;
-  
+
   --border-color: #27354a;
   --border-subtle: #1e293b;
-  
+
   --text-main: #f8fafc;
   --text-muted: #94a3b8;
   --text-inverse: #0f172a;
@@ -99,7 +99,12 @@ body {
   flex-direction: column;
 }
 
-h1, h2, h3, h4, h5, h6 {
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
   font-family: var(--heading);
   font-weight: 600;
   color: var(--text-main);
