@@ -4,7 +4,7 @@ import * as requestRepo from "../repositories/folderJoinRequestRepo.js";
 import * as userRepo from "../repositories/userRepo.js";
 import { getAvailableStorageDet, updateStorageSize } from "../repositories/userRepo.js";
 import * as activityService from "./activityService.js";
-import { ActivityType, TargetType } from "../validations/activityValidation.js";
+import { ActivityType, TargetType } from "../utils/activityValidation.js";
 import { fetchByFolderIdAndUserId } from "../repositories/fileRepo.js";
 import storageService from "../storage/storageService.js";
 import generateInviteCode from "../utils/inviteCodeGenerator.js";

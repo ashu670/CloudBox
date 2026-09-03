@@ -42,7 +42,7 @@ export const getFolderMembers = async (folderId) => {
 };
 
 import * as activityRepo from "./activityRepo.js";
-import { ActivityType, TargetType } from "../validations/activityValidation.js";
+import { ActivityType, TargetType } from "../utils/activityValidation.js";
 
 export const removeMemberTx = async (folderId, targetUserId, actorUserId, actorName, targetName) => {
     return await prisma.$transaction(async (tx) => {

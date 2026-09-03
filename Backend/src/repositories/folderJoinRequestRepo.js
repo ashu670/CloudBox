@@ -1,6 +1,6 @@
 import { prisma } from "../config/db.js";
 import * as activityRepo from "./activityRepo.js";
-import { ActivityType, TargetType } from "../validations/activityValidation.js";
+import { ActivityType, TargetType } from "../utils/activityValidation.js";
 
 export const create = async (data) => {
     return await prisma.folderJoinRequest.create({
