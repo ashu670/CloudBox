@@ -211,7 +211,7 @@ export const getFolderStats = async (folderId) => {
 };
 
 import * as activityRepo from "./activityRepo.js";
-import { ActivityType, TargetType } from "../validations/activityValidation.js";
+import { ActivityType, TargetType } from "../utils/activityValidation.js";
 
 export const transferOwnershipTx = async (folderId, newOwnerUserId, actorUserId, actorName, newOwnerName) => {
     return await prisma.$transaction(async (tx) => {

@@ -1,5 +1,5 @@
 import * as activityRepo from "../repositories/activityRepo.js";
-import { validateActivityLogInput } from "../validations/activityValidation.js";
+import { validateActivityLogInput } from "../utils/activityValidation.js";
 import { canAccessFolder, FolderAction } from "./permissionService.js";
 
 export const log = async ({ folderId, userId, action, target, targetId, message }, tx = null) => {

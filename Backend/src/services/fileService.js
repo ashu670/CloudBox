@@ -6,7 +6,7 @@ import { touchFolder } from "./folderService.js";
 import { canAccessFolder, validateFolderAccess, FolderAction } from "./permissionService.js";
 import storageService from "../storage/storageService.js";
 import * as activityService from "./activityService.js";
-import { ActivityType, TargetType } from "../validations/activityValidation.js";
+import { ActivityType, TargetType } from "../utils/activityValidation.js";
 
 async function generateUniqueStorageName(uid, folderId, originalName) {
     const ext = path.extname(originalName);
