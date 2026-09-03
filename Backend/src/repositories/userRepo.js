@@ -64,3 +64,10 @@ export const updateStorageSize = async (id, size) => {
         data : {usedStorage : size}
     });
 }
+
+export const incrementStorageSize = async (id, size) => {
+    return await prisma.user.update({
+        where: { id },
+        data: { usedStorage: { increment: BigInt(size) } }
+    });
+}

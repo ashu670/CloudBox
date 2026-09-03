@@ -1,7 +1,7 @@
 import path from "path";
 import * as fileRepo from "../repositories/fileRepo.js";
 import * as folderRepo from "../repositories/folderRepo.js";
-import { getAvailableStorageDet, updateStorageSize } from "../repositories/userRepo.js";
+import { getAvailableStorageDet, updateStorageSize, incrementStorageSize } from "../repositories/userRepo.js";
 import { touchFolder } from "./folderService.js";
 import { canAccessFolder, validateFolderAccess, FolderAction } from "./permissionService.js";
 import storageService from "../storage/storageService.js";
@@ -57,26 +57,37 @@ export const uploadFile = async (file, folderId, uid) => {
 };
 
 export const uploadComplete = async (stoName, uid) => {
-    if(uid !== Number(stoName.split("_")[0])) throw new Error("Access denied");
+    if (uid !== Number(stoName.split("_")[0])) throw new Error("Access denied");
     const response = await storageService.getMetadata(stoName);
-    if(!response) throw new Error("unable to fetch metadata");
+    if (!response) throw new Error("unable to fetch metadata");
     
     const data = {
-        orgName : stoName.split("_").slice(3).join("_"),
+        orgName: stoName.split("_").slice(3).join("_"),
         stoName,
-        mimeType : response.contentType,
-        folderId : Number(stoName.split("_")[1]),
+        mimeType: response.contentType,
+        folderId: Number(stoName.split("_")[1]),
         uid,
-        size : Number(response.size)
+        size: Number(response.size)
     };
 
     try {
         const file = await fileRepo.create(data);
-        const { usedSize } = await getAvailableStorageDet(uid);
-        const newUsedStorage = usedSize + BigInt(data.size);
-        await updateStorageSize(uid, newUsedStorage);
+
+        await Promise.all([
+            incrementStorageSize(uid, BigInt(data.size)),
+            touchFolder(data.folderId),
+            activityService.log({
+                folderId: data.folderId,
+                userId: uid,
+                action: ActivityType.UPLOAD_FILE,
+                target: TargetType.FILE,
+                targetId: file.id,
+                message: `Uploaded file "${data.orgName}"`
+            })
+        ]);
+
         return file;
-    } catch(err) {
+    } catch (err) {
         await storageService.delete(stoName);
         console.error("Upload complete error:", err.message);
         throw err;
