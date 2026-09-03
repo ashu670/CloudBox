@@ -1,8 +1,7 @@
-import { error } from "console";
 import * as service from "../services/folderService.js";
 
 const getErrorStatus = (error) => {
-    const msg = error.message ? error.message.toLowerCase() : "";
+    const msg = error?.message ? error.message.toLowerCase() : "";
     if (msg.includes("access denied") || msg.includes("unauthorized")) return 403;
     if (msg.includes("not found") || msg.includes("not exists") || msg.includes("doesn't exists")) return 404;
     if (
@@ -28,6 +27,7 @@ export const create = async (req, res) => {
     try {
         const folder = await service.createFolder(name, pid, uid);
         return res.status(201).json({
+            success: true,
             message: "Folder created successfully",
             folder
         });
@@ -35,11 +35,16 @@ export const create = async (req, res) => {
         if (err.message === "You don't have permission to create folders.") {
             return res.status(403).json({
                 success: false,
-                message: "You don't have permission to create folders."
+                message: "You don't have permission to create folders.",
+                error: err.message
             });
         }
         const status = getErrorStatus(err);
-        return res.status(status).json({ error: err.message });
+        return res.status(status).json({
+            success: false,
+            message: err.message,
+            error: err.message
+        });
     }
 };
 
@@ -49,10 +54,18 @@ export const fetch = async (req, res) => {
 
     try {
         const children = await service.fetchFolder(uid, pid);
-        return res.status(200).json({message : "Fetched succefull", children});
+        return res.status(200).json({
+            success: true,
+            message: "Fetched successfully",
+            children
+        });
     } catch (err) {
         const status = getErrorStatus(err);
-        return res.status(status).json({error : err.message});
+        return res.status(status).json({
+            success: false,
+            message: err.message,
+            error: err.message
+        });
     }
 };
 
@@ -63,12 +76,20 @@ export const deleteFolder = async (req, res) => {
 
     try {
         const response = await service.delFolder(uid, id, force);
-        return res.status(200).json(response);
+        return res.status(200).json({
+            success: true,
+            message: "Folder deleted successfully",
+            response
+        });
     } catch (err) {
         const status = getErrorStatus(err);
-        return res.status(status).json({error : err.message});
+        return res.status(status).json({
+            success: false,
+            message: err.message,
+            error: err.message
+        });
     }
-}
+};
 
 export const createSharedFolder = async (req, res) => {
 
@@ -89,6 +110,7 @@ export const createSharedFolder = async (req, res) => {
         const status = getErrorStatus(err);
         return res.status(status).json({
             success: false,
+            message: err.message,
             error: err.message
         });
     }
@@ -118,6 +140,7 @@ export const joinSharedFolder = async (req, res) => {
 
         return res.status(status).json({
             success: false,
+            message: err.message,
             error: err.message
         });
 
@@ -147,6 +170,7 @@ export const getFolderRequests = async (req, res) => {
 
         return res.status(400).json({
             success: false,
+            message: err.message,
             error: err.message
         });
 
@@ -173,6 +197,7 @@ export const approveRequest = async (req, res) => {
 
         return res.status(400).json({
             success: false,
+            message: err.message,
             error: err.message
         });
 
@@ -203,6 +228,7 @@ export const rejectRequest = async (req, res) => {
 
         return res.status(400).json({
             success: false,
+            message: err.message,
             error: err.message
         });
 
@@ -232,6 +258,7 @@ export const getFolderMembers = async (req, res) => {
 
         return res.status(400).json({
             success: false,
+            message: err.message,
             error: err.message
         });
 
@@ -246,10 +273,18 @@ export const rename = async (req, res) => {
 
     try {
         const response = await service.rename(id, uid, newName);
-        return res.status(200).json(response);
+        return res.status(200).json({
+            success: true,
+            message: "Folder renamed successfully",
+            response
+        });
     } catch (err) {
         const status = getErrorStatus(err);
-        return res.status(status).json({error : err.message});
+        return res.status(status).json({
+            success: false,
+            message: err.message,
+            error: err.message
+        });
     }
 };
 
@@ -260,10 +295,18 @@ export const move = async (req, res) => {
 
     try {
         const response = await service.move(id, uid, newPid);
-        return res.status(200).json({message : 'folder moved successful', response});
+        return res.status(200).json({
+            success: true,
+            message: "Folder moved successfully",
+            response
+        });
     } catch (err) {
         const status = getErrorStatus(err);
-        return res.status(status).json({error : err.message});
+        return res.status(status).json({
+            success: false,
+            message: err.message,
+            error: err.message
+        });
     }
 };
 

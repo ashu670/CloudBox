@@ -95,10 +95,6 @@ export default function FolderView() {
     };
 
 
-
-
-
-
     const toggleSharedPanel = (panel) => {
         setSharedPanel((prev) => (prev === panel ? null : panel));
     };

@@ -115,18 +115,17 @@ export function useFolderManager() {
             if (data.children && data.children.id !== null) {
                 setFoldersCache(prev => ({ ...prev, [data.children.id]: data.children }));
             }
-            fetchUserProfile();
         } catch (err) {
             if (err.response?.status === 401) {
                 showToast("Session expired. Please log in again.", "error");
                 navigate("/login");
             } else {
-                showToast(err.response?.data?.error || "Unable to fetch contents.", "error");
+                showToast(err.response?.data?.message || err.response?.data?.error || "Unable to fetch contents.", "error");
             }
         } finally {
             setLoading(false);
         }
-    }, [currentFolderId, navigate, addToCache, showToast, fetchUserProfile]);
+    }, [currentFolderId, navigate, addToCache, showToast]);
 
     const rebuildHistory = useCallback((folderId) => {
         const path = [];
@@ -185,7 +184,7 @@ export function useFolderManager() {
             fetchFolders();
             fetchTreeSubfolders(currentFolderId);
         } catch (err) {
-            showToast(err.response?.data?.error || "Failed to create folder", "error");
+            showToast(err.response?.data?.message || err.response?.data?.error || "Failed to create folder", "error");
         }
     };
 
@@ -200,7 +199,7 @@ export function useFolderManager() {
             fetchTreeSubfolders(currentFolderId);
             fetchUserProfile();
         } catch (err) {
-            showToast(err.response?.data?.error || "Failed to delete folder", "error");
+            showToast(err.response?.data?.message || err.response?.data?.error || "Failed to delete folder", "error");
         }
     };
 
@@ -214,7 +213,7 @@ export function useFolderManager() {
             fetchFolders();
             fetchUserProfile();
         } catch (err) {
-            showToast(err.response?.data?.error || "Failed to delete file", "error");
+            showToast(err.response?.data?.message || err.response?.data?.error || "Failed to delete file", "error");
         }
     };
 
@@ -278,7 +277,7 @@ export function useFolderManager() {
             setEditingItem(null);
             fetchFolders();
         } catch (err) {
-            showToast(err.response?.data?.error || `Failed to rename ${type}`, "error");
+            showToast(err.response?.data?.message || err.response?.data?.error || `Failed to rename ${type}`, "error");
         }
     };
 
@@ -312,7 +311,7 @@ export function useFolderManager() {
             setMovingItem(null);
             fetchFolders();
         } catch (err) {
-            showToast(err.response?.data?.error || "Failed to move item", "error");
+            showToast(err.response?.data?.message || err.response?.data?.error || "Failed to move item", "error");
         }
     };
 
@@ -321,22 +320,41 @@ export function useFolderManager() {
         await moveItemToFolder(movingItem, currentFolderId);
     };
 
+    async function uploadFile(file, signedUrl) {
+        const response = await fetch(signedUrl, {
+            method: "PUT",
+            headers: {
+                "Content-Type": file.type || "application/octet-stream"
+            },
+            body: file
+        });
+
+        if (!response.ok) {
+            throw new Error("Failed to upload file to Firebase");
+        }
+    }
+
     const handleFileUpload = async (file, targetFolderId = null) => {
         if (!file) return;
         const destId = targetFolderId || currentFolderId;
-        if (destId <= 0) {
-            showToast("Please open a folder first.", "error");
-            return;
-        }
         setIsUploading(true);
-        const formData = new FormData();
-        formData.append("file", file);
-        formData.append("folderId", destId);
+        const uploadData = {
+            'fileName' : file.name,
+            'fileSize' : file.size,
+            'mimeType' : file.type || "application/octet-stream",
+            'folderId' : destId
+        };
         try {
             const token = localStorage.getItem("accessToken");
-            await axios.post("api/file/upload", formData, {
-                headers: { Authorization: `Bearer ${token}`, "Content-Type": "multipart/form-data" }
+            const response = await axios.post("api/file/upload", uploadData, {
+                headers: { Authorization: `Bearer ${token}`}
             });
+            const {signedUrl, stoName} = response.data.data;
+            await uploadFile(file, signedUrl);
+            await axios.post("api/file/upload/complete", {stoName}, {
+                headers: {Authorization: `Bearer ${token}`}
+            });
+
             showToast(`File "${file.name}" uploaded successfully`, "success");
             fetchFolders();
             fetchUserProfile();
