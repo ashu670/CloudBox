@@ -1,4 +1,5 @@
 import * as repo from "../repositories/userRepo.js";
+import { create, findRootFolder } from "../repositories/folderRepo.js";
 
 export const passportService = async (GoogleAccessToken, GoogleRefreshToken, profile, done) => {
     try{
@@ -11,8 +12,17 @@ export const passportService = async (GoogleAccessToken, GoogleRefreshToken, pro
         let user = await repo.findByGoogleId(googleId);
         if(!user) user = await repo.findByEmail(email);
 
-        if(user) user = await repo.updateGoogleId(user.id, googleId);
-        else user = await repo.createWithGoogle({name, email, googleId});
+        if(user) {
+            user = await repo.updateGoogleId(user.id, googleId);
+        } else {
+            user = await repo.createWithGoogle({name, email, googleId});
+            await create({ name: "root", uid: user.id, isRoot: true });
+        }
+
+        let rootFolder = await findRootFolder(user.id);
+        if (!rootFolder) {
+            await create({ name: "root", uid: user.id, isRoot: true });
+        }
 
         return done(null, user);
     }catch(err){

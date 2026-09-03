@@ -1,5 +1,5 @@
 export default function FileIcon({ mimeType = "", size }) {
-    const iconStyle = size 
+    const iconStyle = size
         ? { width: `${size}px`, height: `${size}px`, minWidth: `${size}px`, flexShrink: 0 }
         : undefined;
 

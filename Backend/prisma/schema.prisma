@@ -94,6 +94,7 @@ model Folder {
   name      String
 
   pid       Int?
+  isRoot    Boolean  @default(false)
   parent    Folder?  @relation("FolderToFolder", fields: [pid], references: [id], onDelete: Cascade)
   children  Folder[] @relation("FolderToFolder")
 

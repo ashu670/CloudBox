@@ -27,7 +27,7 @@ function App() {
 
         <Route
           path="/dashboard"
-          element={<FolderView/>}
+          element={<FolderView />}
         />
       </Routes>
     </BrowserRouter>

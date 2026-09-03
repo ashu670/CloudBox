@@ -21,7 +21,7 @@ router.post('/login', authCon.login);
 router.post('/logout', authCon.logout);
 router.post('/refresh', authCon.refresh);
 
-//cronjob for waking up the server at every 10 min
+//for uptime robot
 router.get('/health', authCon.healthCheck);
 
 router.get('/profile', authenticate, authCon.getProfile);

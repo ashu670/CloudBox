@@ -9,6 +9,7 @@ export default function Navbar({ searchQuery, setSearchQuery, userProfile, onTog
     const handleLogout = () => {
         localStorage.removeItem("accessToken");
         localStorage.removeItem("currentFolderId");
+        localStorage.removeItem("rootFolderId");
         localStorage.removeItem("folderHistory");
         navigate("/login");
     };

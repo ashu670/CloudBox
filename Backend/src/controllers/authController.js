@@ -1,5 +1,6 @@
 import * as authService from '../services/authService.js';
 import * as userRepo from '../repositories/userRepo.js';
+import * as folderRepo from '../repositories/folderRepo.js';
 import { formatUserForResponse } from '../utils/userFormatter.js';
 
 const isProduction = process.env.NODE_ENV === "production";
@@ -14,9 +15,9 @@ const COOKIE_OPTIONS = {
 export const signup = async (req, res) => {
     try{
         const {name, email, password} = req.body;   //validation will be done before this   
-        const {user, accessToken, refreshToken} = await authService.registerUser(name, email, password);
+        const {user, accessToken, refreshToken, root} = await authService.registerUser(name, email, password);
         res.cookie('refreshToken', refreshToken, COOKIE_OPTIONS);
-        return res.status(201).json({user, accessToken});
+        return res.status(201).json({user, accessToken, root});
     }catch(err){
         return res.status(400).json({error : err.message});
     }
@@ -55,7 +56,18 @@ export const getProfile = async (req, res) => {
     try {
         const user = await userRepo.findById(req.user.id);
         if (!user) return res.status(404).json({ error: "User not found" });
-        return res.status(200).json({ user: formatUserForResponse(user) });
+        let rootFolder = await folderRepo.findRootFolder(req.user.id);
+        if (!rootFolder) {
+            rootFolder = await folderRepo.create({ name: "root", uid: req.user.id, isRoot: true });
+        }
+        const formatted = formatUserForResponse(user);
+        return res.status(200).json({
+            user: {
+                ...formatted,
+                rootFolderId: rootFolder.id
+            },
+            root: rootFolder.id
+        });
     } catch (err) {
         return res.status(500).json({ error: err.message });
     }

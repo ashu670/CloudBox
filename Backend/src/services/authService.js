@@ -1,6 +1,7 @@
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import * as repo from '../repositories/userRepo.js';
+import { create, findRootFolder } from '../repositories/folderRepo.js';
 import { formatUserForResponse } from '../utils/userFormatter.js';
 
 const salt = 10;
@@ -38,10 +39,16 @@ export const registerUser = async (name, email, password) => {
 
     const hashed = await bcrypt.hash(password, salt);
     const newUser = await repo.create({name, email, password : hashed});
+    const data = {
+        name : "root",
+        uid : newUser.id,
+        isRoot : true
+    }
+    const root  = await create(data);
 
     const tokens = generateTokens(newUser);
 
-    return {user : formatUserForResponse(newUser), ...tokens};
+    return {user : formatUserForResponse(newUser), ...tokens, root : root.id};
 };
 
 export const loginUser = async (email, password) => {
@@ -51,8 +58,13 @@ export const loginUser = async (email, password) => {
     const isMatch = await bcrypt.compare(password, user.password);
     if(!isMatch) throw new Error('Invalid Password');
 
+    let rootFolder = await findRootFolder(user.id);
+    if (!rootFolder) {
+        rootFolder = await create({ name: "root", uid: user.id, isRoot: true });
+    }
+
     const tokens = generateTokens(user);
-    return {user : formatUserForResponse(user), ...tokens};
+    return { user: formatUserForResponse(user), ...tokens, root: rootFolder.id };
 }
 
 export const refreshAccessTokens = async (refreshToken) => {

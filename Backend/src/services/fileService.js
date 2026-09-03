@@ -32,9 +32,16 @@ export const uploadFile = async (file, folderId, uid) => {
         throw new Error("Invalid Folder ID.");
     }
 
-    const folderExists = await folderRepo.findById(folderId);
-    if (!folderExists) {
-        throw new Error("Folder not found.");
+    if(folderId !== -1){
+        const folderExists = await folderRepo.findById(folderId);
+        if (!folderExists) {
+            throw new Error("Folder not found.");
+        }
+
+        const hasWritePermission = await canAccessFolder(folderId, uid, FolderAction.WRITE);
+        if (!hasWritePermission) {
+            throw new Error("You don't have permission to upload files.");
+        }
     }
 
     const filesize = BigInt(file.size);
@@ -43,11 +50,6 @@ export const uploadFile = async (file, folderId, uid) => {
 
     if(filesize > avlSize){
         throw new Error("Not enough storage available");
-    }
-
-    const hasWritePermission = await canAccessFolder(folderId, uid, FolderAction.WRITE);
-    if (!hasWritePermission) {
-        throw new Error("You don't have permission to upload files.");
     }
 
     const stoName = await generateUniqueStorageName(uid, folderId, file.name);
