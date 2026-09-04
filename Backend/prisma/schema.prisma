@@ -83,6 +83,7 @@ model User {
 
   folders        Folder[]
   files          File[]
+  fileShares     FileShare[]
 
   sharedFolders FolderMember[]
   joinRequests  FolderJoinRequest[]
@@ -163,13 +164,21 @@ model File {
   uid  Int
   user User @relation(fields: [uid], references: [id], onDelete: Cascade)
 
-  visibility Visibility @default(PRIVATE)
-  isShared       Boolean @default(false)
-  inviteCode     String? @unique
-  isInviteActive Boolean @default(false)
+  fileShares  FileShare[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model FileShare{
+  id          Int       @id @default(autoincrement())
+  token       String    @unique
+  fileId      Int
+  uid         Int
+  createdAt   DateTime  @default(now())
+
+  file        File      @relation(fields : [fileId], references : [id], onDelete : Cascade)
+  User        User      @relation(fields : [uid], references : [id], onDelete : Cascade)
 }
 
 model ActivityLogs {

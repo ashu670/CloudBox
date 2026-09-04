@@ -1,4 +1,5 @@
 import * as fileService from "../services/fileService.js";
+import * as fileShareService from "../services/fileShareService.js";
 
 const getErrorStatus = (error) => {
     const msg = error?.message ? error.message.toLowerCase() : "";
@@ -186,6 +187,44 @@ export const getStorageBreakdown = async (req, res) => {
             success: false,
             message: err.message,
             error: err.message
+        });
+    }
+};
+
+export const share = async (req, res) => {
+    try {
+        const fileId = req.params.id;
+        const uid = req.user.id;
+
+        const fileShare = await fileShareService.createFileShare(
+            fileId,
+            uid
+        );
+
+        return res.status(201).json({
+            success: true,
+            message: "File share created successfully",
+            data: fileShare
+        });
+
+    } catch (error) {
+        if (error.message === "File not found.") {
+            return res.status(404).json({
+                success: false,
+                message: error.message
+            });
+        }
+
+        if (error.message === "You don't have permission to share this file.") {
+            return res.status(403).json({
+                success: false,
+                message: error.message
+            });
+        }
+
+        return res.status(500).json({
+            success: false,
+            message: error.message
         });
     }
 };

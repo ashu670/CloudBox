@@ -11,6 +11,7 @@ import authRoutes from "./routes/authRoutes.js";
 import folderRoutes from "./routes/folderRoutes.js";
 import fileRoutes from "./routes/fileRoutes.js";
 import activityRoutes from "./routes/activityRoutes.js";
+import publicShareRoutes from "./routes/publicShareRoutes.js";
 import passport from './config/passport.js';
 
 const app = express();
@@ -48,6 +49,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/folder", folderRoutes);
 app.use("/api/file", fileRoutes);
 app.use("/api/activity", activityRoutes);
+app.use("/api/public", publicShareRoutes);
 
 /* ---------------------- 404 Handler ---------------------- */
 
