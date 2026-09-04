@@ -26,9 +26,13 @@ export default function Signup() {
         try {
             const res = await axios.post("api/auth/signup", form);
             localStorage.setItem("accessToken", res.data.accessToken);
+            localStorage.removeItem("folderHistory");
             if (res.data.root) {
                 localStorage.setItem("rootFolderId", res.data.root);
                 localStorage.setItem("currentFolderId", res.data.root);
+            } else {
+                localStorage.removeItem("rootFolderId");
+                localStorage.removeItem("currentFolderId");
             }
             navigate("/dashboard");
         } catch (err) {

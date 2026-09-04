@@ -10,6 +10,9 @@ export default function AuthSuccess() {
         const token = searchParams.get("token");
         if (token) {
             localStorage.setItem("accessToken", token);
+            localStorage.removeItem("currentFolderId");
+            localStorage.removeItem("rootFolderId");
+            localStorage.removeItem("folderHistory");
             navigate("/dashboard");
         } else {
             navigate("/login");
