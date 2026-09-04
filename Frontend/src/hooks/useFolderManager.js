@@ -292,6 +292,25 @@ export function useFolderManager() {
         }
     };
 
+    const [shareModalItem, setShareModalItem] = useState(null);
+
+    const openShareModal = useCallback((itemOrId) => {
+        if (typeof itemOrId === "object" && itemOrId !== null) {
+            setShareModalItem(itemOrId);
+        } else if (typeof itemOrId === "number" || typeof itemOrId === "string") {
+            const foundFile = files.find(f => f.id === Number(itemOrId));
+            setShareModalItem(foundFile || { id: Number(itemOrId), orgName: "File" });
+        }
+    }, [files]);
+
+    const closeShareModal = useCallback(() => {
+        setShareModalItem(null);
+    }, []);
+
+    const shareFile = useCallback((fileId) => {
+        openShareModal(fileId);
+    }, [openShareModal]);
+
     const handleRenameSubmit = async (e, id, type) => {
         e.preventDefault();
         if (!renameValue.trim()) return;
@@ -455,7 +474,7 @@ export function useFolderManager() {
         previewItem, previewFile, closePreview,
         toasts, expandedFolders, treeNodes, foldersCache, currentFolderInfo,
         createFolder, deleteFolder, deleteFile,
-        downloadFile, handleRenameSubmit, executeMove, moveItemToFolder, handleFileUpload,
+        downloadFile, shareFile, openShareModal, closeShareModal, shareModalItem, handleRenameSubmit, executeMove, moveItemToFolder, handleFileUpload,
         handleFolderSelect, toggleFolderExpand, goBack, refreshAfterSharedAction, showToast
     };
 }

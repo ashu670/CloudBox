@@ -175,10 +175,14 @@ model FileShare{
   token       String    @unique
   fileId      Int
   uid         Int
+  isActive    Boolean   @default(true)
+  expiresAt   DateTime?
   createdAt   DateTime  @default(now())
 
   file        File      @relation(fields : [fileId], references : [id], onDelete : Cascade)
   User        User      @relation(fields : [uid], references : [id], onDelete : Cascade)
+
+  @@unique([fileId, uid])
 }
 
 model ActivityLogs {
