@@ -48,11 +48,11 @@ export default function FilePreviewModal({ previewItem, onClose, onDownload, onS
         }
 
         if (mimeType === "application/pdf") {
-            const pdfUrl = `${url}#toolbar=0&navpanes=0`;
+            const pdfViewerUrl = `https://docs.google.com/gview?url=${encodeURIComponent(url)}&embedded=true`;
             return (
                 <div style={{ width: "100%", height: "100%", backgroundColor: "#1e1e24" }}>
                     <iframe
-                        src={pdfUrl}
+                        src={pdfViewerUrl}
                         title={file.orgName}
                         style={{ width: "100%", height: "100%", border: "none" }}
                     />
