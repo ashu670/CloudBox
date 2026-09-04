@@ -142,11 +142,30 @@ export const createFolder = async (name, pid, uid) => {
 };
 
 export const fetchFolder = async (uid, pid) => {
-    if (pid === -1) pid = null;
+    if (pid === null || pid === 0 || pid === -1 || pid === "0" || pid === "-1" || isNaN(Number(pid))) {
+        const rootFolder = await repo.findRootFolder(uid);
+        if (rootFolder) {
+            pid = rootFolder.id;
+        } else {
+            pid = null;
+        }
+    } else {
+        pid = Number(pid);
+    }
 
     const valid = await validateFolderAccess(pid, uid, FolderAction.READ);
     if (!valid) {
-        throw new Error("Parent folder not found or access denied");
+        // Fallback: if access to requested pid fails, try user's root folder
+        const rootFolder = await repo.findRootFolder(uid);
+        if (rootFolder && rootFolder.id !== pid) {
+            pid = rootFolder.id;
+            const validRoot = await validateFolderAccess(pid, uid, FolderAction.READ);
+            if (!validRoot) {
+                throw new Error("Parent folder not found or access denied");
+            }
+        } else {
+            throw new Error("Parent folder not found or access denied");
+        }
     }
 
     const folderDetails = await repo.findChildren(uid, pid);

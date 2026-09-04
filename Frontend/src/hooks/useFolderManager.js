@@ -139,6 +139,11 @@ export function useFolderManager() {
             if (err.response?.status === 401) {
                 showToast("Session expired. Please log in again.", "error");
                 navigate("/login");
+            } else if (id !== -1 && id !== rootFolderId) {
+                // If subfolder fails (e.g. stale ID or permissions), gracefully fallback to root
+                localStorage.removeItem("currentFolderId");
+                setCurrentFolderId(-1);
+                setHistory([]);
             } else {
                 showToast(err.response?.data?.message || err.response?.data?.error || "Unable to fetch contents.", "error");
             }
