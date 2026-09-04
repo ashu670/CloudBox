@@ -195,10 +195,12 @@ export const share = async (req, res) => {
     try {
         const fileId = req.params.id;
         const uid = req.user.id;
+        const { duration } = req.body || {};
 
         const fileShare = await fileShareService.createFileShare(
             fileId,
-            uid
+            uid,
+            duration
         );
 
         return res.status(201).json({
@@ -223,6 +225,44 @@ export const share = async (req, res) => {
         }
 
         return res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+export const unshare = async (req, res) => {
+    try {
+        const fileId = req.params.id;
+        const uid = req.user.id;
+
+        const result = await fileShareService.revokeFileShare(fileId, uid);
+        return res.status(200).json({
+            success: true,
+            message: result.message
+        });
+    } catch (error) {
+        const status = getErrorStatus(error);
+        return res.status(status).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+export const getShareStatus = async (req, res) => {
+    try {
+        const fileId = req.params.id;
+        const uid = req.user.id;
+
+        const data = await fileShareService.getShareStatus(fileId, uid);
+        return res.status(200).json({
+            success: true,
+            data
+        });
+    } catch (error) {
+        const status = getErrorStatus(error);
+        return res.status(status).json({
             success: false,
             message: error.message
         });

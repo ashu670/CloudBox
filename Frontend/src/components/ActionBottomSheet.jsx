@@ -1,9 +1,10 @@
 import React, { useEffect } from "react";
-import { DownloadIcon, MoveIcon, RenameIcon, DeleteIcon } from "./ActionIcons";
+import { DownloadIcon, ShareIcon, MoveIcon, RenameIcon, DeleteIcon } from "./ActionIcons";
 
 const getIcon = (type) => {
     switch (type) {
         case 'download': return <DownloadIcon size={22} />;
+        case 'share': return <ShareIcon size={22} />;
         case 'move': return <MoveIcon size={22} />;
         case 'rename': return <RenameIcon size={22} />;
         case 'delete': return <DeleteIcon size={22} />;

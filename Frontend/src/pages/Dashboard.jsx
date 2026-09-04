@@ -13,6 +13,7 @@ import ActivityLogs from "../components/ActivityLogs";
 import FilePreviewModal from "../components/FilePreviewModal";
 import ActionBottomSheet from "../components/ActionBottomSheet";
 import DirectoryMoveModal from "../components/DirectoryMoveModal";
+import ShareModal from "../components/ShareModal";
 import { DownloadIcon, MoveIcon, RenameIcon, DeleteIcon } from "../components/ActionIcons";
 
 export default function FolderView() {
@@ -24,7 +25,7 @@ export default function FolderView() {
         previewItem, previewFile, closePreview,
         toasts, expandedFolders, treeNodes, foldersCache, currentFolderInfo,
         createFolder, deleteFolder, deleteFile,
-        downloadFile, handleRenameSubmit, executeMove, moveItemToFolder, handleFileUpload,
+        downloadFile, shareFile, openShareModal, closeShareModal, shareModalItem, handleRenameSubmit, executeMove, moveItemToFolder, handleFileUpload,
         handleFolderSelect, toggleFolderExpand, goBack, refreshAfterSharedAction, showToast
     } = useFolderManager();
 
@@ -66,6 +67,11 @@ export default function FolderView() {
                 type: 'download',
                 label: "Download",
                 onClick: (e) => downloadFile(e, item.id, item.orgName)
+            },
+            {
+                type: 'share',
+                label: "Share",
+                onClick: (e) => shareFile(item.id)
             },
             {
                 type: 'move',
@@ -1003,6 +1009,7 @@ export default function FolderView() {
                     previewItem={previewItem}
                     onClose={closePreview}
                     onDownload={downloadFile}
+                    onShare={shareFile}
                 />
 
                 {/* Bottom Sheet Action Menu */}
@@ -1024,6 +1031,15 @@ export default function FolderView() {
                             setShowMoveModal(false);
                             setMovingItem(null);
                         }}
+                    />
+                )}
+
+                {/* Share Modal */}
+                {shareModalItem && (
+                    <ShareModal
+                        item={shareModalItem}
+                        onClose={closeShareModal}
+                        showToast={showToast}
                     />
                 )}
 

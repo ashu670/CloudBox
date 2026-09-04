@@ -7,6 +7,15 @@ export const DownloadIcon = ({ size = 22 }) => (
     </svg>
 );
 
+export const ShareIcon = ({ size = 22 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+        <circle cx="18" cy="5" r="3" fill="rgba(16, 185, 129, 0.18)" stroke="#10b981" strokeWidth="2" />
+        <circle cx="6" cy="12" r="3" fill="rgba(16, 185, 129, 0.18)" stroke="#10b981" strokeWidth="2" />
+        <circle cx="18" cy="19" r="3" fill="rgba(16, 185, 129, 0.18)" stroke="#10b981" strokeWidth="2" />
+        <path d="M8.59 13.51l6.83 3.98M15.41 6.51l-6.82 3.98" stroke="#10b981" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+);
+
 export const MoveIcon = ({ size = 22 }) => (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
         <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" fill="rgba(139, 92, 246, 0.18)" stroke="#8b5cf6" strokeWidth="2" strokeLinejoin="round" />
