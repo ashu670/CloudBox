@@ -131,11 +131,11 @@ export default function PublicShare() {
         }
 
         if (mimeType === "application/pdf") {
-            const pdfSrc = `${downloadUrl}#toolbar=0&navpanes=0`;
+            const pdfViewerUrl = `https://docs.google.com/gview?url=${encodeURIComponent(downloadUrl)}&embedded=true`;
             return (
                 <div style={{ width: "100%", height: "100%", backgroundColor: "#1e1e24" }}>
                     <iframe
-                        src={pdfSrc}
+                        src={pdfViewerUrl}
                         title={file.orgName}
                         style={{ width: "100%", height: "100%", border: "none", display: "block" }}
                     />
