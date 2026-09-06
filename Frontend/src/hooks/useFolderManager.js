@@ -276,18 +276,26 @@ export function useFolderManager() {
         if (e) e.stopPropagation();
         try {
             const token = localStorage.getItem("accessToken");
-            const response = await axios.get(`api/file/download/${fileId}`, {
-                headers: { Authorization: `Bearer ${token}` },
-                responseType: "blob"
+            const res = await axios.get(`api/file/download/${fileId}`, {
+                headers: { Authorization: `Bearer ${token}` }
             });
-            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const downloadUrl = res.data?.url;
+            const fileName = res.data?.name || orgName || "download";
+
+            if (!downloadUrl) throw new Error("No download URL received.");
+
+            const blobRes = await fetch(downloadUrl);
+            const blob = await blobRes.blob();
+            const objectUrl = window.URL.createObjectURL(blob);
+
             const link = document.createElement("a");
-            link.href = url;
-            link.setAttribute("download", orgName);
+            link.href = objectUrl;
+            link.setAttribute("download", fileName);
             document.body.appendChild(link);
             link.click();
             link.parentNode.removeChild(link);
-            window.URL.revokeObjectURL(url);
+            window.URL.revokeObjectURL(objectUrl);
+
             showToast("Download started successfully", "success");
         } catch (err) {
             console.error("Download error:", err);
