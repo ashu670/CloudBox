@@ -15,6 +15,7 @@ import ActionBottomSheet from "../components/ActionBottomSheet";
 import DirectoryMoveModal from "../components/DirectoryMoveModal";
 import ShareModal from "../components/ShareModal";
 import { DownloadIcon, MoveIcon, RenameIcon, DeleteIcon } from "../components/ActionIcons";
+import { lockBodyScroll, unlockBodyScroll } from "../utils/scrollLock";
 
 export default function FolderView() {
     const {
@@ -35,6 +36,13 @@ export default function FolderView() {
     const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
     const [showMoveModal, setShowMoveModal] = useState(false);
     const [activeBottomSheet, setActiveBottomSheet] = useState(null);
+
+    useEffect(() => {
+        if (mobileSidebarOpen) {
+            lockBodyScroll();
+            return () => unlockBodyScroll();
+        }
+    }, [mobileSidebarOpen]);
 
     const openActionSheet = (item, itemType) => {
         const isFolder = itemType === 'folder';

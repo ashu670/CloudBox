@@ -1,11 +1,20 @@
 import React, { useState, useEffect } from "react";
 import { formatBytes } from "../utils/formatters";
+import { lockBodyScroll, unlockBodyScroll } from "../utils/scrollLock";
 import FileIcon from "./fileIcon";
 import PdfPreview from "./pdfPreview";
 
 export default function FilePreviewModal({ previewItem, onClose, onDownload, onShare }) {
     const [textContent, setTextContent] = useState(null);
     const [loadingText, setLoadingText] = useState(false);
+
+    useEffect(() => {
+        if (!previewItem) return;
+        lockBodyScroll();
+        return () => {
+            unlockBodyScroll();
+        };
+    }, [previewItem]);
 
     useEffect(() => {
         if (!previewItem || !previewItem.mimeType) return;
