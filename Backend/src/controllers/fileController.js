@@ -174,6 +174,26 @@ export const download = async (req, res) => {
     }
 };
 
+export const preview = async (req, res) => {
+    const uid = req.user.id;
+    const id = Number(req.params.id);
+    try{
+        const result = await fileService.preview(id, uid);
+
+        res.status(200).json({
+            success : true,
+            data : result
+        })
+    }
+    catch(err){
+        const code = getErrorStatus(err);
+        res.status(code).json({
+            success : false,
+            Error : err.message
+        })
+    }
+}
+
 export const getStorageBreakdown = async (req, res) => {
     try {
         const uid = req.user.id;

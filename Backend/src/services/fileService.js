@@ -184,6 +184,23 @@ export const download = async (id, uid) => {
     };
 };
 
+export const preview = async (id, uid) => {
+    const file = await fileRepo.findById(id);
+    if(!file) throw new Error("File doesnt exists or access denied");
+
+    const hasAccess = await canAccessFolder(file.folderId, uid, FolderAction.READ);
+    if(!hasAccess) throw new Error("you dont have permission to view the file");
+    
+    const previewUrl = await storageService.getSignedUrl(file.stoName, 15);
+
+    return {
+        url : previewUrl,
+        orgName : file.orgName,
+        mimeType : file.mimeType,
+        size : file.size
+    };
+}
+
 export const getStorageBreakdown = async (uid) => {
     const files = await fileRepo.findAllByUserId(uid);
     const stats = { image: 0, video: 0, audio: 0, document: 0 };
