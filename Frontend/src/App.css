@@ -989,6 +989,13 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
+}
+
+.row-item-name > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .col-type {
@@ -1706,8 +1713,46 @@
   gap: 10px;
 }
 
+.mobile-drawer-header {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 6px;
+}
+
+.mobile-drawer-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--text-main);
+}
+
+.mobile-drawer-close-btn {
+  background: none;
+  border: none;
+  font-size: 18px;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+
+.mobile-drawer-close-btn:hover {
+  background-color: var(--bg-hover);
+  color: var(--text-main);
+}
+
 /* Comprehensive Responsive Design System & Off-Canvas Mobile Drawer */
 @media (max-width: 768px) {
+
+  .mobile-drawer-header {
+    display: flex;
+  }
 
   html,
   body,
@@ -1733,24 +1778,27 @@
     display: block;
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.5);
-    backdrop-filter: blur(3px);
-    z-index: 998;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    z-index: 999;
   }
 
   .sidebar {
     position: fixed;
-    top: 64px;
-    left: -290px;
-    width: 280px;
-    min-width: 280px;
-    height: calc(100vh - 64px);
-    z-index: 999;
+    top: 0;
+    left: -310px;
+    width: 290px;
+    max-width: 85vw;
+    height: 100vh;
+    height: 100dvh;
+    z-index: 1000;
     background-color: var(--bg-surface);
-    box-shadow: var(--dropdown-shadow);
+    box-shadow: 10px 0 35px rgba(0, 0, 0, 0.25);
+    border-radius: 0 20px 20px 0;
     transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     overflow-y: auto;
     border-right: 1px solid var(--border-color);
+    padding: 16px;
   }
 
   .sidebar.mobile-open {
@@ -1821,7 +1869,7 @@
 
   .table-header,
   .table-row {
-    grid-template-columns: 32px 1fr 80px 140px;
+    grid-template-columns: 28px 1fr 70px 36px;
     padding: 10px 12px;
     gap: 8px;
   }
@@ -1831,6 +1879,10 @@
     display: none;
   }
 
+  .col-name {
+    min-width: 0;
+  }
+
   .action-btn {
     padding: 4px 8px;
     font-size: 11px;
@@ -1838,6 +1890,10 @@
 }
 
 @media (max-width: 480px) {
+  .topbar {
+    padding: 0 10px;
+  }
+
   .topbar-brand .brand-name {
     display: none;
   }
@@ -1848,7 +1904,14 @@
 
   .table-header,
   .table-row {
-    grid-template-columns: 28px 1fr 70px 120px;
+    grid-template-columns: 24px 1fr 65px 32px;
+    padding: 8px 10px;
+    font-size: 12.5px;
+    gap: 6px;
+  }
+
+  .quick-action-buttons .btn {
+    white-space: nowrap;
     padding: 8px 10px;
     font-size: 12.5px;
   }
