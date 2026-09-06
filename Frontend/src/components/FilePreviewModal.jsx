@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { formatBytes } from "../utils/formatters";
 import FileIcon from "./fileIcon";
+import PdfPreview from "./pdfPreview";
 
 export default function FilePreviewModal({ previewItem, onClose, onDownload, onShare }) {
     const [textContent, setTextContent] = useState(null);
@@ -48,16 +49,7 @@ export default function FilePreviewModal({ previewItem, onClose, onDownload, onS
         }
 
         if (mimeType === "application/pdf") {
-            const pdfViewerUrl = `https://docs.google.com/gview?url=${encodeURIComponent(url)}&embedded=true`;
-            return (
-                <div style={{ width: "100%", height: "100%", backgroundColor: "#1e1e24" }}>
-                    <iframe
-                        src={pdfViewerUrl}
-                        title={file.orgName}
-                        style={{ width: "100%", height: "100%", border: "none" }}
-                    />
-                </div>
-            );
+            return <PdfPreview url={url} />;
         }
 
         if (mimeType.startsWith("video/")) {
