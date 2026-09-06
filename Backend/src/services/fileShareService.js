@@ -94,6 +94,8 @@ export const getFileShareByToken = async (token) => {
         console.error("Failed to generate signed URL for share:", err);
     }
 
+    console.log(fileShare);
+
     const ownerName = fileShare.User?.name || fileShare.file?.user?.name || "CloudBox User";
 
     return {

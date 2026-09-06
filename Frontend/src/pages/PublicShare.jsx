@@ -4,6 +4,7 @@ import axios from "../api/axios";
 import { formatBytes, formatDate } from "../utils/formatters";
 import FileIcon from "../components/fileIcon";
 import Navbar from "../components/navbar";
+import PdfPreview from "../components/pdfPreview";
 
 export default function PublicShare() {
     const { token } = useParams();
@@ -131,16 +132,7 @@ export default function PublicShare() {
         }
 
         if (mimeType === "application/pdf") {
-            const pdfViewerUrl = `https://docs.google.com/gview?url=${encodeURIComponent(downloadUrl)}&embedded=true`;
-            return (
-                <div style={{ width: "100%", height: "100%", backgroundColor: "#1e1e24" }}>
-                    <iframe
-                        src={pdfViewerUrl}
-                        title={file.orgName}
-                        style={{ width: "100%", height: "100%", border: "none", display: "block" }}
-                    />
-                </div>
-            );
+            return <PdfPreview url={downloadUrl} />;
         }
 
         if (mimeType.startsWith("video/")) {
