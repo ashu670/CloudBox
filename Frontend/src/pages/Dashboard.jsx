@@ -370,6 +370,22 @@ export default function FolderView() {
 
                 {/* Modern Sidebar */}
                 <aside className={`sidebar ${mobileSidebarOpen ? 'mobile-open' : ''}`}>
+                    {/* Mobile Drawer Header */}
+                    <div className="mobile-drawer-header">
+                        <div className="mobile-drawer-brand">
+                            <svg className="cloudbox-logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
+                            </svg>
+                            <span className="brand-name">CloudBox</span>
+                        </div>
+                        <button
+                            className="mobile-drawer-close-btn"
+                            onClick={() => setMobileSidebarOpen(false)}
+                            aria-label="Close menu"
+                        >
+                            ✕
+                        </button>
+                    </div>
 
                     {/* User Snippet Card */}
                     <div className="user-profile-card">
