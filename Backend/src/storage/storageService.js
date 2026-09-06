@@ -74,17 +74,6 @@ const storageService = {
         }
     },
 
-    async download(storageName) {
-        try {
-            const file = bucket.file(storageName);
-            return file.createReadStream();
-
-        } catch (error) {
-            console.error("Firebase Storage download error:", error.message);
-            throw error;
-        }
-    },
-
     async getSignedUrl(storageName, expiresMinutes = 60) {
         try {
             const file = bucket.file(storageName);

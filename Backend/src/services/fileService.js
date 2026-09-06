@@ -174,10 +174,12 @@ export const download = async (id, uid) => {
 
     const hasAccess = await canAccessFolder(file.folderId, uid, FolderAction.READ);
     if (!hasAccess) throw new Error("File doesnt exist or access denied");
-    const stream = await storageService.download(file.stoName);
+
+
+    const downloadUrl = await storageService.getSignedUrl(file.stoName);
 
     return {
-        stream,
+        downloadUrl,
         orgName: file.orgName,
         mimeType: file.mimeType,
         size: file.size
