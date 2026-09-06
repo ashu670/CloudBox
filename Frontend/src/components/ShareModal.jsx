@@ -112,15 +112,15 @@ export default function ShareModal({ item, onClose, showToast }) {
 
     return (
         <div className="file-preview-modal-backdrop" onClick={onClose}>
-            <div className="file-preview-modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "480px", width: "90%", padding: "28px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "20px" }}>
-                    <div>
-                        <h2 style={{ fontSize: "20px", fontWeight: "700", margin: 0, color: "var(--text-main)" }}>Share File</h2>
-                        <p style={{ fontSize: "13px", color: "var(--text-muted)", margin: "4px 0 0 0" }}>
+            <div className="file-preview-modal-card share-modal-card" onClick={(e) => e.stopPropagation()}>
+                <div className="share-modal-header">
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                        <h2 style={{ fontSize: "18px", fontWeight: "700", margin: 0, color: "var(--text-main)" }}>Share File</h2>
+                        <p style={{ fontSize: "12.5px", color: "var(--text-muted)", margin: "4px 0 0 0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                             {item.orgName || item.name} ({formatBytes(item.size || 0)})
                         </p>
                     </div>
-                    <button className="preview-close-btn" onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: "18px" }}>✕</button>
+                    <button className="preview-close-btn" onClick={onClose} aria-label="Close modal">✕</button>
                 </div>
 
                 {loading ? (
@@ -129,10 +129,10 @@ export default function ShareModal({ item, onClose, showToast }) {
                         <p style={{ marginTop: "12px", color: "var(--text-secondary)", fontSize: "14px" }}>Loading share details...</p>
                     </div>
                 ) : (
-                    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
                         {shareData && shareData.isActive && shareData.shareUrl ? (
-                            <div style={{ padding: "16px", borderRadius: "10px", backgroundColor: "var(--bg-app)", border: "1px solid var(--border-color)" }}>
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                            <div style={{ padding: "14px", borderRadius: "10px", backgroundColor: "var(--bg-app)", border: "1px solid var(--border-color)" }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px", flexWrap: "wrap", gap: "4px" }}>
                                     <span style={{ fontSize: "12px", fontWeight: "600", color: "#10b981", display: "flex", alignItems: "center", gap: "6px" }}>
                                         <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "#10b981" }}></span>
                                         Public Link Active
@@ -141,20 +141,13 @@ export default function ShareModal({ item, onClose, showToast }) {
                                         {formatExpirationText(shareData.expiresAt)}
                                     </span>
                                 </div>
-                                <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+                                <div className="share-url-row">
                                     <input
                                         type="text"
                                         readOnly
                                         value={shareData.shareUrl}
-                                        style={{
-                                            flex: 1,
-                                            padding: "8px 12px",
-                                            borderRadius: "6px",
-                                            border: "1px solid var(--border-color)",
-                                            backgroundColor: "var(--bg-card)",
-                                            fontSize: "13px",
-                                            color: "var(--text-main)"
-                                        }}
+                                        className="input-field"
+                                        style={{ flex: 1, minWidth: 0, fontSize: "12.5px" }}
                                     />
                                     <button onClick={handleCopy} className="btn btn-secondary btn-sm" style={{ whiteSpace: "nowrap" }}>
                                         Copy Link
@@ -163,7 +156,7 @@ export default function ShareModal({ item, onClose, showToast }) {
                             </div>
                         ) : (
                             <div style={{ padding: "14px", borderRadius: "10px", backgroundColor: "var(--bg-app)", border: "1px solid var(--border-color)", textAlign: "center" }}>
-                                <p style={{ margin: 0, fontSize: "13.5px", color: "var(--text-secondary)" }}>
+                                <p style={{ margin: 0, fontSize: "13px", color: "var(--text-secondary)" }}>
                                     This file is currently <strong>Private</strong>. Generate a public link below to share it.
                                 </p>
                             </div>
@@ -173,7 +166,7 @@ export default function ShareModal({ item, onClose, showToast }) {
                             <label style={{ fontSize: "13px", fontWeight: "600", color: "var(--text-main)", marginBottom: "8px", display: "block" }}>
                                 Link Expiration Duration
                             </label>
-                            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px" }}>
+                            <div className="duration-grid">
                                 {[
                                     { key: "1h", label: "1 Hour" },
                                     { key: "1d", label: "1 Day" },
@@ -198,24 +191,23 @@ export default function ShareModal({ item, onClose, showToast }) {
                             </div>
                         </div>
 
-                        <div style={{ display: "flex", gap: "10px", marginTop: "10px", justifyContent: "flex-end" }}>
+                        <div className="share-footer-actions">
                             {shareData && shareData.isActive && (
                                 <button
                                     onClick={handleMakePrivate}
                                     disabled={actionLoading}
-                                    className="btn btn-secondary"
-                                    style={{ color: "#ef4444", borderColor: "#ef4444", marginRight: "auto" }}
+                                    className="btn btn-secondary btn-revoke"
                                 >
                                     Make Private
                                 </button>
                             )}
-                            <button onClick={onClose} className="btn btn-secondary">
+                            <button onClick={onClose} className="btn btn-secondary btn-cancel">
                                 Cancel
                             </button>
                             <button
                                 onClick={() => handleCreateOrUpdateShare()}
                                 disabled={actionLoading}
-                                className="btn btn-primary"
+                                className="btn btn-primary btn-submit"
                             >
                                 {actionLoading ? "Processing..." : shareData?.isActive ? "Update Link Expiry" : "Generate Public URL"}
                             </button>
