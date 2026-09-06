@@ -155,8 +155,15 @@ export const download = async (req, res) => {
         const { downloadUrl, orgName, mimeType, size } = await fileService.download(id, uid);
 
         return res.status(200).json({
-            url : downloadUrl,
-            name : orgName,
+            success: true,
+            data: {
+                downloadUrl,
+                orgName,
+                mimeType,
+                size
+            },
+            url: downloadUrl,
+            name: orgName,
             mimeType,
             size
         });

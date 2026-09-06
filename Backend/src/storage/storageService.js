@@ -74,14 +74,20 @@ const storageService = {
         }
     },
 
-    async getSignedUrl(storageName, expiresMinutes = 60) {
+    async getSignedUrl(storageName, expiresMinutes = 60, promptSaveAs = null) {
         try {
             const file = bucket.file(storageName);
 
-            const [url] = await file.getSignedUrl({
+            const options = {
                 action: "read",
                 expires: Date.now() + expiresMinutes * 60 * 1000
-            });
+            };
+
+            if (promptSaveAs) {
+                options.promptSaveAs = promptSaveAs;
+            }
+
+            const [url] = await file.getSignedUrl(options);
 
             return url;
 
