@@ -250,12 +250,15 @@ export function useFolderManager() {
         if (e) e.stopPropagation();
         try {
             const token = localStorage.getItem("accessToken");
-            const response = await axios.get(`api/file/download/${file.id}`, {
-                headers: { Authorization: `Bearer ${token}` },
-                responseType: "blob"
+            const res = await axios.get(`api/file/preview/${file.id}`, {
+                headers: { Authorization: `Bearer ${token}` }
             });
-            const url = window.URL.createObjectURL(new Blob([response.data], { type: file.mimeType }));
-            setPreviewItem({ file, url, mimeType: file.mimeType });
+            if (res.data?.success && res.data?.data?.url) {
+                const { url, mimeType } = res.data.data;
+                setPreviewItem({ file, url, mimeType: mimeType || file.mimeType, isSignedUrl: true });
+            } else {
+                throw new Error("Invalid preview data");
+            }
         } catch (err) {
             console.error("Preview error:", err);
             showToast("Failed to load file preview", "error");
@@ -263,7 +266,7 @@ export function useFolderManager() {
     };
 
     const closePreview = () => {
-        if (previewItem?.url) {
+        if (previewItem?.url && !previewItem?.isSignedUrl) {
             window.URL.revokeObjectURL(previewItem.url);
         }
         setPreviewItem(null);
