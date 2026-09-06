@@ -279,22 +279,19 @@ export function useFolderManager() {
             const res = await axios.get(`api/file/download/${fileId}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            const downloadUrl = res.data?.url;
-            const fileName = res.data?.name || orgName || "download";
+            const downloadUrl = res.data?.data?.downloadUrl || res.data?.url;
+            const fileName = res.data?.data?.orgName || res.data?.name || orgName || "download";
 
             if (!downloadUrl) throw new Error("No download URL received.");
 
-            const blobRes = await fetch(downloadUrl);
-            const blob = await blobRes.blob();
-            const objectUrl = window.URL.createObjectURL(blob);
-
+            // Direct native browser download from Firebase Storage signed URL
             const link = document.createElement("a");
-            link.href = objectUrl;
+            link.href = downloadUrl;
             link.setAttribute("download", fileName);
+            link.style.display = "none";
             document.body.appendChild(link);
             link.click();
-            link.parentNode.removeChild(link);
-            window.URL.revokeObjectURL(objectUrl);
+            link.remove();
 
             showToast("Download started successfully", "success");
         } catch (err) {

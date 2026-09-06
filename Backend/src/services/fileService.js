@@ -176,7 +176,7 @@ export const download = async (id, uid) => {
     if (!hasAccess) throw new Error("File doesnt exist or access denied");
 
 
-    const downloadUrl = await storageService.getSignedUrl(file.stoName);
+    const downloadUrl = await storageService.getSignedUrl(file.stoName, 60, file.orgName);
 
     return {
         downloadUrl,
