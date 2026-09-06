@@ -174,8 +174,6 @@ export const download = async (id, uid) => {
 
     const hasAccess = await canAccessFolder(file.folderId, uid, FolderAction.READ);
     if (!hasAccess) throw new Error("File doesnt exist or access denied");
-
-    // const absolutePath = storageService.getFilePath(file.stoName);
     const stream = await storageService.download(file.stoName);
 
     return {
