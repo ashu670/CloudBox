@@ -256,102 +256,51 @@ export default function PdfPreview({ url }) {
             }}
         >
             {/* Single-Row Mobile-Responsive Dark Control Toolbar */}
-            <div
-                style={{
-                    height: "46px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: "6px",
-                    flexShrink: 0,
-                    backgroundColor: "#16171e",
-                    borderBottom: "1px solid #262734",
-                    padding: "0 10px",
-                    zIndex: 10,
-                    overflowX: "auto",
-                    boxShadow: "0 2px 10px rgba(0,0,0,0.4)"
-                }}
-            >
+            <div className="pdf-toolbar">
                 {/* Navigation Group */}
-                <div style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
+                <div className="pdf-toolbar-group">
                     <button
                         disabled={pageNumber <= 1}
                         onClick={() => setPageNumber((p) => Math.max(1, p - 1))}
-                        style={{
-                            padding: "4px 10px",
-                            fontSize: "12px",
-                            fontWeight: "600",
-                            borderRadius: "6px",
-                            backgroundColor: pageNumber <= 1 ? "#1c1d26" : "#262836",
-                            color: pageNumber <= 1 ? "#4b4e5e" : "#f3f4f6",
-                            border: "1px solid #343746",
-                            cursor: pageNumber <= 1 ? "not-allowed" : "pointer"
-                        }}
+                        className="pdf-tb-btn"
                     >
                         Prev
                     </button>
 
-                    <span style={{ fontSize: "12.5px", fontWeight: "600", color: "#f3f4f6", padding: "0 2px", whiteSpace: "nowrap" }}>
+                    <span className="pdf-tb-page">
                         {pageNumber} / {pdf.numPages}
                     </span>
 
                     <button
                         disabled={pageNumber >= pdf.numPages}
                         onClick={() => setPageNumber((p) => Math.min(pdf.numPages, p + 1))}
-                        style={{
-                            padding: "4px 10px",
-                            fontSize: "12px",
-                            fontWeight: "600",
-                            borderRadius: "6px",
-                            backgroundColor: pageNumber >= pdf.numPages ? "#1c1d26" : "#262836",
-                            color: pageNumber >= pdf.numPages ? "#4b4e5e" : "#f3f4f6",
-                            border: "1px solid #343746",
-                            cursor: pageNumber >= pdf.numPages ? "not-allowed" : "pointer"
-                        }}
+                        className="pdf-tb-btn"
                     >
                         Next
                     </button>
                 </div>
 
-                <div style={{ width: "1px", height: "16px", backgroundColor: "#2e3140", margin: "0 4px", flexShrink: 0 }} />
+                <div className="pdf-tb-divider" />
 
                 {/* Zoom Controls Group */}
-                <div style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
+                <div className="pdf-toolbar-group">
                     <button
                         disabled={scale <= 0.5}
                         onClick={() => setScale((s) => Math.max(0.5, Math.round((s - 0.25) * 100) / 100))}
-                        style={{
-                            padding: "3px 9px",
-                            fontSize: "13px",
-                            fontWeight: "700",
-                            borderRadius: "6px",
-                            backgroundColor: scale <= 0.5 ? "#1c1d26" : "#262836",
-                            color: scale <= 0.5 ? "#4b4e5e" : "#f3f4f6",
-                            border: "1px solid #343746",
-                            cursor: scale <= 0.5 ? "not-allowed" : "pointer"
-                        }}
+                        className="pdf-tb-btn pdf-tb-zoom-btn"
                         title="Zoom out"
                     >
                         −
                     </button>
 
-                    <span style={{ fontSize: "12.5px", fontWeight: "600", color: "#f3f4f6", minWidth: "40px", textAlign: "center" }}>
+                    <span className="pdf-tb-scale">
                         {Math.round(scale * 100)}%
                     </span>
 
                     <button
                         disabled={scale >= 3.0}
                         onClick={() => setScale((s) => Math.min(3.0, Math.round((s + 0.25) * 100) / 100))}
-                        style={{
-                            padding: "3px 9px",
-                            fontSize: "13px",
-                            fontWeight: "700",
-                            borderRadius: "6px",
-                            backgroundColor: scale >= 3.0 ? "#1c1d26" : "#262836",
-                            color: scale >= 3.0 ? "#4b4e5e" : "#f3f4f6",
-                            border: "1px solid #343746",
-                            cursor: scale >= 3.0 ? "not-allowed" : "pointer"
-                        }}
+                        className="pdf-tb-btn pdf-tb-zoom-btn"
                         title="Zoom in"
                     >
                         +
@@ -359,17 +308,7 @@ export default function PdfPreview({ url }) {
 
                     <button
                         onClick={() => setScale(1.0)}
-                        style={{
-                            padding: "3px 8px",
-                            fontSize: "11px",
-                            fontWeight: "600",
-                            borderRadius: "6px",
-                            backgroundColor: scale === 1.0 ? "#1c1d26" : "#262836",
-                            color: scale === 1.0 ? "#6b7280" : "#60a5fa",
-                            border: "1px solid #343746",
-                            cursor: "pointer",
-                            marginLeft: "2px"
-                        }}
+                        className={`pdf-tb-btn pdf-tb-fit-btn ${scale === 1.0 ? 'active' : ''}`}
                         title="Reset Zoom"
                     >
                         Fit

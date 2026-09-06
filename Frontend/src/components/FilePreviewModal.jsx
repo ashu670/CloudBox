@@ -145,53 +145,36 @@ export default function FilePreviewModal({ previewItem, onClose, onDownload, onS
         >
             {/* Modal Full-Width Header */}
             <header
-                style={{
-                    height: "60px",
-                    padding: "0 24px",
-                    backgroundColor: "var(--bg-surface)",
-                    borderBottom: "1px solid var(--border-color)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: "16px",
-                    flexShrink: 0
-                }}
+                className="preview-modal-header"
                 onClick={(e) => e.stopPropagation()}
             >
-                <div style={{ display: "flex", alignItems: "center", gap: "14px", minWidth: 0, flex: 1 }}>
-                    <div style={{ transform: "scale(1.2)", display: "flex", alignItems: "center", flexShrink: 0 }}>
+                <div className="preview-header-info">
+                    <div className="preview-file-icon">
                         <FileIcon mimeType={mimeType} />
                     </div>
-                    <div style={{ minWidth: 0 }}>
-                        <h2 style={{ fontSize: "16px", fontWeight: "700", color: "var(--text-main)", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <div className="preview-title-container">
+                        <h2 className="preview-file-name" title={file.orgName}>
                             {file.orgName}
                         </h2>
-                        <div style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "2px" }}>
-                            {formatBytes(file.size)} • {mimeType}
+                        <div className="preview-file-meta">
+                            {formatBytes(file.size)} <span className="preview-meta-mime">• {mimeType}</span>
                         </div>
                     </div>
                 </div>
 
-                <div style={{ display: "flex", alignItems: "center", gap: "12px", flexShrink: 0 }}>
+                <div className="preview-header-actions">
                     {onShare && (
-                        <button className="btn btn-secondary" onClick={() => onShare(file.id)} style={{ padding: "7px 16px", fontSize: "13px" }}>
+                        <button className="btn btn-secondary preview-action-btn" onClick={() => onShare(file.id)}>
                             Share
                         </button>
                     )}
-                    <button className="btn btn-primary" onClick={() => onDownload(null, file.id, file.orgName)} style={{ padding: "7px 18px", fontSize: "13px", fontWeight: "600" }}>
+                    <button className="btn btn-primary preview-action-btn" onClick={() => onDownload(null, file.id, file.orgName)}>
                         Download
                     </button>
                     <button
+                        className="preview-close-btn"
                         onClick={onClose}
-                        style={{
-                            background: "none",
-                            border: "none",
-                            fontSize: "22px",
-                            color: "var(--text-muted)",
-                            cursor: "pointer",
-                            padding: "4px 8px",
-                            marginLeft: "4px"
-                        }}
+                        aria-label="Close preview"
                     >
                         ✕
                     </button>

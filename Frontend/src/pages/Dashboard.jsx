@@ -860,7 +860,7 @@ export default function FolderView() {
                                         return (
                                             <div
                                                 key={`row-folder-${folder.id}`}
-                                                className={`table-row clickable-row ${isTarget ? 'drag-over-target' : ''}`}
+                                                className={`table-row clickable-row ${isTarget ? 'drag-over-target' : ''} ${isEditing ? 'editing-row' : ''}`}
                                                 onClick={() => !isEditing && handleFolderSelect(folder)}
                                                 draggable={!isEditing}
                                                 onDragStart={(e) => handleDragStartItem(e, { type: 'folder', id: folder.id, name: folder.name })}
@@ -934,7 +934,7 @@ export default function FolderView() {
                                         return (
                                             <div
                                                 key={`row-file-${file.id}`}
-                                                className="table-row clickable-row"
+                                                className={`table-row clickable-row ${isEditing ? 'editing-row' : ''}`}
                                                 onClick={(e) => {
                                                     if (e.target.closest('.col-actions') || e.target.closest('form')) return;
                                                     previewFile(e, file);
