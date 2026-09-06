@@ -1,5 +1,6 @@
 import React, { useEffect } from "react";
 import { DownloadIcon, ShareIcon, MoveIcon, RenameIcon, DeleteIcon } from "./ActionIcons";
+import { lockBodyScroll, unlockBodyScroll } from "../utils/scrollLock";
 
 const getIcon = (type) => {
     switch (type) {
@@ -13,6 +14,14 @@ const getIcon = (type) => {
 };
 
 export default function ActionBottomSheet({ activeItem, onClose }) {
+    useEffect(() => {
+        if (!activeItem) return;
+        lockBodyScroll();
+        return () => {
+            unlockBodyScroll();
+        };
+    }, [activeItem]);
+
     useEffect(() => {
         const handleKeyDown = (e) => {
             if (e.key === "Escape") onClose();

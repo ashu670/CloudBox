@@ -1,9 +1,18 @@
 import React, { useState, useEffect, useCallback } from "react";
 import axios from "../api/axios";
 import { BackArrowIcon, MoveIcon } from "./ActionIcons";
+import { lockBodyScroll, unlockBodyScroll } from "../utils/scrollLock";
 
 export default function DirectoryMoveModal({ movingItem, onClose, onMoveSuccess, showToast }) {
     const rootFolderId = Number(localStorage.getItem("rootFolderId")) || -1;
+
+    useEffect(() => {
+        if (!movingItem) return;
+        lockBodyScroll();
+        return () => {
+            unlockBodyScroll();
+        };
+    }, [movingItem]);
 
     const [pickerFolderId, setPickerFolderId] = useState(() => {
         const saved = localStorage.getItem("rootFolderId");

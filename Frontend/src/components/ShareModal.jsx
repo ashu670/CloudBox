@@ -1,12 +1,21 @@
 import React, { useState, useEffect } from "react";
 import axios from "../api/axios";
 import { formatBytes, formatDate } from "../utils/formatters";
+import { lockBodyScroll, unlockBodyScroll } from "../utils/scrollLock";
 
 export default function ShareModal({ item, onClose, showToast }) {
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState(false);
     const [duration, setDuration] = useState("1d");
     const [shareData, setShareData] = useState(null);
+
+    useEffect(() => {
+        if (!item) return;
+        lockBodyScroll();
+        return () => {
+            unlockBodyScroll();
+        };
+    }, [item]);
 
     useEffect(() => {
         const fetchStatus = async () => {
