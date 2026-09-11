@@ -79,9 +79,10 @@ export const getFileShareByToken = async (token) => {
     }
 
     const fileShare = await fileShareRepo.findByToken(token.trim());
-    if (!fileShare || !fileShare.file || !fileShare.isActive) {
+    if (!fileShare || !fileShare.file || fileShare.file.deletedAt || !fileShare.isActive) {
         throw new Error("Invalid or expired share link.");
     }
+
 
     if (fileShare.expiresAt && new Date() > new Date(fileShare.expiresAt)) {
         throw new Error("Invalid or expired share link.");

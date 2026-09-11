@@ -14,6 +14,7 @@ import FilePreviewModal from "../components/FilePreviewModal";
 import ActionBottomSheet from "../components/ActionBottomSheet";
 import DirectoryMoveModal from "../components/DirectoryMoveModal";
 import ShareModal from "../components/ShareModal";
+import TrashModal from "../components/TrashModal";
 import { DownloadIcon, MoveIcon, RenameIcon, DeleteIcon } from "../components/ActionIcons";
 import { lockBodyScroll, unlockBodyScroll } from "../utils/scrollLock";
 
@@ -36,6 +37,7 @@ export default function FolderView() {
     const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
     const [showMoveModal, setShowMoveModal] = useState(false);
     const [activeBottomSheet, setActiveBottomSheet] = useState(null);
+    const [showTrash, setShowTrash] = useState(false);
 
     useEffect(() => {
         if (mobileSidebarOpen) {
@@ -428,6 +430,33 @@ export default function FolderView() {
                         <div className="sidebar-section-title">Directory Tree</div>
                         <div className="tree-container">
                             {renderRootNode()}
+                        </div>
+                    </div>
+
+                    {/* Trash */}
+                    <div className="trash-widget" onClick={() => setShowTrash(true)}>
+                        <div className="trash-widget-icon">
+                            <svg
+                                width="18"
+                                height="18"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                            >
+                                <polyline points="3 6 5 6 21 6" />
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+                                <path d="M10 11v6" />
+                                <path d="M14 11v6" />
+                                <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+                            </svg>
+                        </div>
+
+                        <div className="trash-widget-content">
+                            <span className="trash-widget-title">Trash</span>
+                            <span className="trash-widget-subtitle">
+                                Recently deleted
+                            </span>
                         </div>
                     </div>
 
@@ -1066,6 +1095,16 @@ export default function FolderView() {
                         showToast={showToast}
                     />
                 )}
+
+                {/* Trash Modal */}
+                {showTrash && (
+                    <TrashModal
+                        onClose={() => setShowTrash(false)}
+                        showToast={showToast}
+                        refreshDashboard={refreshAfterSharedAction}
+                    />
+                )}
+
 
 
 

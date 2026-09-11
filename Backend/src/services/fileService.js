@@ -1,4 +1,5 @@
 import path from "path";
+import { prisma } from "../config/db.js";
 import * as fileRepo from "../repositories/fileRepo.js";
 import * as folderRepo from "../repositories/folderRepo.js";
 import { getAvailableStorageDet, updateStorageSize, incrementStorageSize } from "../repositories/userRepo.js";
@@ -7,6 +8,7 @@ import { canAccessFolder, validateFolderAccess, FolderAction } from "./permissio
 import storageService from "../storage/storageService.js";
 import * as activityService from "./activityService.js";
 import { ActivityType, TargetType } from "../utils/activityValidation.js";
+import * as trashLogs from "./trashService.js";
 
 async function generateUniqueStorageName(uid, folderId, originalName) {
     const ext = path.extname(originalName);
@@ -97,15 +99,26 @@ export const uploadComplete = async (stoName, uid) => {
 };
 
 export const del = async (id, uid) => {
-    const valid = await fileRepo.findByUserId(id, uid);
-    if (!valid) throw new Error("File not exists or access denied");
-    touchFolder(valid.folderId);
-    await storageService.delete(valid.stoName);
-    const {usedSize} = await getAvailableStorageDet(uid);
-    const newUsedStorage = usedSize - BigInt(valid.size);
-    await updateStorageSize(uid, newUsedStorage < 0n ? 0n : newUsedStorage);
 
-    const deleted = await fileRepo.delById(id);
+    const valid = await fileRepo.findByUserId(id, uid);
+
+    if (!valid) {
+        throw new Error("File not exists or access denied");
+    }
+
+    touchFolder(valid.folderId);
+
+    // Create trash record & soft-delete
+    const data = {
+        uid,
+        fileId: id,
+        folderId: null,
+        type: "FILE",
+        pid: valid.folderId
+    };
+
+    const trashRecord = await trashLogs.create(data);
+    const deleted = await fileRepo.softDelete(id);
 
     await activityService.log({
         folderId: valid.folderId,
@@ -116,8 +129,13 @@ export const del = async (id, uid) => {
         message: `Deleted file "${valid.orgName}"`
     });
 
-    return deleted;
+    return {
+        expiry: trashRecord.expiry,
+        ...deleted
+    };
 };
+
+
 
 export const renameFile = async (id, uid, newOrgName) => {
     if (!newOrgName || !newOrgName.trim()) {
