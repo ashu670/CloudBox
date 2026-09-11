@@ -91,7 +91,7 @@ export const del = async (req, res) => {
         const response = await fileService.del(id, uid);
         return res.status(200).json({
             success: true,
-            message: "File deleted successfully",
+            message: `File is in trash you can restore it by ${response.expiry}`,
             response
         });
     } catch (err) {

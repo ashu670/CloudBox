@@ -1,3 +1,4 @@
+import { prisma } from "../config/db.js";
 import * as repo from "../repositories/folderRepo.js";
 import * as memberRepo from "../repositories/folderMemberRepo.js";
 import * as requestRepo from "../repositories/folderJoinRequestRepo.js";
@@ -9,6 +10,8 @@ import { fetchByFolderIdAndUserId } from "../repositories/fileRepo.js";
 import storageService from "../storage/storageService.js";
 import generateInviteCode from "../utils/inviteCodeGenerator.js";
 import { validateFolderAccess, canAccessFolder, FolderAction } from "./permissionService.js";
+import * as trashLogs from "./trashService.js";
+
 
 // --- Private Helpers ---
 
@@ -182,37 +185,32 @@ export const delFolder = async (uid, id, force) => {
     }
     if (valid.pid) touchFolder(valid.pid);
 
-    const filesToDelete = await fetchByFolderIdAndUserId(id, uid);
-    if (filesToDelete && filesToDelete.length > 0 && !force) {
-        const error = new Error(`Folder contains ${filesToDelete.length} files ! Do you want to delete ?`);
-        error.requiresConfirmation = true;
-        throw error;
-    }
+    const pidToStore = valid.pid ?? 0;
 
-    if (filesToDelete && filesToDelete.length > 0) {
-        await Promise.all(filesToDelete.map(m => storageService.delete(m.stoName)));
-        const totalDeletedSize = filesToDelete.reduce((sum, f) => sum + BigInt(f.size), 0n);
-        if (totalDeletedSize > 0n) {
-            const { usedSize } = await getAvailableStorageDet(uid);
-            const newUsedStorage = usedSize - totalDeletedSize;
-            await updateStorageSize(uid, newUsedStorage < 0n ? 0n : newUsedStorage);
-        }
-    }
+    const data = {
+        uid,
+        folderId: id,
+        fileId: null,
+        type: "FOLDER",
+        pid: pidToStore
+    };
 
-    const deletedFolder = await repo.deleteFolder(id);
+    const trashRecord = await trashLogs.create(data);
+    const deleted = await repo.softDeleteFolder(id);
 
-    if (valid.pid) {
-        await activityService.log({
-            folderId: valid.pid,
-            userId: uid,
-            action: ActivityType.DELETE_FOLDER,
-            target: TargetType.FOLDER,
-            targetId: id,
-            message: `Deleted folder "${valid.name}"`
-        });
-    }
+    await activityService.log({
+        folderId: valid.pid ?? id,
+        userId: uid,
+        action: ActivityType.DELETE_FOLDER,
+        target: TargetType.FOLDER,
+        targetId: id,
+        message: `Deleted folder "${valid.name}"`
+    });
 
-    return deletedFolder;
+    return {
+        expiry: trashRecord.expiry,
+        ...deleted
+    };
 };
 
 export const createSharedFolder = async (name, uid) => {

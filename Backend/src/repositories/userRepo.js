@@ -70,4 +70,20 @@ export const incrementStorageSize = async (id, size) => {
         where: { id },
         data: { usedStorage: { increment: BigInt(size) } }
     });
-}
+};
+
+export const decrementStorageSize = async (id, size) => {
+    const user = await prisma.user.findUnique({
+        where: { id },
+        select: { usedStorage: true }
+    });
+    if (!user) return;
+    const current = user.usedStorage;
+    const sub = BigInt(size);
+    const newSize = current > sub ? current - sub : 0n;
+    return await prisma.user.update({
+        where: { id },
+        data: { usedStorage: newSize }
+    });
+};
+
