@@ -22,7 +22,7 @@ const CreateSharedFolder = ({ onFolderCreated }) => {
       setFolderName('');
       if (onFolderCreated) onFolderCreated(data);
     } catch (err) {
-      setError(err.response?.data?.error || err.response?.data?.message || 'Failed to create shared folder');
+      setError(err.response?.data?.error || err.response?.data?.message || 'Failed to create project');
     } finally {
       setLoading(false);
     }
@@ -36,27 +36,29 @@ const CreateSharedFolder = ({ onFolderCreated }) => {
 
   return (
     <div className="shared-folder-card">
-      <h3>Create Shared Folder</h3>
-      <form onSubmit={handleCreate}>
+      <form onSubmit={handleCreate} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
         <input
           type="text"
           className="input-field"
-          placeholder="Folder Name"
+          placeholder="Project Name..."
           value={folderName}
           onChange={(e) => setFolderName(e.target.value)}
           required
+          autoFocus
         />
-        <button type="submit" className="btn btn-primary" disabled={loading}>
-          {loading ? 'Creating...' : 'Create Shared Folder'}
-        </button>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+          <button type="submit" className="btn btn-primary" disabled={loading}>
+            {loading ? 'Creating...' : 'Create Project'}
+          </button>
+        </div>
       </form>
 
-      {error && <p className="error-msg">{error}</p>}
+      {error && <p className="error-msg" style={{ marginTop: '10px' }}>{error}</p>}
 
       {inviteCode && (
-        <div className="invite-code-container">
-          <p><strong>Invite Code:</strong> <code>{inviteCode}</code></p>
-          <button type="button" className="btn btn-secondary" onClick={handleCopy}>
+        <div className="invite-code-container" style={{ marginTop: '14px' }}>
+          <p style={{ margin: 0 }}><strong>Invite Code:</strong> <code>{inviteCode}</code></p>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={handleCopy}>
             {copied ? 'Copied!' : 'Copy Invite Code'}
           </button>
         </div>

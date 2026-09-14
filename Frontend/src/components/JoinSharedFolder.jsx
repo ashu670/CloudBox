@@ -19,7 +19,7 @@ const JoinSharedFolder = ({ onJoined }) => {
       if (onJoined) onJoined(res.data.data || res.data);
     } catch (err) {
       setMessage({
-        text: err.response?.data?.error || err.response?.data?.message || 'Failed to join folder',
+        text: err.response?.data?.error || err.response?.data?.message || 'Failed to join project',
         type: 'error',
       });
     } finally {
@@ -29,23 +29,25 @@ const JoinSharedFolder = ({ onJoined }) => {
 
   return (
     <div className="shared-folder-card">
-      <h3>Join Shared Folder</h3>
-      <form onSubmit={handleJoin}>
+      <form onSubmit={handleJoin} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
         <input
           type="text"
           className="input-field"
-          placeholder="Enter Invite Code"
+          placeholder="Enter Invite Code..."
           value={inviteCode}
           onChange={(e) => setInviteCode(e.target.value)}
           required
+          autoFocus
         />
-        <button type="submit" className="btn btn-primary" disabled={loading}>
-          {loading ? 'Joining...' : 'Join Folder'}
-        </button>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+          <button type="submit" className="btn btn-primary" disabled={loading}>
+            {loading ? 'Joining...' : 'Join Project'}
+          </button>
+        </div>
       </form>
 
       {message.text && (
-        <p className={message.type === 'error' ? 'error-msg' : 'success-msg'}>
+        <p className={message.type === 'error' ? 'error-msg' : 'success-msg'} style={{ marginTop: '10px' }}>
           {message.text}
         </p>
       )}

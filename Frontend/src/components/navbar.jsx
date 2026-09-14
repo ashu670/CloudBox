@@ -11,7 +11,7 @@ export default function Navbar({ searchQuery, setSearchQuery, userProfile, onTog
         localStorage.removeItem("currentFolderId");
         localStorage.removeItem("rootFolderId");
         localStorage.removeItem("folderHistory");
-        navigate("/login");
+        navigate("/");
     };
 
     const isDashboard = location.pathname === "/dashboard";
@@ -30,7 +30,7 @@ export default function Navbar({ searchQuery, setSearchQuery, userProfile, onTog
                 )}
 
                 <div className="topbar-brand">
-                    <Link to="/dashboard" className="brand-link">
+                    <Link to="/" className="brand-link">
                         <svg className="cloudbox-logo" viewBox="0 0 24 24">
                             <path fill="currentColor" d="M19.35,10.03C18.67,6.59 15.64,4 12,4C9.11,4 6.6,5.64 5.35,8.03C2.34,8.36 0,10.9 0,14C0,17.1 2.9,20 6,20H19C21.76,20 24,17.76 24,15C24,12.36 21.95,10.22 19.35,10.03Z" />
                         </svg>
@@ -82,7 +82,7 @@ export default function Navbar({ searchQuery, setSearchQuery, userProfile, onTog
                 ) : (
                     <div className="nav-links">
                         <Link to="/login" className={location.pathname === "/login" ? "active" : ""}>Log In</Link>
-                        <Link to="/" className={`btn-signup ${location.pathname === "/" ? "active" : ""}`}>Sign Up</Link>
+                        <Link to="/signup" className={`btn-signup ${location.pathname === "/signup" ? "active" : ""}`}>Sign Up</Link>
                     </div>
                 )}
             </div>

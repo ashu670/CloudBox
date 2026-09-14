@@ -39,6 +39,7 @@ export default function FolderView() {
     const [showMoveModal, setShowMoveModal] = useState(false);
     const [activeBottomSheet, setActiveBottomSheet] = useState(null);
     const [showTrash, setShowTrash] = useState(false);
+    const [isProjectsExpanded, setIsProjectsExpanded] = useState(true);
 
     useEffect(() => {
         if (mobileSidebarOpen) {
@@ -212,6 +213,23 @@ export default function FolderView() {
     const categoryStats = storageBreakdown || { image: 0, video: 0, audio: 0, document: 0 };
     const totalStorageUsed = userProfile?.usedStorage || (categoryStats.image + categoryStats.video + categoryStats.audio + categoryStats.document);
 
+    // Calculate Storage Usage values
+    const usedStorageBytes = userProfile?.usedStorage || 0;
+    const limitStorageBytes = userProfile?.storageLimit || 524288000;
+    const storagePercent = Math.min(100, Math.round((usedStorageBytes / limitStorageBytes) * 100));
+
+    // Derive Project Folders & Personal Folders Grid
+    const allFoldersList = [...(treeNodes[-1]?.children || treeNodes[-1]?.subfolders || []), ...folders, ...Object.values(foldersCache)];
+    const projectFoldersMap = new Map();
+    allFoldersList.forEach(f => {
+        if (f && f.id && (f.isShared || (userProfile?.id && f.uid && f.uid !== userProfile.id) || f.inviteCode)) {
+            projectFoldersMap.set(f.id, f);
+        }
+    });
+    const projectFolders = Array.from(projectFoldersMap.values());
+    const personalFoldersGrid = filteredFolders.filter(f => !f.isShared && (!userProfile?.id || f.uid === userProfile.id) && !f.inviteCode);
+    const displayFolders = isSharedFolderContext ? filteredFolders : personalFoldersGrid;
+
 
     // Sidebar Folder Tree Rendering
     const renderTreeNode = (node, depth = 0) => {
@@ -286,15 +304,117 @@ export default function FolderView() {
         );
     };
 
+    const renderProjectsSection = () => (
+        <div className="sidebar-section projects-sidebar-section" style={{ marginTop: '8px', paddingLeft: '8px' }}>
+            <div className="sidebar-section-title projects-header-title" onClick={(e) => { e.stopPropagation(); setIsProjectsExpanded(prev => !prev); }}>
+                <div className="projects-title-left">
+                    <svg className="projects-title-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                    </svg>
+                    <span>PROJECTS</span>
+                </div>
+                <svg className={`projects-chevron ${isProjectsExpanded ? 'expanded' : ''}`} width="14" height="14" viewBox="0 0 24 24">
+                    <path d="M8.59,16.59L13.17,12L8.59,7.41L10,6L16,12L10,18L8.59,16.59Z" fill="currentColor"/>
+                </svg>
+            </div>
+
+            {isProjectsExpanded && (
+                <>
+                    {projectFolders.length === 0 ? (
+                        <div className="projects-empty-card">
+                            <div className="projects-empty-card-header">
+                                <div className="projects-empty-card-icon">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                                        <circle cx="9" cy="7" r="4" />
+                                        <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                                        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                                    </svg>
+                                </div>
+                                <div className="projects-empty-card-text">
+                                    <span className="projects-empty-title">No projects yet</span>
+                                    <span className="projects-empty-desc">Create or join a workspace</span>
+                                </div>
+                            </div>
+                            <div className="projects-empty-actions">
+                                <button type="button" className="projects-action-btn primary" onClick={() => setSharedPanel('create')}>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <line x1="12" y1="5" x2="12" y2="19" />
+                                        <line x1="5" y1="12" x2="19" y2="12" />
+                                    </svg>
+                                    <span>Create Project</span>
+                                </button>
+                                <button type="button" className="projects-action-btn secondary" onClick={() => setSharedPanel('join')}>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <path d="M15 3h6v6" />
+                                        <path d="M10 14L21 3" />
+                                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                                    </svg>
+                                    <span>Join Project</span>
+                                </button>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="projects-list">
+                            {projectFolders.map(proj => {
+                                const isActive = currentFolderId === proj.id || history.some(h => h.id === proj.id);
+                                return (
+                                    <div
+                                        key={`project-item-${proj.id}`}
+                                        className={`sidebar-project-card ${isActive ? 'active' : ''}`}
+                                        onClick={() => handleFolderSelect(proj)}
+                                    >
+                                        <div className="project-card-icon-box">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                                            </svg>
+                                        </div>
+                                        <div className="project-card-info">
+                                            <span className="project-card-name">{proj.name}</span>
+                                            <span className="project-card-meta">
+                                                {proj.userRole || (proj.uid === userProfile?.id ? "OWNER" : "MEMBER")}
+                                            </span>
+                                        </div>
+                                        <svg className="project-card-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                            <polyline points="9 18 15 12 9 6" />
+                                        </svg>
+                                    </div>
+                                );
+                            })}
+                            <div className="projects-footer-actions">
+                                <button type="button" className="projects-action-btn primary" onClick={() => setSharedPanel('create')}>
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <line x1="12" y1="5" x2="12" y2="19" />
+                                        <line x1="5" y1="12" x2="19" y2="12" />
+                                    </svg>
+                                    <span>Create</span>
+                                </button>
+                                <button type="button" className="projects-action-btn secondary" onClick={() => setSharedPanel('join')}>
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <path d="M15 3h6v6" />
+                                        <path d="M10 14L21 3" />
+                                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                                    </svg>
+                                    <span>Join</span>
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </>
+            )}
+        </div>
+    );
+
     const renderRootNode = () => {
         const rootIdKey = rootFolderId !== -1 ? rootFolderId : -1;
-        const isExpanded = expandedFolders[rootIdKey] !== undefined 
-            ? expandedFolders[rootIdKey] 
+        const isExpanded = expandedFolders[rootIdKey] !== undefined
+            ? expandedFolders[rootIdKey]
             : (expandedFolders[-1] !== undefined ? expandedFolders[-1] : true);
         const isActive = currentFolderId === rootFolderId || currentFolderId === -1 || currentFolderId === 0;
         const isTarget = dropTargetId === -1 || dropTargetId === rootFolderId;
         const rootData = treeNodes[rootIdKey] || treeNodes[-1];
-        const rootSubfolders = rootData?.subfolders || (Array.isArray(rootData) ? rootData : []);
+        const allRootSubs = rootData?.subfolders || (Array.isArray(rootData) ? rootData : []);
+        const rootSubfolders = allRootSubs.filter(f => !f.isShared && (!userProfile?.id || f.uid === userProfile.id) && !f.inviteCode);
         const rootFiles = rootData?.files || [];
         const hasRootContent = rootSubfolders.length > 0 || rootFiles.length > 0;
 
@@ -353,15 +473,15 @@ export default function FolderView() {
                         )}
                     </div>
                 )}
+
+                {/* Projects Dropdown dynamically positioned right below Root Drive */}
+                {renderProjectsSection()}
             </div>
         );
     };
 
 
-    // Calculate Storage Usage values
-    const usedStorageBytes = userProfile?.usedStorage || 0;
-    const limitStorageBytes = userProfile?.storageLimit || 524288000;
-    const storagePercent = Math.min(100, Math.round((usedStorageBytes / limitStorageBytes) * 100));
+
 
     return (
         <div className="app-container">
@@ -413,7 +533,7 @@ export default function FolderView() {
                     <div className="sidebar-section">
                         <div className="sidebar-section-title">Main Menu</div>
                         <div
-                            className={`sidebar-nav-item ${(currentFolderId === -1 || currentFolderId === rootFolderId) ? 'active' : ''}`}
+                            className={`sidebar-nav-item ${(currentFolderId === -1 || currentFolderId === rootFolderId) && !isSharedFolderContext ? 'active' : ''}`}
                             onClick={() => handleFolderSelect({ id: rootFolderId !== -1 ? rootFolderId : -1, name: "Root", pid: null })}
                         >
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -426,13 +546,15 @@ export default function FolderView() {
                         </div>
                     </div>
 
-                    {/* Directory Tree */}
+                    {/* Directory Tree (Personal Storage with dynamically positioned PROJECTS section) */}
                     <div className="sidebar-section directory-section">
                         <div className="sidebar-section-title">Directory Tree</div>
                         <div className="tree-container">
                             {renderRootNode()}
                         </div>
                     </div>
+
+
 
                     {/* Trash */}
                     <div className="trash-widget" onClick={() => setShowTrash(true)}>
@@ -496,64 +618,112 @@ export default function FolderView() {
                         }
                     }}
                 >
-                    {/* Welcome Banner Header */}
-                    <div className="dashboard-welcome">
-                        <div className="welcome-text">
-                            <h2>Welcome Back, {userProfile?.name || "User"}</h2>
-                            <p>Manage your cloud files, shared directories, and storage effortlessly.</p>
+                    {/* Welcome Banner / Project Workspace Header */}
+                    {isSharedFolderContext ? (
+                        <div className="project-workspace-header">
+                            <div className="project-header-top">
+                                <div className="project-header-icon-wrapper">
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+                                        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                                    </svg>
+                                </div>
+                                <div className="project-header-info">
+                                    <div className="project-header-title-row">
+                                        <h2>{currentFolderInfo?.name || "Project Workspace"}</h2>
+                                        <span className="project-role-badge">{currentFolderInfo?.userRole || "MEMBER"}</span>
+                                    </div>
+                                    <p className="project-header-subtitle">
+                                        Collaborative Workspace {currentFolderInfo?.user?.name ? `• Created by ${currentFolderInfo.user.name}` : ""}
+                                        {currentFolderInfo?.inviteCode ? ` • Invite Code: ${currentFolderInfo.inviteCode}` : ""}
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="project-header-actions">
+                                <button type="button" className="btn btn-secondary btn-sm" onClick={() => setSharedPanel('members')}>
+                                    Project Members
+                                </button>
+                                {currentFolderInfo?.userRole === 'OWNER' && (
+                                    <button type="button" className="btn btn-secondary btn-sm" onClick={() => setSharedPanel('owner-panel')}>
+                                        Owner Panel
+                                    </button>
+                                )}
+                                {currentFolderInfo?.userRole === 'ADMIN' && (
+                                    <button type="button" className="btn btn-secondary btn-sm" onClick={() => setSharedPanel('admin-panel')}>
+                                        Admin Panel
+                                    </button>
+                                )}
+                                {(currentFolderInfo?.userRole === 'OWNER' || currentFolderInfo?.userRole === 'ADMIN') && (
+                                    <button type="button" className="btn btn-secondary btn-sm" onClick={() => setSharedPanel('activities')}>
+                                        Activity Logs
+                                    </button>
+                                )}
+                                <button type="button" className="btn btn-secondary btn-sm" onClick={() => setSharedPanel('requests')}>
+                                    Requests
+                                </button>
+                            </div>
                         </div>
+                    ) : (
+                        <div className="dashboard-welcome">
+                            <div className="welcome-text">
+                                <h2>Welcome Back, {userProfile?.name || "User"}</h2>
+                                <p>Manage your cloud files, personal directories, and storage effortlessly.</p>
+                            </div>
 
-                        <div className="quick-action-buttons">
-                            <button type="button" className="btn btn-secondary" onClick={() => setShowCreator(!showCreator)}>
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                    <line x1="12" y1="5" x2="12" y2="19" />
-                                    <line x1="5" y1="12" x2="19" y2="12" />
-                                </svg>
-                                <span>Create Folder</span>
-                            </button>
+                            <div className="quick-action-buttons">
+                                <button type="button" className="btn btn-secondary" onClick={() => setShowCreator(true)}>
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <line x1="12" y1="5" x2="12" y2="19" />
+                                        <line x1="5" y1="12" x2="19" y2="12" />
+                                    </svg>
+                                    <span>Create Folder</span>
+                                </button>
 
-                            <button
-                                type="button"
-                                className="btn btn-primary"
-                                onClick={() => document.getElementById("file-picker").click()}
-                                disabled={isUploading}
-                            >
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                    <polyline points="17 8 12 3 7 8" />
-                                    <line x1="12" y1="3" x2="12" y2="15" />
-                                </svg>
-                                <span>{isUploading ? "Uploading..." : "Upload File"}</span>
-                            </button>
+                                <button
+                                    type="button"
+                                    className="btn btn-primary"
+                                    onClick={() => document.getElementById("file-picker").click()}
+                                    disabled={isUploading}
+                                >
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                        <polyline points="17 8 12 3 7 8" />
+                                        <line x1="12" y1="3" x2="12" y2="15" />
+                                    </svg>
+                                    <span>{isUploading ? "Uploading..." : "Upload File"}</span>
+                                </button>
 
-                            <input
-                                id="file-picker"
-                                type="file"
-                                style={{ display: "none" }}
-                                onChange={(e) => {
-                                    if (e.target.files && e.target.files[0]) {
-                                        handleFileUpload(e.target.files[0]);
-                                    }
-                                }}
-                            />
+                                <input
+                                    id="file-picker"
+                                    type="file"
+                                    style={{ display: "none" }}
+                                    onChange={(e) => {
+                                        if (e.target.files && e.target.files[0]) {
+                                            handleFileUpload(e.target.files[0]);
+                                        }
+                                    }}
+                                />
+                            </div>
                         </div>
-                    </div>
+                    )}
 
-                    {/* Toolbar & Shared Action Buttons */}
+                    {/* Toolbar Navigation & Breadcrumbs */}
                     <div className="explorer-toolbar">
                         <div className="breadcrumbs">
-                            <span
-                                className={`breadcrumb-item ${(currentFolderId === -1 || currentFolderId === rootFolderId) ? 'active' : ''} ${(dropTargetId === -1 || dropTargetId === rootFolderId) ? 'drag-over-target' : ''}`}
-                                onClick={() => handleFolderSelect({ id: rootFolderId !== -1 ? rootFolderId : -1, name: "Root" })}
-                                onDragOver={(e) => handleDragOverTarget(e, rootFolderId !== -1 ? rootFolderId : -1)}
-                                onDragLeave={(e) => handleDragLeaveTarget(e, rootFolderId !== -1 ? rootFolderId : -1)}
-                                onDrop={(e) => handleDropOnTarget(e, rootFolderId !== -1 ? rootFolderId : -1)}
-                            >
-                                Root
-                            </span>
+                            {!isSharedFolderContext && (
+                                <span
+                                    className={`breadcrumb-item ${(currentFolderId === -1 || currentFolderId === rootFolderId) ? 'active' : ''} ${(dropTargetId === -1 || dropTargetId === rootFolderId) ? 'drag-over-target' : ''}`}
+                                    onClick={() => handleFolderSelect({ id: rootFolderId !== -1 ? rootFolderId : -1, name: "Root" })}
+                                    onDragOver={(e) => handleDragOverTarget(e, rootFolderId !== -1 ? rootFolderId : -1)}
+                                    onDragLeave={(e) => handleDragLeaveTarget(e, rootFolderId !== -1 ? rootFolderId : -1)}
+                                    onDrop={(e) => handleDropOnTarget(e, rootFolderId !== -1 ? rootFolderId : -1)}
+                                >
+                                    Root
+                                </span>
+                            )}
                             {history.map((folder, index) => (
                                 <span key={folder.id} className="breadcrumb-wrapper">
-                                    <span className="breadcrumb-separator">/</span>
+                                    {(!isSharedFolderContext || index > 0) && <span className="breadcrumb-separator">/</span>}
                                     <span
                                         className={`breadcrumb-item ${index === history.length - 1 ? 'active' : ''} ${dropTargetId === folder.id ? 'drag-over-target' : ''}`}
                                         onClick={() => handleFolderSelect(folder)}
@@ -565,11 +735,6 @@ export default function FolderView() {
                                     </span>
                                 </span>
                             ))}
-                            {isSharedFolderContext && currentFolderInfo?.inviteCode && (
-                                <span className="invite-badge">
-                                    Code: <strong>{currentFolderInfo.inviteCode}</strong> ({currentFolderInfo.isInviteActive ? 'Active' : 'Disabled'})
-                                </span>
-                            )}
                         </div>
 
                         <div className="toolbar-actions">
@@ -582,135 +747,10 @@ export default function FolderView() {
                                     <button type="button" className="btn btn-secondary btn-sm" onClick={() => setMovingItem(null)}>Cancel</button>
                                 </div>
                             )}
-
-                            <button
-                                type="button"
-                                className={`btn btn-secondary btn-sm ${sharedPanel === 'create' ? 'active' : ''}`}
-                                onClick={() => toggleSharedPanel('create')}
-                            >
-                                Create Shared
-                            </button>
-
-                            <button
-                                type="button"
-                                className={`btn btn-secondary btn-sm ${sharedPanel === 'join' ? 'active' : ''}`}
-                                onClick={() => toggleSharedPanel('join')}
-                            >
-                                Join Shared
-                            </button>
-
-                            {isSharedFolderContext && (
-                                <>
-                                    {currentFolderInfo?.userRole === 'OWNER' && (
-                                        <button
-                                            type="button"
-                                            className={`btn btn-secondary btn-sm ${sharedPanel === 'owner-panel' ? 'active' : ''}`}
-                                            onClick={() => toggleSharedPanel('owner-panel')}
-                                        >
-                                            Owner Panel
-                                        </button>
-                                    )}
-                                    {currentFolderInfo?.userRole === 'ADMIN' && (
-                                        <button
-                                            type="button"
-                                            className={`btn btn-secondary btn-sm ${sharedPanel === 'admin-panel' ? 'active' : ''}`}
-                                            onClick={() => toggleSharedPanel('admin-panel')}
-                                        >
-                                            Admin Panel
-                                        </button>
-                                    )}
-                                    {(currentFolderInfo?.userRole === 'OWNER' || currentFolderInfo?.userRole === 'ADMIN') && (
-                                        <button
-                                            type="button"
-                                            className={`btn btn-secondary btn-sm ${sharedPanel === 'activities' ? 'active' : ''}`}
-                                            onClick={() => toggleSharedPanel('activities')}
-                                        >
-                                            Activity Logs
-                                        </button>
-                                    )}
-                                    <button
-                                        type="button"
-                                        className={`btn btn-secondary btn-sm ${sharedPanel === 'requests' ? 'active' : ''}`}
-                                        onClick={() => toggleSharedPanel('requests')}
-                                    >
-                                        Requests
-                                    </button>
-                                    <button
-                                        type="button"
-                                        className={`btn btn-secondary btn-sm ${sharedPanel === 'members' ? 'active' : ''}`}
-                                        onClick={() => toggleSharedPanel('members')}
-                                    >
-                                        Members
-                                    </button>
-                                </>
-                            )}
                         </div>
                     </div>
 
-                    {/* Shared View Panels */}
-                    {sharedPanel && (
-                        <div className="shared-view-panel">
-                            {sharedPanel === 'create' && (
-                                <CreateSharedFolder onFolderCreated={handleSharedFolderCreated} />
-                            )}
-                            {sharedPanel === 'join' && (
-                                <JoinSharedFolder onJoined={handleSharedFolderJoined} />
-                            )}
-                            {sharedPanel === 'owner-panel' && isSharedFolderContext && (
-                                <OwnerPanel
-                                    folderId={currentFolderId}
-                                    onNotify={(msg, type) => showToast(msg, type)}
-                                    onRefresh={refreshAfterSharedAction}
-                                />
-                            )}
-                            {sharedPanel === 'admin-panel' && isSharedFolderContext && (
-                                <AdminPanel
-                                    folderId={currentFolderId}
-                                    onNotify={(msg, type) => showToast(msg, type)}
-                                    onRefresh={refreshAfterSharedAction}
-                                />
-                            )}
-                            {sharedPanel === 'activities' && isSharedFolderContext && (
-                                <ActivityLogs
-                                    folderId={currentFolderId}
-                                />
-                            )}
-                            {sharedPanel === 'requests' && isSharedFolderContext && (
-                                <FolderRequests
-                                    folderId={currentFolderId}
-                                    onRequestHandled={handleRequestHandled}
-                                    onNotify={(msg, type) => showToast(msg, type)}
-                                />
-                            )}
-                            {sharedPanel === 'members' && isSharedFolderContext && (
-                                <FolderMembers folderId={currentFolderId} />
-                            )}
-                        </div>
-                    )}
 
-                    {/* Inline Folder Creator */}
-                    {showCreator && (
-                        <form onSubmit={createFolder} className="creator-bar">
-                            <input
-                                value={folderName}
-                                onChange={(e) => setFolderName(e.target.value)}
-                                placeholder="Enter folder name..."
-                                className="input-field"
-                                autoFocus
-                            />
-                            <button type="submit" className="btn btn-primary btn-sm">Create</button>
-                            <button
-                                type="button"
-                                className="btn btn-secondary btn-sm"
-                                onClick={() => {
-                                    setFolderName("");
-                                    setShowCreator(false);
-                                }}
-                            >
-                                Cancel
-                            </button>
-                        </form>
-                    )}
 
                     {/* Back button */}
                     {currentFolderId !== -1 && currentFolderId !== 0 && currentFolderId !== rootFolderId && (
@@ -721,12 +761,12 @@ export default function FolderView() {
                         </div>
                     )}
 
-                    {/* Quick Folders Cards Grid ("My Folders") */}
-                    {!searchLoading && !searchError && filteredFolders.length > 0 && (
+                    {/* Quick Folders Cards Grid ("My Folders" / "Project Folders") */}
+                    {!searchLoading && !searchError && displayFolders.length > 0 && (
                         <section className="dashboard-section">
-                            <div className="section-title">My Folders</div>
+                            <div className="section-title">{isSharedFolderContext ? "Project Folders" : "My Folders"}</div>
                             <div className="folders-grid">
-                                {filteredFolders.map(folder => {
+                                {displayFolders.map(folder => {
                                     const isEditing = editingItem && editingItem.type === 'folder' && editingItem.id === folder.id;
                                     const isTarget = dropTargetId === folder.id;
                                     return (
@@ -1126,6 +1166,104 @@ export default function FolderView() {
                         showToast={showToast}
                         refreshDashboard={refreshAfterSharedAction}
                     />
+                )}
+
+                {/* Create / Join Project & Shared Panels Popup Modal */}
+                {sharedPanel && (
+                    <div className="file-preview-modal-backdrop" onClick={() => setSharedPanel(null)}>
+                        <div className="file-preview-modal-card custom-modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "520px", width: "90%" }}>
+                            <div className="share-modal-header" style={{ marginBottom: "16px" }}>
+                                <div>
+                                    <h2 style={{ fontSize: "18px", fontWeight: "700", margin: 0, color: "var(--text-main)" }}>
+                                        {sharedPanel === 'create' && "Create Project"}
+                                        {sharedPanel === 'join' && "Join Project"}
+                                        {sharedPanel === 'owner-panel' && "Project Owner Panel"}
+                                        {sharedPanel === 'admin-panel' && "Project Admin Panel"}
+                                        {sharedPanel === 'activities' && "Project Activity Logs"}
+                                        {sharedPanel === 'requests' && "Project Join Requests"}
+                                        {sharedPanel === 'members' && "Project Members"}
+                                    </h2>
+                                </div>
+                                <button className="preview-close-btn" onClick={() => setSharedPanel(null)} aria-label="Close modal">✕</button>
+                            </div>
+
+                            {sharedPanel === 'create' && (
+                                <CreateSharedFolder onFolderCreated={async () => { await handleSharedFolderCreated(); setSharedPanel(null); }} />
+                            )}
+                            {sharedPanel === 'join' && (
+                                <JoinSharedFolder onJoined={async () => { await handleSharedFolderJoined(); setSharedPanel(null); }} />
+                            )}
+                            {sharedPanel === 'owner-panel' && isSharedFolderContext && (
+                                <OwnerPanel
+                                    folderId={currentFolderId}
+                                    onNotify={(msg, type) => showToast(msg, type)}
+                                    onRefresh={refreshAfterSharedAction}
+                                />
+                            )}
+                            {sharedPanel === 'admin-panel' && isSharedFolderContext && (
+                                <AdminPanel
+                                    folderId={currentFolderId}
+                                    onNotify={(msg, type) => showToast(msg, type)}
+                                    onRefresh={refreshAfterSharedAction}
+                                />
+                            )}
+                            {sharedPanel === 'activities' && isSharedFolderContext && (
+                                <ActivityLogs
+                                    folderId={currentFolderId}
+                                />
+                            )}
+                            {sharedPanel === 'requests' && isSharedFolderContext && (
+                                <FolderRequests
+                                    folderId={currentFolderId}
+                                    onRequestHandled={handleRequestHandled}
+                                    onNotify={(msg, type) => showToast(msg, type)}
+                                />
+                            )}
+                            {sharedPanel === 'members' && isSharedFolderContext && (
+                                <FolderMembers folderId={currentFolderId} />
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* Create Normal Folder Popup Modal */}
+                {showCreator && (
+                    <div className="file-preview-modal-backdrop" onClick={() => setShowCreator(false)}>
+                        <div className="file-preview-modal-card custom-modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "440px", width: "90%" }}>
+                            <div className="share-modal-header" style={{ marginBottom: "16px" }}>
+                                <div>
+                                    <h2 style={{ fontSize: "18px", fontWeight: "700", margin: 0, color: "var(--text-main)" }}>Create New Folder</h2>
+                                    <p style={{ fontSize: "12.5px", color: "var(--text-muted)", margin: "4px 0 0 0" }}>
+                                        Enter a name for your folder in {currentFolderInfo?.name || "Root"}
+                                    </p>
+                                </div>
+                                <button className="preview-close-btn" onClick={() => setShowCreator(false)} aria-label="Close modal">✕</button>
+                            </div>
+
+                            <form onSubmit={(e) => { createFolder(e); setShowCreator(false); }} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                                <input
+                                    value={folderName}
+                                    onChange={(e) => setFolderName(e.target.value)}
+                                    placeholder="Enter folder name..."
+                                    className="input-field"
+                                    autoFocus
+                                />
+                                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                                    <button
+                                        type="button"
+                                        className="btn btn-secondary"
+                                        onClick={() => {
+                                            setFolderName("");
+                                            setShowCreator(false);
+                                        }}
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button type="submit" className="btn btn-primary">Create Folder</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
                 )}
 
 
