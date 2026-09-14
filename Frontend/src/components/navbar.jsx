@@ -1,23 +1,150 @@
-import { Link } from "react-router-dom";
+import React, { useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { LogOut, LayoutDashboard, Menu, X, UserPlus, LogIn } from "lucide-react";
 
 export default function Navbar() {
+    const location = useLocation();
+    const navigate = useNavigate();
+    const [mobileOpen, setMobileOpen] = useState(false);
+    const isAuthenticated = !!localStorage.getItem("accessToken");
+
+    const handleLogout = () => {
+        localStorage.removeItem("accessToken");
+        localStorage.removeItem("currentFolderId");
+        localStorage.removeItem("folderHistory");
+        navigate("/login");
+    };
+
+    const isLanding = location.pathname === "/";
 
     return (
+        <nav className="navbar-wrapper">
+            <div className="navbar-container">
+                {/* Ultra-Premium Geometric Brand Logo */}
+                <Link to="/" className="nav-brand" onClick={() => setMobileOpen(false)}>
+                    <div className="brand-logo-container">
+                        <div className="brand-icon-wrapper">
+                            <svg className="brand-svg-icon" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <defs>
+                                    <linearGradient id="cbGrad1" x1="0%" y1="0%" x2="100%" y2="100%">
+                                        <stop offset="0%" stopColor="#c084fc" />
+                                        <stop offset="50%" stopColor="#8b5cf6" />
+                                        <stop offset="100%" stopColor="#4f46e5" />
+                                    </linearGradient>
+                                    <linearGradient id="cbGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
+                                        <stop offset="0%" stopColor="#38bdf8" />
+                                        <stop offset="100%" stopColor="#6366f1" />
+                                    </linearGradient>
+                                </defs>
+                                <path d="M20 4L34 12V28L20 36L6 28V12L20 4Z" fill="url(#cbGrad1)" fillOpacity="0.2" stroke="url(#cbGrad1)" strokeWidth="1.5" />
+                                <path d="M20 4L34 12L20 20L6 12L20 4Z" fill="url(#cbGrad1)" fillOpacity="0.6" />
+                                <path d="M6 12L20 20V36L6 28V12Z" fill="url(#cbGrad2)" fillOpacity="0.4" />
+                                <path d="M34 12L20 20V36L34 28V12Z" fill="url(#cbGrad1)" fillOpacity="0.85" />
+                                <circle cx="20" cy="20" r="4.5" fill="#ffffff" filter="drop-shadow(0 0 6px #22d3ee)" />
+                            </svg>
+                            <div className="brand-icon-sparkle"></div>
+                        </div>
+                    </div>
+                    <div className="brand-name-group">
+                        <span className="brand-title">Cloud<span className="brand-gradient-text">Box</span></span>
+                        <span className="brand-pro-tag">ENTERPRISE</span>
+                    </div>
+                </Link>
 
-        <nav>
+                {/* Desktop Links */}
+                <div className="nav-center-links">
+                    {isLanding ? (
+                        <>
+                            <a href="#features" className="nav-link">Features</a>
+                            <a href="#workflow" className="nav-link">Workflow</a>
+                            <a href="#comparison" className="nav-link">Comparison</a>
+                            <a href="#faq" className="nav-link">FAQ</a>
+                        </>
+                    ) : (
+                        <Link to="/" className="nav-link">Home</Link>
+                    )}
+                </div>
 
-            <Link to="/">Signup</Link>
+                {/* Right Action CTAs */}
+                <div className="nav-right-actions">
+                    {isAuthenticated ? (
+                        <>
+                            <Link
+                                to="/dashboard"
+                                className={`btn ${location.pathname === "/dashboard" ? "btn-primary" : "btn-secondary"} btn-sm`}
+                            >
+                                <LayoutDashboard size={15} /> Dashboard
+                            </Link>
+                            <button
+                                type="button"
+                                onClick={handleLogout}
+                                className="btn btn-secondary btn-sm"
+                                title="Sign out of account"
+                            >
+                                <LogOut size={15} /> Log Out
+                            </button>
+                        </>
+                    ) : (
+                        <>
+                            <Link
+                                to="/login"
+                                className={`btn ${location.pathname === "/login" ? "btn-primary" : "btn-secondary"} btn-sm`}
+                            >
+                                <LogIn size={15} /> Sign In
+                            </Link>
+                            <Link
+                                to="/signup"
+                                className="btn btn-primary btn-sm btn-glow"
+                            >
+                                <UserPlus size={15} /> Get Started
+                            </Link>
+                        </>
+                    )}
 
-            {" | "}
+                    {/* Mobile Hamburger Toggle */}
+                    <button
+                        type="button"
+                        className="mobile-menu-btn"
+                        onClick={() => setMobileOpen(!mobileOpen)}
+                        aria-label="Toggle navigation menu"
+                    >
+                        {mobileOpen ? <X size={24} /> : <Menu size={24} />}
+                    </button>
+                </div>
+            </div>
 
-            <Link to="/login">Login</Link>
-
-            {" | "}
-
-            <Link to="/profile">Profile</Link>
-
+            {/* Mobile Dropdown Menu */}
+            {mobileOpen && (
+                <div className="mobile-menu-dropdown">
+                    {isLanding && (
+                        <>
+                            <a href="#features" className="nav-link" onClick={() => setMobileOpen(false)}>Features</a>
+                            <a href="#workflow" className="nav-link" onClick={() => setMobileOpen(false)}>Workflow</a>
+                            <a href="#comparison" className="nav-link" onClick={() => setMobileOpen(false)}>Comparison</a>
+                            <a href="#faq" className="nav-link" onClick={() => setMobileOpen(false)}>FAQ</a>
+                        </>
+                    )}
+                    {isAuthenticated ? (
+                        <>
+                            <Link to="/dashboard" className="btn btn-primary btn-sm" onClick={() => setMobileOpen(false)}>
+                                <LayoutDashboard size={15} /> Dashboard
+                            </Link>
+                            <button type="button" onClick={() => { setMobileOpen(false); handleLogout(); }} className="btn btn-secondary btn-sm">
+                                <LogOut size={15} /> Log Out
+                            </button>
+                        </>
+                    ) : (
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                            <Link to="/login" className="btn btn-secondary btn-sm" style={{ flex: 1 }} onClick={() => setMobileOpen(false)}>
+                                Sign In
+                            </Link>
+                            <Link to="/signup" className="btn btn-primary btn-sm" style={{ flex: 1 }} onClick={() => setMobileOpen(false)}>
+                                Get Started
+                            </Link>
+                        </div>
+                    )}
+                </div>
+            )}
         </nav>
-
     );
-
 }
