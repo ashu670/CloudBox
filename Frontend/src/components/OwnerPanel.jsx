@@ -76,7 +76,7 @@ const RoleSelect = ({ value, onChange, disabled }) => (
 /* ══════════════════════════════════════════════════════════════════════════
    OWNER PANEL
 ══════════════════════════════════════════════════════════════════════════ */
-const OwnerPanel = ({ folderId, onNotify, onRefresh }) => {
+const OwnerPanel = ({ folderId, onNotify, onRefresh, onProjectDeleted }) => {
   const [data, setData]             = useState(null);
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState('');
@@ -106,6 +106,26 @@ const OwnerPanel = ({ folderId, onNotify, onRefresh }) => {
     try { await fn(); onNotify?.(successMsg, 'success'); await fetch(); onRefresh?.(); }
     catch (e) { onNotify?.(e.response?.data?.error || 'Action failed', 'error'); }
     finally { setBusy(false); }
+  };
+
+  const handleDeleteProject = async () => {
+    if (!window.confirm(`Are you sure you want to delete project "${data?.folderName || ''}"? All files and member access will be permanently removed.`)) return;
+    setBusy(true);
+    try {
+      await axios.delete(`api/folder/delete/${folderId}`, {
+        headers: { Authorization: `Bearer ${token()}` }
+      });
+      onNotify?.('Project deleted successfully', 'success');
+      if (onProjectDeleted) {
+        onProjectDeleted();
+      } else {
+        onRefresh?.();
+      }
+    } catch (e) {
+      onNotify?.(e.response?.data?.error || e.response?.data?.message || 'Failed to delete project', 'error');
+    } finally {
+      setBusy(false);
+    }
   };
 
   const handleCopy = () => {
@@ -180,6 +200,15 @@ const OwnerPanel = ({ folderId, onNotify, onRefresh }) => {
           <div className="op-banner-sub">{data.folderName}</div>
         </div>
         <div className="op-banner-badge">{data.visibility}</div>
+        <button
+          type="button"
+          className="op-btn op-btn-danger"
+          style={{ marginLeft: 'auto' }}
+          onClick={handleDeleteProject}
+          disabled={busy}
+        >
+          <Icon d={Icons.trash} size={14} /> Delete Project
+        </button>
       </div>
 
       {/* ── Stats ── */}

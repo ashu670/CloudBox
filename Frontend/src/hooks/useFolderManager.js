@@ -10,7 +10,8 @@ export function useFolderManager() {
     const [searchQuery, setSearchQuery] = useState("");
     const [searchResult, setSearchResult] = useState({
         folders: [],
-        files: []});
+        files: []
+    });
     const [searchLoading, setSearchLoading] = useState(false);
     const [searchError, setSearchError] = useState(null);
     const [rootFolderId, setRootFolderId] = useState(() => {
@@ -101,6 +102,7 @@ export function useFolderManager() {
         try {
             const token = localStorage.getItem("accessToken");
             const fetchId = (folderId === -1 && rootFolderId !== -1) ? rootFolderId : folderId;
+            if (fetchId === -1) return;
             const { data } = await axios.get(`api/folder/fetch/${fetchId}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
@@ -127,10 +129,11 @@ export function useFolderManager() {
 
 
     const fetchFolders = useCallback(async (id = currentFolderId) => {
+        const fetchId = (id === -1 && rootFolderId !== -1) ? rootFolderId : id;
+        if (fetchId === -1) return;
         setLoading(true);
         try {
             const token = localStorage.getItem("accessToken");
-            const fetchId = (id === -1 && rootFolderId !== -1) ? rootFolderId : id;
             const { data } = await axios.get(`api/folder/fetch/${fetchId}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
@@ -171,8 +174,7 @@ export function useFolderManager() {
 
     useEffect(() => {
         fetchUserProfile();
-        fetchTreeSubfolders(-1);
-    }, [fetchUserProfile, fetchTreeSubfolders]);
+    }, [fetchUserProfile]);
 
     useEffect(() => {
         fetchFolders();
@@ -184,6 +186,9 @@ export function useFolderManager() {
     }, [currentFolderId, history]);
 
     const handleFolderSelect = useCallback((folder) => {
+        setLoading(true);
+        setFolders([]);
+        setFiles([]);
         const targetId = (folder.id === -1 || folder.id === 0) ? (rootFolderId !== -1 ? rootFolderId : -1) : folder.id;
         if (targetId > 0) {
             setFoldersCache(prev => ({
@@ -358,13 +363,13 @@ export function useFolderManager() {
 
         try {
             const token = localStorage.getItem("accessToken");
-            const endpoint = item.type === 'folder' 
-                ? `api/folder/move/${item.id}/${targetPid}` 
+            const endpoint = item.type === 'folder'
+                ? `api/folder/move/${item.id}/${targetPid}`
                 : `api/file/move/${item.id}/${targetPid}`;
-            
+
             await axios.patch(endpoint, {}, { headers: { Authorization: `Bearer ${token}` } });
             showToast(`Moved "${item.name || 'item'}" successfully`, "success");
-            
+
             fetchTreeSubfolders(-1);
             if (currentFolderId > 0) fetchTreeSubfolders(currentFolderId);
             if (targetFolderId > 0 && targetFolderId !== currentFolderId) fetchTreeSubfolders(targetFolderId);
@@ -402,20 +407,20 @@ export function useFolderManager() {
         }
         setIsUploading(true);
         const uploadData = {
-            'fileName' : file.name,
-            'fileSize' : file.size,
-            'mimeType' : file.type || "application/octet-stream",
-            'folderId' : destId
+            'fileName': file.name,
+            'fileSize': file.size,
+            'mimeType': file.type || "application/octet-stream",
+            'folderId': destId
         };
         try {
             const token = localStorage.getItem("accessToken");
             const response = await axios.post("api/file/upload", uploadData, {
-                headers: { Authorization: `Bearer ${token}`}
+                headers: { Authorization: `Bearer ${token}` }
             });
-            const {signedUrl, stoName} = response.data.data;
+            const { signedUrl, stoName } = response.data.data;
             await uploadFile(file, signedUrl);
-            await axios.post("api/file/upload/complete", {stoName}, {
-                headers: {Authorization: `Bearer ${token}`}
+            await axios.post("api/file/upload/complete", { stoName }, {
+                headers: { Authorization: `Bearer ${token}` }
             });
 
             showToast(`File "${file.name}" uploaded successfully`, "success");
@@ -435,9 +440,9 @@ export function useFolderManager() {
         const rootIdKey = rootFolderId !== -1 ? rootFolderId : -1;
         const isRootTarget = folderId === -1 || folderId === 0 || folderId === rootIdKey;
         const targetId = isRootTarget ? rootIdKey : folderId;
-        
-        const currentVal = expandedFolders[targetId] !== undefined 
-            ? expandedFolders[targetId] 
+
+        const currentVal = expandedFolders[targetId] !== undefined
+            ? expandedFolders[targetId]
             : (expandedFolders[-1] !== undefined ? expandedFolders[-1] : isRootTarget);
         const newVal = !currentVal;
 
@@ -519,10 +524,14 @@ export function useFolderManager() {
         };
     }, [searchQuery]);
 
-    // Filter files and folders based on searchQuery
-    const filteredFolders = searchQuery.trim() 
+    const isRootContext = currentFolderId === -1 || currentFolderId === 0 || currentFolderId === rootFolderId;
+
+    // Filter files and folders based on searchQuery and active folder context
+    const filteredFolders = searchQuery.trim()
         ? searchResult.folders
-        : folders;
+        : isRootContext
+            ? folders.filter(f => !f.isShared)
+            : folders;
 
     const filteredFiles = searchQuery.trim()
         ? searchResult.files

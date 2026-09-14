@@ -30,7 +30,7 @@ const FolderMembers = ({ folderId }) => {
 
   return (
     <div className="folder-members-container">
-      <h4>Folder Members</h4>
+      <h4>Project Members</h4>
       {members.length === 0 ? (
         <p className="shared-empty">No members found.</p>
       ) : (

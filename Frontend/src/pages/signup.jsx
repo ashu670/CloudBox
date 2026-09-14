@@ -46,12 +46,20 @@ export default function Signup() {
             <div className="auth-wrapper">
                 <div className="auth-card">
                     <div className="auth-header">
+                        <div className="auth-header-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                                <circle cx="8.5" cy="7" r="4"/>
+                                <line x1="20" y1="8" x2="20" y2="14"/>
+                                <line x1="23" y1="11" x2="17" y2="11"/>
+                            </svg>
+                        </div>
                         <h1>Create Account</h1>
                         <p>Sign up to start using CloudBox</p>
                     </div>
 
                     {error && (
-                        <div style={{ color: "var(--danger)", background: "var(--danger-light)", border: "1px solid var(--danger-border)", padding: "10px 14px", borderRadius: "8px", fontSize: "13px", fontWeight: 500 }}>
+                        <div style={{ color: "#ef4444", background: "#fef2f2", border: "1px solid #fecaca", padding: "10px 14px", borderRadius: "10px", fontSize: "13px", fontWeight: 500 }}>
                             {error}
                         </div>
                     )}
@@ -86,31 +94,20 @@ export default function Signup() {
                             required
                         />
 
-                        <button type="submit" className="btn btn-primary" style={{ justifyContent: "center", padding: "10px" }}>
+                        <button type="submit" className="btn btn-primary auth-submit-btn">
                             Sign Up
                         </button>
                     </form>
 
-                    <div style={{ display: "flex", alignItems: "center", margin: "16px 0", color: "var(--text-muted)", fontSize: "12px" }}>
-                        <div style={{ flex: 1, height: "1px", background: "var(--border-color)" }}></div>
-                        <span style={{ padding: "0 10px" }}>OR</span>
-                        <div style={{ flex: 1, height: "1px", background: "var(--border-color)" }}></div>
+                    <div className="auth-divider">
+                        <span>OR</span>
                     </div>
 
                     <a
                         href={`${API_BASE_URL}/api/auth/google`}
-                        className="btn btn-secondary"
-                        style={{
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            gap: "8px",
-                            padding: "10px",
-                            textDecoration: "none",
-                            fontWeight: 500
-                        }}
+                        className="btn-google"
                     >
-                        <svg width="16" height="16" viewBox="0 0 24 24">
+                        <svg width="18" height="18" viewBox="0 0 24 24">
                             <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
                             <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
                             <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
@@ -119,7 +116,7 @@ export default function Signup() {
                         Continue with Google
                     </a>
 
-                    <div className="auth-footer" style={{ marginTop: "16px" }}>
+                    <div className="auth-footer">
                         Already have an account? <Link to="/login">Log in</Link>
                     </div>
                 </div>
