@@ -1,6 +1,8 @@
-import {prisma} from '../config/db.js';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
+import * as repo from '../repositories/userRepo.js';
+import { create, findRootFolder } from '../repositories/folderRepo.js';
+import { formatUserForResponse } from '../utils/userFormatter.js';
 
 const salt = 10;
 
@@ -8,7 +10,7 @@ const generateTokens = (user) => {
     const accessToken = jwt.sign(
         {id : user.id, role : user.role},
         process.env.JWT_SECRET,
-        {expiresIn : '15m'}
+        {expiresIn : '1h'}
     );
 
     const refreshToken = jwt.sign(
@@ -20,39 +22,57 @@ const generateTokens = (user) => {
     return {accessToken, refreshToken};
 };
 
-export const registerUser = async (name, email, password) => {   // name, email, password aaya controller se 
-    const existing = await prisma.user.findUnique({where : {email}});  // prisma ka db hamne bana rkha h usme se check kra unique email
-    if(existing) throw new Error('Email already exists');   // agar mil gya to user pahle se exist krta h 
+export const googleTokens = (data) => {
+    const accessToken = jwt.sign(data, process.env.JWT_SECRET, {expiresIn : "1h"});
+    const refreshToken = jwt.sign(
+        {id : data.id},
+        process.env.JWT_SECRET_REF,
+        {expiresIn : '7d'}
+    );
 
-    const hashed = await bcrypt.hash(password, salt);    // otherwise nhi mila unique email to  hashed variable mai  password ko salt ki help leke bcrypt kra
-    const newUser = await prisma.user.create({data : {name, email, password : hashed}}); // and model mai user ka name, email, and hashed password store krwa diya 
+    return {accessToken, refreshToken};
+}
+
+export const registerUser = async (name, email, password) => {
+    const existing = await repo.findByEmail(email);
+    if(existing) throw new Error('Email already exists');
+
+    const hashed = await bcrypt.hash(password, salt);
+    const newUser = await repo.create({name, email, password : hashed});
+    const data = {
+        name : "root",
+        uid : newUser.id,
+        isRoot : true
+    }
+    const root  = await create(data);
 
     const tokens = generateTokens(newUser);   // abb newuser jisme h user ka name, email, hashedpassword  ka use krke genrattoken mai bhej diya or genrate token -> acesss token and refresh token dono bana ke return kr dera h waps jo ki store ho jaa rha h tokens mai and ham fir wo tokens send kr rhe h waps to controllers 
 
-    const {password : _, ...rest} = newUser;    // destructuring ---->>> const _ = newUser.password;    newuser.password store in the variable name -> _   ,      _ = "$2b$10$abcxyz12345"  ,        why only _ bcz -> Ye value intentionally ignore kar rahe hain.   rest all are in ...rest
-    return {user : rest, ...tokens};   // here return the user : rest means -> id, name, email (not password)  and all tokens (access, refresh)
+    return {user : formatUserForResponse(newUser), ...tokens, root : root.id};
 };
 
 // same as register user
 export const loginUser = async (email, password) => {
-    const user = await prisma.user.findUnique({where : {email}});
+    const user = await repo.findByEmail(email);
     if(!user) throw new Error('Invalid email');
 
     const isMatch = await bcrypt.compare(password, user.password);
     if(!isMatch) throw new Error('Invalid Password');
 
+    let rootFolder = await findRootFolder(user.id);
+    if (!rootFolder) {
+        rootFolder = await create({ name: "root", uid: user.id, isRoot: true });
+    }
+
     const tokens = generateTokens(user);
-    const {password : _, ...rest} = user;
-    return {user : rest, ...tokens};
+    return { user: formatUserForResponse(user), ...tokens, root: rootFolder.id };
 }
 
 export const refreshAccessTokens = async (refreshToken) => {  // coming from authcontroller jo refresh token store h hammare res.cokies m  
     const decode = jwt.verify(refreshToken, process.env.JWT_SECRET_REF);  // yha verify hora h ki wo refresh token shi h ki nhi 
 
-                                                                         // agar shi nhi h to yhi se return ho jayega err and chala jayega authcontroller m err send krne ki refresh token is not valid 
-
-    const user = await prisma.user.findUnique({where : {id : decode.id}});   // other wise searching the user -> agar mila to ok (new access token genrate krke return krnege ) . 
-    if(!user) throw new Error('user not found');   // otherwise -> err ki user not found or acces token nhi banega ku ? user hai hi nhi iss credentials ka 
+    const user = await repo.findById(decode.id);
+    if(!user) throw new Error('user not found');
 
     //issue new access token
     const accessToken = jwt.sign(                   // abb user h agar mil gya to uski new access token waps create krke return kr denge 

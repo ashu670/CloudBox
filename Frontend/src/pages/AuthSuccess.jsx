@@ -1,6 +1,10 @@
 import { useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+<<<<<<< HEAD
 import { Cloud, ShieldCheck } from "lucide-react";
+=======
+import Navbar from "../components/navbar";
+>>>>>>> main
 
 export default function AuthSuccess() {
     const [searchParams] = useSearchParams();
@@ -10,15 +14,23 @@ export default function AuthSuccess() {
         const token = searchParams.get("token");
         if (token) {
             localStorage.setItem("accessToken", token);
+<<<<<<< HEAD
             setTimeout(() => {
                 navigate("/dashboard");
             }, 600);
+=======
+            localStorage.removeItem("currentFolderId");
+            localStorage.removeItem("rootFolderId");
+            localStorage.removeItem("folderHistory");
+            navigate("/dashboard");
+>>>>>>> main
         } else {
             navigate("/login");
         }
     }, [searchParams, navigate]);
 
     return (
+<<<<<<< HEAD
         <div className="auth-page-wrapper">
             <div className="auth-split-card" style={{ maxWidth: '440px', gridTemplateColumns: '1fr', textAlign: 'center', padding: '48px 32px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px' }}>
@@ -39,6 +51,14 @@ export default function AuthSuccess() {
                         <ShieldCheck size={16} />
                         <span>Google Verification Confirmed</span>
                     </div>
+=======
+        <div className="app-container">
+            <Navbar />
+            <div className="auth-wrapper">
+                <div className="auth-card" style={{ textAlign: "center" }}>
+                    <h2>Authenticating...</h2>
+                    <p style={{ marginTop: "10px", color: "var(--text-muted)" }}>Completing Google sign-in</p>
+>>>>>>> main
                 </div>
             </div>
         </div>

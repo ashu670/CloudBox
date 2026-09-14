@@ -1,11 +1,9 @@
 # ==========================
-# Node.js
+# Dependencies
 # ==========================
 node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
+backend/node_modules/
+frontend/node_modules/
 
 # ==========================
 # Environment Variables
@@ -14,31 +12,38 @@ pnpm-debug.log*
 .env.*
 !.env.example
 
+googleSecrets.json
+
 # ==========================
 # Logs
 # ==========================
 logs/
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
 # ==========================
 # Runtime Files
 # ==========================
 pids/
 *.pid
-*.seed
 *.pid.lock
-
-# ==========================
-# Coverage
-# ==========================
-coverage/
-.nyc_output/
+*.seed
 
 # ==========================
 # Build Output
 # ==========================
 dist/
 build/
+frontend/dist/
+
+# ==========================
+# Coverage
+# ==========================
+coverage/
+.nyc_output/
 
 # ==========================
 # Cache
@@ -48,10 +53,21 @@ build/
 tmp/
 
 # ==========================
+# Uploads (Generated Files)
+# ==========================
+uploads/
+src/uploads/
+backend/uploads/
+
+# ==========================
 # Prisma
 # ==========================
 prisma/dev.db
 prisma/dev.db-journal
+
+# Uncomment ONLY if you intentionally
+# do NOT want to track migrations
+# prisma/migrations/
 
 # ==========================
 # Docker
@@ -77,17 +93,7 @@ Thumbs.db
 jest.config.js.snap
 
 # ==========================
-# React
-# ==========================
-frontend/node_modules/
-frontend/dist/
-
-# ==========================
-# Backend
-# ==========================
-backend/node_modules/
-
-# ==========================
 # Misc
 # ==========================
 *.local
+serviceAccKey.json

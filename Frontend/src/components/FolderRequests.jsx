@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from '../api/axios';
 import { formatDate } from '../utils/formatters';
+<<<<<<< HEAD
 import { Inbox, Check, X, User, Clock } from 'lucide-react';
+=======
+>>>>>>> main
 
 const FolderRequests = ({ folderId, onRequestHandled, onNotify }) => {
   const [requests, setRequests] = useState([]);
@@ -63,6 +66,7 @@ const FolderRequests = ({ folderId, onRequestHandled, onNotify }) => {
     }
   };
 
+<<<<<<< HEAD
   if (loading) return <div style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>Loading join requests...</div>;
   if (error) return <div className="error-banner">{error}</div>;
 
@@ -84,10 +88,25 @@ const FolderRequests = ({ folderId, onRequestHandled, onNotify }) => {
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+=======
+  if (loading) return <p className="shared-loading">Loading requests...</p>;
+  if (error) return <p className="error-msg">{error}</p>;
+
+  return (
+    <div className="folder-requests-container">
+      <h4>Pending Join Requests</h4>
+      {requests.length === 0 ? (
+        <div className="shared-empty-state">
+          <p>No pending requests for this folder.</p>
+        </div>
+      ) : (
+        <ul className="requests-list">
+>>>>>>> main
           {requests.map((req) => {
             const id = req.id || req._id;
             const isProcessing = processingId === id;
             return (
+<<<<<<< HEAD
               <div
                 key={id}
                 style={{
@@ -142,6 +161,38 @@ const FolderRequests = ({ folderId, onRequestHandled, onNotify }) => {
             );
           })}
         </div>
+=======
+              <li key={id} className="request-card">
+                <div className="request-info">
+                  <strong>{req.user?.name || req.userName || `User #${req.requestedBy}`}</strong>
+                  <span className="request-email">{req.user?.email || req.email || '—'}</span>
+                  <span className="request-date">
+                    Requested {formatDate(req.requestedAt || req.createdAt)}
+                  </span>
+                </div>
+                <div className="request-actions">
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    disabled={isProcessing}
+                    onClick={() => handleApprove(id)}
+                  >
+                    Approve
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm btn-reject"
+                    disabled={isProcessing}
+                    onClick={() => handleReject(id)}
+                  >
+                    Reject
+                  </button>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+>>>>>>> main
       )}
     </div>
   );

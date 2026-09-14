@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from '../api/axios';
+<<<<<<< HEAD
 import { Users, User, Shield, ShieldAlert, Edit3, Eye } from 'lucide-react';
+=======
+>>>>>>> main
 
 const FolderMembers = ({ folderId }) => {
   const [members, setMembers] = useState([]);
@@ -26,6 +29,7 @@ const FolderMembers = ({ folderId }) => {
     fetchMembers();
   }, [fetchMembers]);
 
+<<<<<<< HEAD
   const getRoleBadge = (role) => {
     const roleMap = {
       OWNER: { bg: 'rgba(217, 119, 6, 0.12)', color: 'var(--accent-amber)', border: 'rgba(217, 119, 6, 0.25)', icon: <Shield size={12} /> },
@@ -106,6 +110,28 @@ const FolderMembers = ({ folderId }) => {
             </div>
           ))}
         </div>
+=======
+  if (loading) return <p className="shared-loading">Loading members...</p>;
+  if (error) return <p className="error-msg">{error}</p>;
+
+  return (
+    <div className="folder-members-container">
+      <h4>Project Members</h4>
+      {members.length === 0 ? (
+        <p className="shared-empty">No members found.</p>
+      ) : (
+        <ul className="members-list">
+          {members.map((member) => (
+            <li key={member.userId || member.id || member._id} className="member-card">
+              <div>
+                <strong>{member.name || member.user?.name}</strong>
+                <p>{member.email || member.user?.email}</p>
+              </div>
+              <span className="role-tag">{member.role}</span>
+            </li>
+          ))}
+        </ul>
+>>>>>>> main
       )}
     </div>
   );
