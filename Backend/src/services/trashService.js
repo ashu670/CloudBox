@@ -132,16 +132,18 @@ async function cleanupExpiredFolder(trashLog) {
         totalStorageRemoved += file.size || 0;
     }
 
-    await prisma.file.deleteMany({
-        where: {
-            folderId: { in: folderIds }
-        }
-    });
+    await prisma.$transaction(async (tx) => {
+        await tx.file.deleteMany({
+            where: {
+                folderId: { in: folderIds }
+            }
+        });
 
-    await prisma.folder.deleteMany({
-        where: {
-            id: { in: folderIds }
-        }
+        await tx.folder.deleteMany({
+            where: {
+                id: { in: folderIds }
+            }
+        });
     });
 
     if (totalStorageRemoved > 0) {
@@ -343,4 +345,29 @@ export const restoreAllTrash = async (uid) => {
         message: `Restored ${restoredCount} items from trash`,
         restoredCount
     };
+};
+
+export const deletePermanentTrashItem = async (id, uid) => {
+    const trashLog = await repo.findByIdAndUid(id, uid);
+    if (!trashLog) {
+        throw new Error("Trash log entry not found or access denied");
+    }
+
+    let reclaimedBytes = 0;
+
+    if (trashLog.type === "FILE") {
+        reclaimedBytes = await cleanupExpiredFile(trashLog);
+        return {
+            message: "Permanently deleted file from trash",
+            type: "FILE",
+            reclaimedBytes
+        };
+    } else if (trashLog.type === "FOLDER") {
+        reclaimedBytes = await cleanupExpiredFolder(trashLog);
+        return {
+            message: "Permanently deleted folder subtree from trash",
+            type: "FOLDER",
+            reclaimedBytes
+        };
+    }
 };

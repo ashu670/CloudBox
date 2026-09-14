@@ -9,5 +9,6 @@ router.use(authenticate);
 router.get("/", trashCon.getTrashList);
 router.post("/restore/all", trashCon.restoreAllItems);
 router.post("/restore/:id", trashCon.restoreItem);
+router.delete("/:id", trashCon.deletePermanentItem);
 
 export default router;
