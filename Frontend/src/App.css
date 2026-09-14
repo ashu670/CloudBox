@@ -2662,6 +2662,14 @@
 .trash-item-action-desktop {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+}
+
+.trash-item-action-mobile {
+  display: none;
+  align-items: center;
+  gap: 8px;
 }
 
 .trash-restore-btn {
@@ -2687,6 +2695,32 @@
 }
 
 .trash-restore-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.trash-delete-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.08);
+  color: #ef4444;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.trash-delete-btn:hover:not(:disabled) {
+  background: #ef4444;
+  color: #ffffff;
+  border-color: #ef4444;
+}
+
+.trash-delete-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }

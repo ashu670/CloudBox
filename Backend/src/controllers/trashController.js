@@ -48,3 +48,21 @@ export const restoreAllItems = async (req, res) => {
         });
     }
 };
+
+export const deletePermanentItem = async (req, res) => {
+    try {
+        const uid = req.user.id;
+        const { id } = req.params;
+        const result = await trashService.deletePermanentTrashItem(id, uid);
+        return res.status(200).json({
+            success: true,
+            ...result
+        });
+    } catch (err) {
+        console.error(`Error deleting trash item ${req.params.id} permanently:`, err);
+        return res.status(400).json({
+            error: err.message || "Failed to permanently delete trash item"
+        });
+    }
+};
+

@@ -39,6 +39,8 @@ export default function TrashModal({ onClose, showToast, refreshDashboard }) {
         fetchTrashItems();
     }, [fetchTrashItems]);
 
+    const [deletingId, setDeletingId] = useState(null);
+
     const handleRestoreItem = async (id, name) => {
         setRestoringId(id);
         try {
@@ -54,6 +56,27 @@ export default function TrashModal({ onClose, showToast, refreshDashboard }) {
             showToast?.(err.response?.data?.error || `Failed to restore "${name}"`, "error");
         } finally {
             setRestoringId(null);
+        }
+    };
+
+    const handleDeletePermanentItem = async (id, name) => {
+        if (!window.confirm(`Are you sure you want to permanently delete "${name}"? This action cannot be undone.`)) {
+            return;
+        }
+        setDeletingId(id);
+        try {
+            const token = localStorage.getItem("accessToken");
+            const res = await axios.delete(`api/trash/${id}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            showToast?.(res.data?.message || `Permanently deleted "${name}"`, "success");
+            setTrashItems(prev => prev.filter(item => item.id !== id));
+            refreshDashboard?.();
+        } catch (err) {
+            console.error(`Error deleting item ${id} permanently:`, err);
+            showToast?.(err.response?.data?.error || `Failed to permanently delete "${name}"`, "error");
+        } finally {
+            setDeletingId(null);
         }
     };
 
@@ -185,12 +208,13 @@ export default function TrashModal({ onClose, showToast, refreshDashboard }) {
                                                     </div>
                                                 </div>
 
-                                                {/* Mobile Restore Button */}
+                                                {/* Mobile Actions */}
                                                 <div className="trash-item-action-mobile">
                                                     <button
                                                         className="trash-restore-btn"
                                                         onClick={() => handleRestoreItem(item.id, item.name)}
-                                                        disabled={isRestoringThis || restoringAll}
+                                                        disabled={isRestoringThis || deletingId === item.id || restoringAll}
+                                                        title="Restore"
                                                     >
                                                         {isRestoringThis ? (
                                                             <span className="spinner-sm" />
@@ -202,6 +226,21 @@ export default function TrashModal({ onClose, showToast, refreshDashboard }) {
                                                                 </svg>
                                                                 Restore
                                                             </>
+                                                        )}
+                                                    </button>
+                                                    <button
+                                                        className="trash-delete-btn"
+                                                        onClick={() => handleDeletePermanentItem(item.id, item.name)}
+                                                        disabled={isRestoringThis || deletingId === item.id || restoringAll}
+                                                        title="Delete Permanently"
+                                                    >
+                                                        {deletingId === item.id ? (
+                                                            <span className="spinner-sm" />
+                                                        ) : (
+                                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                                <polyline points="3 6 5 6 21 6" />
+                                                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+                                                            </svg>
                                                         )}
                                                     </button>
                                                 </div>
@@ -237,12 +276,13 @@ export default function TrashModal({ onClose, showToast, refreshDashboard }) {
                                                 </div>
                                             </div>
 
-                                            {/* Desktop Restore Button */}
+                                            {/* Desktop Actions */}
                                             <div className="col-action trash-item-action-desktop">
                                                 <button
                                                     className="trash-restore-btn"
                                                     onClick={() => handleRestoreItem(item.id, item.name)}
-                                                    disabled={isRestoringThis || restoringAll}
+                                                    disabled={isRestoringThis || deletingId === item.id || restoringAll}
+                                                    title="Restore"
                                                 >
                                                     {isRestoringThis ? (
                                                         <span className="spinner-sm" />
@@ -254,6 +294,21 @@ export default function TrashModal({ onClose, showToast, refreshDashboard }) {
                                                             </svg>
                                                             Restore
                                                         </>
+                                                    )}
+                                                </button>
+                                                <button
+                                                    className="trash-delete-btn"
+                                                    onClick={() => handleDeletePermanentItem(item.id, item.name)}
+                                                    disabled={isRestoringThis || deletingId === item.id || restoringAll}
+                                                    title="Delete Permanently"
+                                                >
+                                                    {deletingId === item.id ? (
+                                                        <span className="spinner-sm" />
+                                                    ) : (
+                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                            <polyline points="3 6 5 6 21 6" />
+                                                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+                                                        </svg>
                                                     )}
                                                 </button>
                                             </div>
