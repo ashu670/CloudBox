@@ -1,6 +1,7 @@
 # ==========================
 # Dependencies
 # ==========================
+
 node_modules/
 backend/node_modules/
 frontend/node_modules/
@@ -8,15 +9,22 @@ frontend/node_modules/
 # ==========================
 # Environment Variables
 # ==========================
+
 .env
 .env.*
 !.env.example
 
-googleSecrets.json
+# ==========================
+# Google / Cloud Credentials
+# ==========================
+
+Backend/serviceAccKey.json
+Backend/googleSecrets.json
 
 # ==========================
 # Logs
 # ==========================
+
 logs/
 *.log
 npm-debug.log*
@@ -27,6 +35,7 @@ pnpm-debug.log*
 # ==========================
 # Runtime Files
 # ==========================
+
 pids/
 *.pid
 *.pid.lock
@@ -35,6 +44,7 @@ pids/
 # ==========================
 # Build Output
 # ==========================
+
 dist/
 build/
 frontend/dist/
@@ -42,12 +52,14 @@ frontend/dist/
 # ==========================
 # Coverage
 # ==========================
+
 coverage/
 .nyc_output/
 
 # ==========================
 # Cache
 # ==========================
+
 .cache/
 .temp/
 tmp/
@@ -55,6 +67,7 @@ tmp/
 # ==========================
 # Uploads (Generated Files)
 # ==========================
+
 uploads/
 src/uploads/
 backend/uploads/
@@ -62,6 +75,7 @@ backend/uploads/
 # ==========================
 # Prisma
 # ==========================
+
 prisma/dev.db
 prisma/dev.db-journal
 
@@ -72,11 +86,13 @@ prisma/dev.db-journal
 # ==========================
 # Docker
 # ==========================
+
 .docker/
 
 # ==========================
 # VS Code
 # ==========================
+
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json
@@ -84,16 +100,18 @@ prisma/dev.db-journal
 # ==========================
 # OS Files
 # ==========================
+
 .DS_Store
 Thumbs.db
 
 # ==========================
 # Testing
 # ==========================
+
 jest.config.js.snap
 
 # ==========================
 # Misc
 # ==========================
+
 *.local
-serviceAccKey.json
