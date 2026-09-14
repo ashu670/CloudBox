@@ -8,6 +8,11 @@ export function useFolderManager() {
     const [userProfile, setUserProfile] = useState(null);
     const [storageBreakdown, setStorageBreakdown] = useState({ image: 0, video: 0, audio: 0, document: 0 });
     const [searchQuery, setSearchQuery] = useState("");
+    const [searchResult, setSearchResult] = useState({
+        folders: [],
+        files: []});
+    const [searchLoading, setSearchLoading] = useState(false);
+    const [searchError, setSearchError] = useState(null);
     const [rootFolderId, setRootFolderId] = useState(() => {
         const saved = localStorage.getItem("rootFolderId");
         return saved ? Number(saved) : -1;
@@ -193,6 +198,7 @@ export function useFolderManager() {
             setCurrentFolderId(targetId);
             setHistory(rebuildHistory(targetId));
         }
+        setSearchQuery("");
     }, [rebuildHistory, rootFolderId]);
 
     const createFolder = async (e) => {
@@ -465,17 +471,66 @@ export function useFolderManager() {
 
     const currentFolderInfo = currentFolderId > 0 ? foldersCache[currentFolderId] : null;
 
+    useEffect(() => {
+        const query = searchQuery.trim();
+
+        if (!query) {
+            setSearchResult({
+                folders: [],
+                files: []
+            });
+            setSearchLoading(false);
+            setSearchError(null);
+            return;
+        }
+
+        setSearchLoading(true);
+        setSearchError(null);
+
+        const controller = new AbortController();
+
+        const timer = setTimeout(async () => {
+            try {
+                const response = await axios.get(`api/folder/search/${encodeURIComponent(query)}`, {
+                    signal: controller.signal
+                });
+                if (!controller.signal.aborted) {
+                    setSearchResult(response.data?.result || { folders: [], files: [] });
+                    setSearchError(null);
+                    setSearchLoading(false);
+                }
+            } catch (error) {
+                if (axios.isCancel(error) || error?.name === "CanceledError" || controller.signal.aborted) {
+                    return;
+                }
+                console.error("search failed: ", error);
+                setSearchError("Unable to search right now. Please try again.");
+                setSearchResult({
+                    folders: [],
+                    files: []
+                });
+                setSearchLoading(false);
+            }
+        }, 300);
+
+        return () => {
+            clearTimeout(timer);
+            controller.abort();
+        };
+    }, [searchQuery]);
+
     // Filter files and folders based on searchQuery
     const filteredFolders = searchQuery.trim() 
-        ? folders.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase()))
+        ? searchResult.folders
         : folders;
 
     const filteredFiles = searchQuery.trim()
-        ? files.filter(f => f.orgName.toLowerCase().includes(searchQuery.toLowerCase()))
+        ? searchResult.files
         : files;
 
     return {
         folders, files, filteredFolders, filteredFiles, userProfile, storageBreakdown, searchQuery, setSearchQuery,
+        searchLoading, searchError,
         rootFolderId, currentFolderId, history, folderName, setFolderName,
         loading, isUploading, isDragging, setIsDragging, showCreator, setShowCreator,
         editingItem, setEditingItem, renameValue, setRenameValue, movingItem, setMovingItem,

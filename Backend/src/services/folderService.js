@@ -178,6 +178,39 @@ export const fetchFolder = async (uid, pid) => {
     return folderDetails;
 };
 
+export const searchChild = async (uid, name) => {
+    if (!name || !name.trim()) {
+        return {
+            folders: [],
+            files: []
+        };
+    }
+
+    const searchQuery = name.trim();
+    const results = await repo.searchChild(uid, searchQuery);
+
+    const folders = [];
+
+    for(const folder of results.folders){
+        const hasAccess = validateFolderAccess(folder.id, uid, FolderAction.READ);
+
+        if(hasAccess) folders.push(folder);
+    }
+
+    const files = [];
+
+    for(const file of results.files){
+        const hasAccess = validateFolderAccess(file.folderId, uid, FolderAction.READ);
+        
+        if(hasAccess) files.push(file);
+    }
+
+    return {
+        folders,
+        files
+    };
+};
+
 export const delFolder = async (uid, id, force) => {
     const valid = await validateFolderAccess(id, uid, FolderAction.DELETE);
     if (!valid) {

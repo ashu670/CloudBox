@@ -77,6 +77,38 @@ export const findRootFolder = async (uid) => {
     return rootFolder;
 };
 
+export const searchChild = async (uid, name) => {
+
+    const [folders, files] = await Promise.all([
+        prisma.folder.findMany({
+            where: {
+                uid,
+                name: {
+                    startsWith: name,
+                    mode: "insensitive"
+                },
+                deletedAt: null
+            }
+        }),
+
+        prisma.file.findMany({
+            where: {
+                uid,
+                orgName: {
+                    startsWith: name,
+                    mode: "insensitive"
+                },
+                deletedAt: null
+            }
+        })
+    ]);
+
+    return {
+        folders,
+        files
+    };
+};
+
 export const findChildren = async (uid, pid) => {
 
     if (pid === null || pid === 0 || pid === -1) {
@@ -379,4 +411,4 @@ export const updateInviteCodeTx = async (folderId, inviteCodeData, actorUserId, 
 
         return folder;
     });
-};
+};

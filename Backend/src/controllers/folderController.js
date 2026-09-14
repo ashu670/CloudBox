@@ -1,3 +1,4 @@
+import { stat } from "fs";
 import * as service from "../services/folderService.js";
 
 const getErrorStatus = (error) => {
@@ -68,6 +69,26 @@ export const fetch = async (req, res) => {
         });
     }
 };
+
+export const search = async(req, res) => {
+    const name  = req.params.name;;
+    const uid = req.user.id;
+
+    try{
+        const result = await service.searchChild(uid, name);
+        return res.status(200).json({
+            success : true,
+            result
+        })
+    }
+    catch(err){
+        const status = getErrorStatus(err);
+        return res.status(status).json({
+            success : false,
+            error : err.message
+        });
+    }
+}
 
 export const deleteFolder = async (req, res) => {
     const id = Number(req.params.id);
