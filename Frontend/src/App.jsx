@@ -1,7 +1,6 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import "./App.css";
 
-import Navbar from "./components/navbar";
 import Landing from "./pages/Landing";
 import Signup from "./pages/signup";
 import Login from "./pages/login";
@@ -11,7 +10,6 @@ import AuthSuccess from "./pages/AuthSuccess";
 function App() {
   return (
     <BrowserRouter>
-      <Navbar />
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/signup" element={<Signup />} />

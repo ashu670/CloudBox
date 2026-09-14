@@ -1,59 +1,3 @@
-<<<<<<< HEAD
-import React from "react";
-import {
-  FileText,
-  Image as ImageIcon,
-  Video,
-  Music,
-  FileCode,
-  Archive,
-  File
-} from "lucide-react";
-
-export default function FileIcon({ mimeType }) {
-  if (!mimeType) {
-    return <File size={20} color="#94a3b8" />;
-  }
-
-  if (mimeType.startsWith("image/")) {
-    return <ImageIcon size={20} color="#38bdf8" />;
-  }
-
-  if (mimeType === "application/pdf") {
-    return <FileText size={20} color="#f43f5e" />;
-  }
-
-  if (mimeType.startsWith("video/")) {
-    return <Video size={20} color="#34d399" />;
-  }
-
-  if (mimeType.startsWith("audio/")) {
-    return <Music size={20} color="#fbbf24" />;
-  }
-
-  if (
-    mimeType.startsWith("text/") ||
-    mimeType.includes("json") ||
-    mimeType.includes("javascript") ||
-    mimeType.includes("typescript") ||
-    mimeType.includes("xml") ||
-    mimeType.includes("html")
-  ) {
-    return <FileCode size={20} color="#a78bfa" />;
-  }
-
-  if (
-    mimeType.includes("zip") ||
-    mimeType.includes("tar") ||
-    mimeType.includes("gzip") ||
-    mimeType.includes("compressed") ||
-    mimeType.includes("rar")
-  ) {
-    return <Archive size={20} color="#f97316" />;
-  }
-
-  return <File size={20} color="#94a3b8" />;
-=======
 export default function FileIcon({ mimeType = "", size }) {
     const iconStyle = size
         ? { width: `${size}px`, height: `${size}px`, minWidth: `${size}px`, flexShrink: 0 }
@@ -93,5 +37,4 @@ export default function FileIcon({ mimeType = "", size }) {
             <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z" />
         </svg>
     );
->>>>>>> main
 }

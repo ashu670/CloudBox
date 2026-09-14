@@ -46,8 +46,6 @@ export default function Landing() {
   const [copiedCode, setCopiedCode] = useState(false);
   const [activeFormatTab, setActiveFormatTab] = useState('code');
 
-<<<<<<< HEAD
-=======
   const generateRandomInviteCode = () => {
     const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     let code = "CBX-";
@@ -59,15 +57,10 @@ export default function Landing() {
 
   const [inviteCode, setInviteCode] = useState(() => generateRandomInviteCode());
 
->>>>>>> main
   const toggleFaq = (index) => {
     setActiveFaq(activeFaq === index ? null : index);
   };
 
-<<<<<<< HEAD
-  const handleCopyCode = () => {
-    navigator.clipboard.writeText('CBX-7942');
-=======
   const handleCopyCode = async () => {
     try {
       if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -76,19 +69,14 @@ export default function Landing() {
     } catch {
       // fallback
     }
->>>>>>> main
     setCopiedCode(true);
     setTimeout(() => setCopiedCode(false), 2000);
   };
 
-<<<<<<< HEAD
-=======
   const handleRegenerateCode = () => {
     setInviteCode(generateRandomInviteCode());
     setCopiedCode(false);
   };
-
->>>>>>> main
   const demoFolderData = {
     assets: [
       { name: 'enterprise-architecture-v2.pdf', meta: '4.2 MB • Updated 2m ago', type: 'pdf', action: 'Stream' },
@@ -442,37 +430,6 @@ export default function Landing() {
               </div>
 
               <div className="bento-preview-widget" style={{ textAlign: 'center', background: '#f8f7ff', border: '1px solid rgba(124, 58, 237, 0.12)', padding: '18px', borderRadius: '12px' }}>
-<<<<<<< HEAD
-                <div style={{ fontSize: '11px', color: '#6b7280', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.2px', marginBottom: '8px' }}>Active Invite Code</div>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '22px', fontWeight: 900, color: '#0284c7', letterSpacing: '4px', background: 'rgba(2, 132, 199, 0.08)', padding: '10px 14px', borderRadius: '8px', border: '1.5px dashed rgba(2, 132, 199, 0.35)' }}>
-                  CBX-7942
-                </div>
-                <button
-                  type="button"
-                  onClick={handleCopyCode}
-                  className="btn-copy-code-pill"
-                  style={{
-                    marginTop: '12px',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    fontSize: '12px',
-                    fontWeight: 700,
-                    padding: '6px 14px',
-                    borderRadius: 'var(--radius-pill)',
-                    background: copiedCode ? 'rgba(16, 185, 129, 0.12)' : '#ffffff',
-                    border: '1px solid',
-                    borderColor: copiedCode ? '#059669' : '#cbd5e1',
-                    color: copiedCode ? '#059669' : '#1e293b',
-                    cursor: 'pointer',
-                    boxShadow: '0 2px 6px rgba(0,0,0,0.04)',
-                    transition: 'all 0.2s ease'
-                  }}
-                >
-                  {copiedCode ? <CheckCircle2 size={14} /> : <Copy size={14} />}
-                  <span>{copiedCode ? 'Key Copied!' : 'Copy Invite Key'}</span>
-                </button>
-=======
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
                   <span style={{ fontSize: '11px', color: '#6b7280', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.2px' }}>Active Invite Code</span>
                   <button
@@ -514,7 +471,6 @@ export default function Landing() {
                     <span>{copiedCode ? 'Key Copied!' : 'Copy Invite Key'}</span>
                   </button>
                 </div>
->>>>>>> main
               </div>
             </div>
 

@@ -1,10 +1,6 @@
 import { useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-<<<<<<< HEAD
-import { Cloud, ShieldCheck } from "lucide-react";
-=======
 import Navbar from "../components/navbar";
->>>>>>> main
 
 export default function AuthSuccess() {
     const [searchParams] = useSearchParams();
@@ -14,51 +10,24 @@ export default function AuthSuccess() {
         const token = searchParams.get("token");
         if (token) {
             localStorage.setItem("accessToken", token);
-<<<<<<< HEAD
-            setTimeout(() => {
-                navigate("/dashboard");
-            }, 600);
-=======
             localStorage.removeItem("currentFolderId");
             localStorage.removeItem("rootFolderId");
             localStorage.removeItem("folderHistory");
             navigate("/dashboard");
->>>>>>> main
         } else {
             navigate("/login");
         }
     }, [searchParams, navigate]);
 
     return (
-<<<<<<< HEAD
-        <div className="auth-page-wrapper">
-            <div className="auth-split-card" style={{ maxWidth: '440px', gridTemplateColumns: '1fr', textAlign: 'center', padding: '48px 32px' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px' }}>
-                    <div className="brand-icon-wrapper" style={{ width: '64px', height: '64px', borderRadius: '16px' }}>
-                        <Cloud size={36} />
-                    </div>
-                    
-                    <div>
-                        <h2 style={{ fontSize: '22px', fontWeight: 800, marginBottom: '8px' }}>
-                            Authenticating Workspace
-                        </h2>
-                        <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
-                            Securing your connection and decrypting workspace keys...
-                        </p>
-                    </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#34d399', fontSize: '13px', fontWeight: 600, background: 'rgba(16, 185, 129, 0.1)', padding: '6px 14px', borderRadius: '999px', border: '1px solid rgba(16, 185, 129, 0.25)' }}>
-                        <ShieldCheck size={16} />
-                        <span>Google Verification Confirmed</span>
-                    </div>
-=======
         <div className="app-container">
             <Navbar />
             <div className="auth-wrapper">
                 <div className="auth-card" style={{ textAlign: "center" }}>
-                    <h2>Authenticating...</h2>
-                    <p style={{ marginTop: "10px", color: "var(--text-muted)" }}>Completing Google sign-in</p>
->>>>>>> main
+                    <div className="auth-header">
+                        <h1>Authenticating...</h1>
+                        <p style={{ marginTop: "10px", color: "#5b5380" }}>Completing Google sign-in</p>
+                    </div>
                 </div>
             </div>
         </div>

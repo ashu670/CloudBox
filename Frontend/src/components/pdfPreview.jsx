@@ -1,19 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import * as pdfjsLib from "pdfjs-dist";
 
-// Initialize worker for pdfjs-dist v6 ESM support using workerPort
-if (typeof window !== "undefined" && "Worker" in window && !pdfjsLib.GlobalWorkerOptions.workerPort) {
-    try {
-        pdfjsLib.GlobalWorkerOptions.workerPort = new Worker(
-            new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url),
-            { type: "module" }
-        );
-    } catch {
-        pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-            "pdfjs-dist/build/pdf.worker.min.mjs",
-            import.meta.url
-        ).toString();
-    }
+// Initialize worker for pdfjs-dist v6 ESM support
+if (typeof window !== "undefined" && !pdfjsLib.GlobalWorkerOptions.workerSrc) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version || '4.10.38'}/build/pdf.worker.min.mjs`;
 }
 
 export default function PdfPreview({ url }) {
