@@ -21,6 +21,7 @@ import { lockBodyScroll, unlockBodyScroll } from "../utils/scrollLock";
 export default function FolderView() {
     const {
         folders, files, filteredFolders, filteredFiles, userProfile, storageBreakdown, searchQuery, setSearchQuery,
+        searchLoading, searchError,
         rootFolderId, currentFolderId, history, folderName, setFolderName,
         loading, isUploading, isDragging, setIsDragging, showCreator, setShowCreator,
         editingItem, setEditingItem, renameValue, setRenameValue, movingItem, setMovingItem,
@@ -721,7 +722,7 @@ export default function FolderView() {
                     )}
 
                     {/* Quick Folders Cards Grid ("My Folders") */}
-                    {filteredFolders.length > 0 && (
+                    {!searchLoading && !searchError && filteredFolders.length > 0 && (
                         <section className="dashboard-section">
                             <div className="section-title">My Folders</div>
                             <div className="folders-grid">
@@ -854,24 +855,46 @@ export default function FolderView() {
                     {/* Files Explorer Table ("All Files") */}
                     <section className="dashboard-section">
                         <div className="section-title-row">
-                            <span className="section-title">All Files</span>
-                            {searchQuery && (
-                                <span className="search-status-tag">Filtering by "{searchQuery}"</span>
+                            <span className="section-title">{searchQuery.trim() ? "Search Results" : "All Files"}</span>
+                            {searchQuery.trim() && (
+                                <span className="search-status-tag">
+                                    {searchLoading ? `Searching for "${searchQuery.trim()}"...` : `Results for "${searchQuery.trim()}"`}
+                                </span>
                             )}
                         </div>
 
-                        {loading ? (
+                        {searchQuery.trim() && searchLoading ? (
                             <div className="loading-container">
                                 <div className="spinner"></div>
                             </div>
-                        ) : filteredFolders.length === 0 && filteredFiles.length === 0 ? (
+                        ) : searchQuery.trim() && searchError ? (
+                            <div className="empty-state">
+                                <svg className="empty-state-svg" viewBox="0 0 24 24" width="48" height="48">
+                                    <path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z" opacity="0.4" />
+                                </svg>
+                                <h3 className="empty-state-title">Search Error</h3>
+                                <p className="empty-state-text">{searchError}</p>
+                            </div>
+                        ) : searchQuery.trim() && filteredFolders.length === 0 && filteredFiles.length === 0 ? (
+                            <div className="empty-state">
+                                <svg className="empty-state-svg" viewBox="0 0 24 24" width="48" height="48">
+                                    <path fill="currentColor" d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" opacity="0.3" />
+                                </svg>
+                                <h3 className="empty-state-title">No results found</h3>
+                                <p className="empty-state-text">
+                                    No files or folders matched "{searchQuery.trim()}". Check your spelling or try a different search query.
+                                </p>
+                            </div>
+                        ) : !searchQuery.trim() && loading ? (
+                            <div className="loading-container">
+                                <div className="spinner"></div>
+                            </div>
+                        ) : !searchQuery.trim() && filteredFolders.length === 0 && filteredFiles.length === 0 ? (
                             <div className="empty-state">
                                 <svg className="empty-state-svg" viewBox="0 0 24 24" width="48" height="48">
                                     <path fill="currentColor" d="M19.35,10.03C18.67,6.59 15.64,4 12,4C9.11,4 6.6,5.64 5.35,8.03C2.34,8.36 0,10.9 0,14C0,17.1 2.9,20 6,20H19C21.76,20 24,17.76 24,15C24,12.36 21.95,10.22 19.35,10.03Z" opacity="0.3" />
                                 </svg>
-                                <h3 className="empty-state-title">
-                                    {searchQuery ? "No matching files or folders found" : "This folder is empty"}
-                                </h3>
+                                <h3 className="empty-state-title">This folder is empty</h3>
                                 <p className="empty-state-text">
                                     {currentFolderId <= 0
                                         ? "Create a folder to start organizing your files."

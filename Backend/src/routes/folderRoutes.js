@@ -19,6 +19,7 @@ router.post("/invite/expire", checkFolderRole("OWNER"), folderCon.expireInviteCo
 // GET Routes
 router.get("/fetch/:id", folderCon.fetch);
 router.get("/requests/:folderId", folderCon.getFolderRequests);
+router.get("/search/:name", folderCon.search);
 router.get("/members/:folderId", checkFolderRole(["OWNER", "ADMIN"]), folderCon.getFolderMembers);
 router.get("/owner-panel/:folderId", checkFolderRole("OWNER"), folderCon.getOwnerPanel);
 router.get("/admin-panel/:folderId", checkFolderRole(["OWNER", "ADMIN"]), folderCon.getAdminPanel);
