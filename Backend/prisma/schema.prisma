@@ -1,9 +1,147 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
 datasource db {
   provider = "postgresql"
 }
 
-generator client {
-  provider = "prisma-client-js"
+model User {
+  id            Int                 @id @default(autoincrement())
+  name          String
+  email         String              @unique
+  password      String?
+  provider      Provider            @default(LOCAL)
+  googleId      String?             @unique
+  role          Role                @default(USER)
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  storageLimit  BigInt              @default(524288000)
+  usedStorage   BigInt              @default(0)
+  activities    ActivityLogs[]
+  files         File[]
+  fileShares    FileShare[]
+  folders       Folder[]
+  joinRequests  FolderJoinRequest[]
+  sharedFolders FolderMember[]
+  trash         TrashLogs[]
+}
+
+model Folder {
+  id             Int                 @id @default(autoincrement())
+  name           String
+  pid            Int?
+  uid            Int
+  isShared       Boolean             @default(false)
+  inviteCode     String?             @unique
+  isInviteActive Boolean             @default(false)
+  visibility     Visibility          @default(PRIVATE)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  isRoot         Boolean             @default(false)
+  deletedAt      DateTime?
+  activities     ActivityLogs[]
+  files          File[]
+  parent         Folder?             @relation("FolderToFolder", fields: [pid], references: [id], onDelete: Cascade)
+  children       Folder[]            @relation("FolderToFolder")
+  user           User                @relation(fields: [uid], references: [id], onDelete: Cascade)
+  requests       FolderJoinRequest[]
+  members        FolderMember[]
+  trash          TrashLogs[]
+
+  @@index([uid, deletedAt])
+  @@index([pid, deletedAt])
+}
+
+model FolderMember {
+  id       Int        @id @default(autoincrement())
+  folderId Int
+  userId   Int
+  role     FolderRole
+  joinedAt DateTime   @default(now())
+  folder   Folder     @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  user     User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([folderId, userId])
+}
+
+model FolderJoinRequest {
+  id          Int           @id @default(autoincrement())
+  folderId    Int
+  requestedBy Int
+  message     String?
+  status      RequestStatus @default(PENDING)
+  requestedAt DateTime      @default(now())
+  folder      Folder        @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  user        User          @relation(fields: [requestedBy], references: [id], onDelete: Cascade)
+
+  @@unique([folderId, requestedBy])
+}
+
+model File {
+  id         Int         @id @default(autoincrement())
+  orgName    String
+  stoName    String      @unique
+  mimeType   String
+  size       Int
+  folderId   Int
+  uid        Int
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  deletedAt  DateTime?
+  folder     Folder      @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  user       User        @relation(fields: [uid], references: [id], onDelete: Cascade)
+  fileShares FileShare[]
+  trash      TrashLogs[]
+
+  @@index([uid, deletedAt])
+  @@index([folderId, deletedAt])
+}
+
+model FileShare {
+  id        Int       @id @default(autoincrement())
+  token     String    @unique
+  fileId    Int
+  uid       Int
+  createdAt DateTime  @default(now())
+  isActive  Boolean   @default(true)
+  expiresAt DateTime?
+  file      File      @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [uid], references: [id], onDelete: Cascade)
+
+  @@unique([fileId, uid])
+}
+
+model ActivityLogs {
+  id        Int          @id @default(autoincrement())
+  folderId  Int
+  userId    Int
+  action    ActivityType
+  target    TargetType
+  targetId  Int?
+  message   String?
+  createdAt DateTime     @default(now())
+  folder    Folder       @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model TrashLogs {
+  id        Int       @id @default(autoincrement())
+  location  String
+  type      TrashType
+  expiry    DateTime
+  uid       Int
+  fileId    Int?
+  folderId  Int?
+  createdAt DateTime  @default(now())
+  pid       Int
+  file      File?     @relation(fields: [fileId], references: [id])
+  folder    Folder?   @relation(fields: [folderId], references: [id])
+  user      User      @relation(fields: [uid], references: [id], onDelete: Cascade)
+
+  @@index([uid, expiry])
+  @@index([fileId])
+  @@index([folderId])
 }
 
 enum Role {
@@ -44,21 +182,17 @@ enum ActivityType {
   DELETE_FOLDER
   RENAME_FOLDER
   MOVE_FOLDER
-
   UPLOAD_FILE
   DELETE_FILE
   RENAME_FILE
   MOVE_FILE
-
   SHARE_FOLDER
   JOIN_REQUEST
   APPROVE_REQUEST
   REJECT_REQUEST
-
   ROLE_CHANGED
   MEMBER_REMOVED
   OWNER_TRANSFERRED
-
   CREATE_PR
   APPROVE_PR
   REJECT_PR
@@ -70,183 +204,4 @@ enum TargetType {
   FILE
   MEMBER
   PULL_REQUEST
-}
-
-model User {
-  id           Int      @id @default(autoincrement())
-  name         String
-  email        String   @unique
-  password     String?
-  usedStorage  BigInt   @default(0)
-  storageLimit BigInt   @default(524288000)
-
-  provider Provider @default(LOCAL)
-  googleId String?  @unique
-  role     Role     @default(USER)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  folders       Folder[]
-  files         File[]
-  fileShares    FileShare[]
-  trash         TrashLogs[]
-  sharedFolders FolderMember[]
-  joinRequests  FolderJoinRequest[]
-  activities    ActivityLogs[]
-}
-
-model Folder {
-  id   Int    @id @default(autoincrement())
-  name String
-
-  pid     Int?
-  isRoot  Boolean @default(false)
-
-  parent   Folder?  @relation("FolderToFolder", fields: [pid], references: [id], onDelete: Cascade)
-  children Folder[] @relation("FolderToFolder")
-
-  uid  Int
-  user User @relation(fields: [uid], references: [id], onDelete: Cascade)
-
-  files File[]
-  trash TrashLogs[]
-
-  isShared       Boolean    @default(false)
-  inviteCode     String?    @unique
-  isInviteActive Boolean    @default(false)
-  visibility     Visibility @default(PRIVATE)
-
-  members    FolderMember[]
-  requests   FolderJoinRequest[]
-  activities ActivityLogs[]
-
-  // NULL = active
-  // non-NULL = currently in trash
-  deletedAt DateTime?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([uid, deletedAt])
-  @@index([pid, deletedAt])
-}
-
-model FolderMember {
-  id Int @id @default(autoincrement())
-
-  folderId Int
-  folder   Folder @relation(fields: [folderId], references: [id], onDelete: Cascade)
-
-  userId Int
-  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  role     FolderRole
-  joinedAt DateTime   @default(now())
-
-  @@unique([folderId, userId])
-}
-
-model FolderJoinRequest {
-  id Int @id @default(autoincrement())
-
-  folderId Int
-  folder   Folder @relation(fields: [folderId], references: [id], onDelete: Cascade)
-
-  requestedBy Int
-  user        User @relation(fields: [requestedBy], references: [id], onDelete: Cascade)
-
-  message String?
-
-  status RequestStatus @default(PENDING)
-
-  requestedAt DateTime @default(now())
-
-  @@unique([folderId, requestedBy])
-}
-
-model File {
-  id       Int    @id @default(autoincrement())
-  orgName  String
-  stoName  String @unique
-  mimeType String
-  size     Int
-
-  folderId Int
-  folder   Folder @relation(fields: [folderId], references: [id], onDelete: Cascade)
-
-  uid  Int
-  user User @relation(fields: [uid], references: [id], onDelete: Cascade)
-
-  fileShares FileShare[]
-  trash      TrashLogs[]
-
-  // NULL = active
-  // non-NULL = currently in trash
-  deletedAt DateTime?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([uid, deletedAt])
-  @@index([folderId, deletedAt])
-}
-
-model FileShare {
-  id        Int       @id @default(autoincrement())
-  token     String    @unique
-  fileId    Int
-  uid       Int
-  isActive  Boolean   @default(true)
-  expiresAt DateTime?
-  createdAt DateTime  @default(now())
-
-  file File @relation(fields: [fileId], references: [id], onDelete: Cascade)
-  user User @relation(fields: [uid], references: [id], onDelete: Cascade)
-
-  @@unique([fileId, uid])
-}
-
-model ActivityLogs {
-  id Int @id @default(autoincrement())
-
-  folderId Int
-  folder   Folder @relation(fields: [folderId], references: [id], onDelete: Cascade)
-
-  userId Int
-  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  action   ActivityType
-  target   TargetType
-  targetId Int?
-  message  String?
-
-  createdAt DateTime @default(now())
-}
-
-model TrashLogs {
-  id       Int       @id @default(autoincrement())
-  location String
-  type     TrashType
-  expiry   DateTime
-
-  // Original parent folder ID
-  pid Int
-
-  uid  Int
-  user User @relation(fields: [uid], references: [id], onDelete: Cascade)
-
-  // Present only for FILE trash entries
-  fileId Int?
-  file   File? @relation(fields: [fileId], references: [id], onDelete: SetNull)
-
-  // Present only for FOLDER trash entries
-  folderId Int?
-  folder   Folder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
-
-  createdAt DateTime @default(now())
-
-  @@index([uid, expiry])
-  @@index([fileId])
-  @@index([folderId])
 }

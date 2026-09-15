@@ -94,27 +94,31 @@
 
 /* ---- THEME SPECIFIC OVERRIDES ---- */
 [data-theme="dark"] {
-  --bg-app:           #06030f;
-  --bg-main:          #0a0518;
-  --bg-card:          rgba(18, 10, 40, 0.85);
-  --bg-card-hover:    rgba(28, 16, 60, 0.9);
-  --bg-card-solid:    #120a2a;
-  --bg-glass:         rgba(15, 8, 35, 0.85);
-  --bg-glass-heavy:   rgba(18, 10, 42, 0.95);
-  --bg-input:         rgba(22, 12, 48, 0.9);
-  --bg-sidebar:       #090518;
-  --bg-subtle:        rgba(124, 58, 237, 0.15);
-  --bg-muted:         rgba(124, 58, 237, 0.22);
-  --bg-table-header:  #100a26;
-  --bg-table-hover:   rgba(124, 58, 237, 0.16);
-  --border-subtle:    rgba(168, 85, 247, 0.18);
-  --border-medium:    rgba(168, 85, 247, 0.3);
-  --border-glow:      rgba(168, 85, 247, 0.55);
-  --text-main:        #e2d9f3;
-  --text-heading:     #f5f0ff;
-  --text-muted:       #a395c4;
-  --text-dim:         #7a6a9e;
-  --text-inverse:     #0f0a2a;
+  --bg-app:           #0b0f19;
+  --bg-main:          #0b0f19;
+  --bg-card:          #131c2e;
+  --bg-card-hover:    #18233a;
+  --bg-card-solid:    #131c2e;
+  --bg-glass:         rgba(19, 28, 46, 0.85);
+  --bg-glass-heavy:   rgba(19, 28, 46, 0.95);
+  --bg-input:         #18233a;
+  --bg-sidebar:       #0e1526;
+  --bg-subtle:        rgba(99, 102, 241, 0.12);
+  --bg-muted:         rgba(99, 102, 241, 0.18);
+  --bg-table-header:  #111827;
+  --bg-table-hover:   rgba(99, 102, 241, 0.12);
+  --border-subtle:    rgba(255, 255, 255, 0.08);
+  --border-medium:    rgba(255, 255, 255, 0.15);
+  --border-glow:      rgba(99, 102, 241, 0.45);
+  --text-main:        #e2e8f0;
+  --text-heading:     #f8fafc;
+  --text-muted:       #94a3b8;
+  --text-dim:         #64748b;
+  --text-inverse:     #0b0f19;
+  --sidebar-active-bg: rgba(99, 102, 241, 0.18);
+  --sidebar-active-text: #a5b4fc;
+  --accent-primary:   #6366f1;
+  --accent-gradient:  linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
   --shadow-xs:        0 1px 3px rgba(0, 0, 0, 0.3);
   --shadow-sm:        0 2px 8px rgba(0, 0, 0, 0.4);
   --shadow-md:        0 8px 24px rgba(0, 0, 0, 0.5);
@@ -123,27 +127,36 @@
 }
 
 [data-theme="light"] {
-  --bg-app:           #f8f7ff;
-  --bg-main:          #ffffff;
-  --bg-card:          rgba(255, 255, 255, 0.92);
-  --bg-card-hover:    #f3f0ff;
+  --bg-app:           #f4f6fb;
+  --bg-main:          #f4f6fb;
+  --bg-card:          #ffffff;
+  --bg-card-hover:    #fafbfe;
   --bg-card-solid:    #ffffff;
-  --bg-glass:         rgba(255, 255, 255, 0.85);
-  --bg-glass-heavy:   rgba(255, 255, 255, 0.95);
-  --bg-input:         #ffffff;
+  --bg-glass:         rgba(255, 255, 255, 0.9);
+  --bg-glass-heavy:   rgba(255, 255, 255, 0.98);
+  --bg-input:         #f3f4f8;
   --bg-sidebar:       #ffffff;
-  --bg-subtle:        rgba(124, 58, 237, 0.06);
-  --bg-muted:         rgba(124, 58, 237, 0.12);
-  --bg-table-header:  rgba(248, 244, 255, 0.95);
-  --bg-table-hover:   rgba(240, 235, 255, 0.7);
-  --border-subtle:    rgba(124, 58, 237, 0.12);
-  --border-medium:    rgba(124, 58, 237, 0.22);
-  --border-glow:      rgba(124, 58, 237, 0.45);
-  --text-main:        #1e1b4b;
-  --text-heading:     #0f0a2a;
-  --text-muted:       #5b5380;
-  --text-dim:         #8f86b4;
+  --bg-subtle:        #f3f4f8;
+  --bg-muted:         #ede9fe;
+  --bg-table-header:  #f8fafc;
+  --bg-table-hover:   #f8faff;
+  --border-subtle:    #eef1f6;
+  --border-medium:    #e2e8f0;
+  --border-glow:      rgba(99, 102, 241, 0.3);
+  --text-main:        #1e293b;
+  --text-heading:     #0f172a;
+  --text-muted:       #64748b;
+  --text-dim:         #94a3b8;
   --text-inverse:     #ffffff;
+  --sidebar-active-bg: #ede9fe;
+  --sidebar-active-text: #4f46e5;
+  --accent-primary:   #4f46e5;
+  --accent-gradient:  linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  --shadow-xs:        0 1px 3px rgba(15, 23, 42, 0.04);
+  --shadow-sm:        0 2px 8px rgba(15, 23, 42, 0.06);
+  --shadow-md:        0 8px 24px rgba(15, 23, 42, 0.08);
+  --shadow-lg:        0 16px 40px rgba(15, 23, 42, 0.1);
+  --shadow-xl:        0 24px 60px rgba(15, 23, 42, 0.12);
 }
 
 /* ---- GLOBAL RESET ---- */

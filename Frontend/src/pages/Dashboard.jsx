@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useFolderManager } from "../hooks/useFolderManager";
 import { formatBytes, formatDate } from "../utils/formatters";
 import FileIcon from "../components/fileIcon";
@@ -15,8 +15,8 @@ import ActionBottomSheet from "../components/ActionBottomSheet";
 import DirectoryMoveModal from "../components/DirectoryMoveModal";
 import ShareModal from "../components/ShareModal";
 import TrashModal from "../components/TrashModal";
-import { DownloadIcon, MoveIcon, RenameIcon, DeleteIcon } from "../components/ActionIcons";
 import { lockBodyScroll, unlockBodyScroll } from "../utils/scrollLock";
+import axios from "../api/axios";
 
 export default function FolderView() {
     const {
@@ -26,10 +26,10 @@ export default function FolderView() {
         loading, isUploading, isDragging, setIsDragging, showCreator, setShowCreator,
         editingItem, setEditingItem, renameValue, setRenameValue, movingItem, setMovingItem,
         previewItem, previewFile, closePreview,
-        toasts, expandedFolders, treeNodes, foldersCache, currentFolderInfo,
+        toasts, currentFolderInfo,
         createFolder, deleteFolder, deleteFile,
         downloadFile, shareFile, openShareModal, closeShareModal, shareModalItem, handleRenameSubmit, executeMove, moveItemToFolder, handleFileUpload,
-        handleFolderSelect, toggleFolderExpand, goBack, refreshAfterSharedAction, showToast
+        handleFolderSelect, goBack, refreshAfterSharedAction, showToast
     } = useFolderManager();
 
     const [sharedPanel, setSharedPanel] = useState(null);
@@ -39,8 +39,9 @@ export default function FolderView() {
     const [showMoveModal, setShowMoveModal] = useState(false);
     const [activeBottomSheet, setActiveBottomSheet] = useState(null);
     const [showTrash, setShowTrash] = useState(false);
-    const [isProjectsExpanded, setIsProjectsExpanded] = useState(true);
     const [viewMode, setViewMode] = useState("list");
+    const [activeNav, setActiveNav] = useState("dashboard");
+    const [selectedRows, setSelectedRows] = useState(new Set());
 
     useEffect(() => {
         if (mobileSidebarOpen) {
@@ -56,7 +57,7 @@ export default function FolderView() {
             {
                 type: 'move',
                 label: "Move",
-                onClick: (e) => {
+                onClick: () => {
                     setMovingItem({ type: 'folder', id: item.id, name: item.name });
                     setShowMoveModal(true);
                 }
@@ -64,7 +65,7 @@ export default function FolderView() {
             {
                 type: 'rename',
                 label: "Rename",
-                onClick: (e) => {
+                onClick: () => {
                     setEditingItem({ type: 'folder', id: item.id });
                     setRenameValue(item.name);
                 }
@@ -84,12 +85,12 @@ export default function FolderView() {
             {
                 type: 'share',
                 label: "Share",
-                onClick: (e) => shareFile(item.id)
+                onClick: () => shareFile(item.id)
             },
             {
                 type: 'move',
                 label: "Move",
-                onClick: (e) => {
+                onClick: () => {
                     setMovingItem({ type: 'file', id: item.id, name: item.orgName });
                     setShowMoveModal(true);
                 }
@@ -97,7 +98,7 @@ export default function FolderView() {
             {
                 type: 'rename',
                 label: "Rename",
-                onClick: (e) => {
+                onClick: () => {
                     setEditingItem({ type: 'file', id: item.id });
                     setRenameValue(item.orgName);
                 }
@@ -111,10 +112,6 @@ export default function FolderView() {
         ];
 
         setActiveBottomSheet({ name, actions });
-    };
-
-    const toggleSharedPanel = (panel) => {
-        setSharedPanel((prev) => (prev === panel ? null : panel));
     };
 
     const handleSharedFolderCreated = async () => {
@@ -171,7 +168,6 @@ export default function FolderView() {
         e.stopPropagation();
         setDropTargetId(null);
 
-        // Check if external file upload drop
         if (e.dataTransfer.files && e.dataTransfer.files.length > 0 && !draggedItem) {
             if (targetFolderId > 0) {
                 handleFileUpload(e.dataTransfer.files[0], targetFolderId);
@@ -197,291 +193,98 @@ export default function FolderView() {
         }
     };
 
-    // Helper to format type labels
-    const getFileTypeLabel = (mimeType) => {
-        if (!mimeType) return "File";
-        if (mimeType.startsWith("image/")) return "Image file";
-        if (mimeType === "application/pdf") return "PDF Document";
-        if (mimeType.startsWith("audio/")) return "Audio track";
-        if (mimeType.startsWith("video/")) return "Video clip";
-        if (mimeType.startsWith("text/")) return "Text document";
-        if (mimeType.includes("zip") || mimeType.includes("tar") || mimeType.includes("gzip")) return "Archive";
+    const getFileTypeLabel = (mimeType, fileName = "") => {
+        if (!mimeType && !fileName) return "Document";
+        const name = (fileName || "").toLowerCase();
+        if (mimeType?.startsWith("image/") || name.match(/\.(png|jpe?g|gif|webp|svg)$/)) return "Image";
+        if (mimeType === "application/pdf" || name.endsWith(".pdf")) return "PDF";
+        if (mimeType?.startsWith("audio/") || name.match(/\.(mp3|wav|ogg|m4a)$/)) return "Audio";
+        if (mimeType?.startsWith("video/") || name.match(/\.(mp4|mov|webm|mkv)$/)) return "Video";
+        if (name.match(/\.(doc|docx)$/)) return "Document";
+        if (name.match(/\.(xls|xlsx)$/)) return "Spreadsheet";
+        if (mimeType?.includes("zip") || name.match(/\.(zip|tar|gz|rar)$/)) return "Archive";
         return "Document";
     };
 
-    // Overall storage breakdown metrics for all user files across all folders
-    const categoryStats = storageBreakdown || { image: 0, video: 0, audio: 0, document: 0 };
-    const totalStorageUsed = userProfile?.usedStorage || (categoryStats.image + categoryStats.video + categoryStats.audio + categoryStats.document);
-
-    // Calculate Storage Usage values
+    // Calculate Storage metrics — only use real values from API, never fake fallbacks
     const usedStorageBytes = userProfile?.usedStorage || 0;
-    const limitStorageBytes = userProfile?.storageLimit || 524288000;
-    const storagePercent = Math.min(100, Math.round((usedStorageBytes / limitStorageBytes) * 100));
+    const limitStorageBytes = userProfile?.storageLimit || 0;
+    const storagePercent = limitStorageBytes > 0
+        ? Math.min(100, Math.round((usedStorageBytes / limitStorageBytes) * 100))
+        : 0;
 
-    // Derive Project Folders & Personal Folders Grid
-    const allFoldersList = [...(treeNodes[-1]?.children || treeNodes[-1]?.subfolders || []), ...folders, ...Object.values(foldersCache)];
-    const projectFoldersMap = new Map();
-    allFoldersList.forEach(f => {
-        if (f && f.id && (f.isShared || (userProfile?.id && f.uid && f.uid !== userProfile.id) || f.inviteCode)) {
-            projectFoldersMap.set(f.id, f);
+    // Category breakdown — show 0 when not yet loaded; never fallback to fake numbers
+    const categoryStats = storageBreakdown || {};
+    const docSize = formatBytes(categoryStats.document || 0);
+    const imgSize = formatBytes(categoryStats.image || 0);
+    const vidSize = formatBytes(categoryStats.video || 0);
+    const audSize = formatBytes(categoryStats.audio || 0);
+
+    // Greeting according to local time
+    const getGreeting = () => {
+        const hour = new Date().getHours();
+        if (hour < 12) return "Good morning";
+        if (hour < 18) return "Good afternoon";
+        return "Good evening";
+    };
+
+    // Real user info — never show hardcoded dummy values
+    const userName = userProfile?.name || "";
+    const userEmail = userProfile?.email || "";
+
+    // Checkbox toggling
+    const toggleRowSelect = (id) => {
+        setSelectedRows(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
+
+    // Real activity state — fetched from the root folder's activity log
+    const [recentActivity, setRecentActivity] = useState([]);
+    const [activityLoading, setActivityLoading] = useState(false);
+
+    const fetchRecentActivity = useCallback(async (fId) => {
+        if (!fId || fId === -1) return;
+        setActivityLoading(true);
+        try {
+            const { data } = await axios.get(`api/folder/activities/${fId}`);
+            setRecentActivity((data.data || []).slice(0, 4));
+        } catch {
+            setRecentActivity([]);
+        } finally {
+            setActivityLoading(false);
         }
-    });
-    const projectFolders = Array.from(projectFoldersMap.values());
-    const personalFoldersGrid = filteredFolders.filter(f => !f.isShared && (!userProfile?.id || f.uid === userProfile.id) && !f.inviteCode);
-    const displayFolders = isSharedFolderContext ? filteredFolders : personalFoldersGrid;
+    }, []);
 
-    // Sidebar Folder Tree Rendering
-    const renderTreeNode = (node, depth = 0) => {
-        const isExpanded = expandedFolders[node.id];
-        const isActive = currentFolderId === node.id;
-        const isTarget = dropTargetId === node.id;
-        const nodeData = treeNodes[node.id];
-        const subfolders = nodeData?.subfolders || (Array.isArray(nodeData) ? nodeData : []);
-        const nodeFiles = nodeData?.files || [];
-        const hasContent = subfolders.length > 0 || nodeFiles.length > 0;
+    useEffect(() => {
+        if (rootFolderId && rootFolderId !== -1) {
+            fetchRecentActivity(rootFolderId);
+        }
+    }, [rootFolderId, fetchRecentActivity]);
 
-        return (
-            <div key={node.id} className="tree-node-wrapper">
-                <div
-                    className={`tree-node ${isActive ? 'active' : ''} ${isTarget ? 'drag-over-target' : ''}`}
-                    style={{ paddingLeft: `${12 + depth * 14}px` }}
-                    onClick={() => handleFolderSelect(node)}
-                    draggable={true}
-                    onDragStart={(e) => handleDragStartItem(e, { type: 'folder', id: node.id, name: node.name })}
-                    onDragEnd={handleDragEndItem}
-                    onDragOver={(e) => handleDragOverTarget(e, node.id)}
-                    onDragLeave={(e) => handleDragLeaveTarget(e, node.id)}
-                    onDrop={(e) => handleDropOnTarget(e, node.id)}
-                >
-                    <svg
-                        className={`tree-chevron ${isExpanded ? 'expanded' : ''}`}
-                        onClick={(e) => toggleFolderExpand(node.id, e)}
-                        viewBox="0 0 24 24"
-                    >
-                        <path d="M8.59,16.59L13.17,12L8.59,7.41L10,6L16,12L10,18L8.59,16.59Z" />
-                    </svg>
-                    <svg className="tree-icon" viewBox="0 0 24 24">
-                        <path d="M10,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V8C22,6.89 21.1,6 20,6H12L10,4Z" />
-                    </svg>
-                    <span className="tree-node-name">{node.name}</span>
-                </div>
-
-                {isExpanded && (
-                    <div className="tree-children">
-                        {nodeData ? (
-                            !hasContent ? (
-                                <div className="tree-node empty-tree" style={{ paddingLeft: `${28 + depth * 14}px` }}>
-                                    (Empty)
-                                </div>
-                            ) : (
-                                <>
-                                    {subfolders.map(child => renderTreeNode(child, depth + 1))}
-                                    {nodeFiles.map(file => (
-                                        <div
-                                            key={`tree-file-${file.id}`}
-                                            className="tree-node tree-file-node"
-                                            style={{ paddingLeft: `${28 + depth * 14}px` }}
-                                            onClick={(e) => previewFile(e, file)}
-                                            draggable={true}
-                                            onDragStart={(e) => handleDragStartItem(e, { type: 'file', id: file.id, name: file.orgName })}
-                                            onDragEnd={handleDragEndItem}
-                                        >
-                                            <FileIcon mimeType={file.mimeType} size={16} />
-                                            <span className="tree-node-name">{file.orgName}</span>
-                                        </div>
-                                    ))}
-                                </>
-                            )
-                        ) : (
-                            <div className="tree-node loading-tree" style={{ paddingLeft: `${28 + depth * 14}px` }}>
-                                Loading...
-                            </div>
-                        )}
-                    </div>
-                )}
-            </div>
-        );
+    // Helper: map activity action type to icon + colour
+    const getActivityMeta = (action = "") => {
+        const a = action.toUpperCase();
+        if (a.includes("FOLDER") && (a.includes("CREATE") || a.includes("ADD")))
+            return { color: "yellow", icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" /></svg> };
+        if (a.includes("UPLOAD") || a.includes("FILE") && a.includes("ADD"))
+            return { color: "blue", icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg> };
+        if (a.includes("JOIN") || a.includes("MEMBER"))
+            return { color: "purple", icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /></svg> };
+        if (a.includes("DELETE") || a.includes("TRASH") || a.includes("REMOVE"))
+            return { color: "red", icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /></svg> };
+        return { color: "blue", icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg> };
     };
 
-    const renderProjectsSection = () => (
-        <div className="sidebar-section projects-sidebar-section" style={{ marginTop: '8px', paddingLeft: '8px' }}>
-            <div className="sidebar-section-title projects-header-title" onClick={(e) => { e.stopPropagation(); setIsProjectsExpanded(prev => !prev); }}>
-                <div className="projects-title-left">
-                    <svg className="projects-title-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-                    </svg>
-                    <span>PROJECTS</span>
-                </div>
-                <svg className={`projects-chevron ${isProjectsExpanded ? 'expanded' : ''}`} width="14" height="14" viewBox="0 0 24 24">
-                    <path d="M8.59,16.59L13.17,12L8.59,7.41L10,6L16,12L10,18L8.59,16.59Z" fill="currentColor"/>
-                </svg>
-            </div>
-
-            {isProjectsExpanded && (
-                <>
-                    {projectFolders.length === 0 ? (
-                        <div className="projects-empty-card">
-                            <div className="projects-empty-card-header">
-                                <div className="projects-empty-card-icon">
-                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                                        <circle cx="9" cy="7" r="4" />
-                                        <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-                                        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                                    </svg>
-                                </div>
-                                <div className="projects-empty-card-text">
-                                    <span className="projects-empty-title">No projects yet</span>
-                                    <span className="projects-empty-desc">Create or join a workspace</span>
-                                </div>
-                            </div>
-                            <div className="projects-empty-actions">
-                                <button type="button" className="projects-action-btn primary" onClick={() => setSharedPanel('create')}>
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                        <line x1="12" y1="5" x2="12" y2="19" />
-                                        <line x1="5" y1="12" x2="19" y2="12" />
-                                    </svg>
-                                    <span>Create Project</span>
-                                </button>
-                                <button type="button" className="projects-action-btn secondary" onClick={() => setSharedPanel('join')}>
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                        <path d="M15 3h6v6" />
-                                        <path d="M10 14L21 3" />
-                                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                                    </svg>
-                                    <span>Join Project</span>
-                                </button>
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="projects-list">
-                            {projectFolders.map(proj => {
-                                const isActive = currentFolderId === proj.id || history.some(h => h.id === proj.id);
-                                return (
-                                    <div
-                                        key={`project-item-${proj.id}`}
-                                        className={`sidebar-project-card ${isActive ? 'active' : ''}`}
-                                        onClick={() => handleFolderSelect(proj)}
-                                    >
-                                        <div className="project-card-icon-box">
-                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-                                            </svg>
-                                        </div>
-                                        <div className="project-card-info">
-                                            <span className="project-card-name">{proj.name}</span>
-                                            <span className="project-card-meta">
-                                                {proj.userRole || (proj.uid === userProfile?.id ? "OWNER" : "MEMBER")}
-                                            </span>
-                                        </div>
-                                        <svg className="project-card-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                            <polyline points="9 18 15 12 9 6" />
-                                        </svg>
-                                    </div>
-                                );
-                            })}
-                            <div className="projects-footer-actions">
-                                <button type="button" className="projects-action-btn primary" onClick={() => setSharedPanel('create')}>
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                        <line x1="12" y1="5" x2="12" y2="19" />
-                                        <line x1="5" y1="12" x2="19" y2="12" />
-                                    </svg>
-                                    <span>Create</span>
-                                </button>
-                                <button type="button" className="projects-action-btn secondary" onClick={() => setSharedPanel('join')}>
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                        <path d="M15 3h6v6" />
-                                        <path d="M10 14L21 3" />
-                                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                                    </svg>
-                                    <span>Join</span>
-                                </button>
-                            </div>
-                        </div>
-                    )}
-                </>
-            )}
-        </div>
-    );
-
-    const renderRootNode = () => {
-        const rootIdKey = rootFolderId !== -1 ? rootFolderId : -1;
-        const isExpanded = expandedFolders[rootIdKey] !== undefined
-            ? expandedFolders[rootIdKey]
-            : (expandedFolders[-1] !== undefined ? expandedFolders[-1] : true);
-        const isActive = currentFolderId === rootFolderId || currentFolderId === -1 || currentFolderId === 0;
-        const isTarget = dropTargetId === -1 || dropTargetId === rootFolderId;
-        const rootData = treeNodes[rootIdKey] || treeNodes[-1];
-        const allRootSubs = rootData?.subfolders || (Array.isArray(rootData) ? rootData : []);
-        const rootSubfolders = allRootSubs.filter(f => !f.isShared && (!userProfile?.id || f.uid === userProfile.id) && !f.inviteCode);
-        const rootFiles = rootData?.files || [];
-        const hasRootContent = rootSubfolders.length > 0 || rootFiles.length > 0;
-
-        return (
-            <div className="tree-node-wrapper">
-                <div
-                    className={`tree-node ${isActive ? 'active' : ''} ${isTarget ? 'drag-over-target' : ''}`}
-                    onClick={() => handleFolderSelect({ id: rootFolderId !== -1 ? rootFolderId : -1, name: "Root", pid: null })}
-                    onDragOver={(e) => handleDragOverTarget(e, rootFolderId !== -1 ? rootFolderId : -1)}
-                    onDragLeave={(e) => handleDragLeaveTarget(e, rootFolderId !== -1 ? rootFolderId : -1)}
-                    onDrop={(e) => handleDropOnTarget(e, rootFolderId !== -1 ? rootFolderId : -1)}
-                >
-                    <svg
-                        className={`tree-chevron ${isExpanded ? 'expanded' : ''}`}
-                        onClick={(e) => toggleFolderExpand(rootFolderId !== -1 ? rootFolderId : -1, e)}
-                        viewBox="0 0 24 24"
-                    >
-                        <path d="M8.59,16.59L13.17,12L8.59,7.41L10,6L16,12L10,18L8.59,16.59Z" />
-                    </svg>
-                    <svg className="tree-icon root-icon" viewBox="0 0 24 24">
-                        <path d="M12,3L20,9V21H16V14H8V21H4V9L12,3Z" />
-                    </svg>
-                    <span className="tree-node-name">Root Drive</span>
-                </div>
-
-                {isExpanded && (
-                    <div className="tree-children">
-                        {rootData ? (
-                            !hasRootContent ? (
-                                <div className="tree-node empty-tree" style={{ paddingLeft: '28px' }}>
-                                    (No Items)
-                                </div>
-                            ) : (
-                                <>
-                                    {rootSubfolders.map(child => renderTreeNode(child, 0))}
-                                    {rootFiles.map(file => (
-                                        <div
-                                            key={`tree-file-${file.id}`}
-                                            className="tree-node tree-file-node"
-                                            style={{ paddingLeft: '28px' }}
-                                            onClick={(e) => previewFile(e, file)}
-                                            draggable={true}
-                                            onDragStart={(e) => handleDragStartItem(e, { type: 'file', id: file.id, name: file.orgName })}
-                                            onDragEnd={handleDragEndItem}
-                                        >
-                                            <FileIcon mimeType={file.mimeType} size={16} />
-                                            <span className="tree-node-name">{file.orgName}</span>
-                                        </div>
-                                    ))}
-                                </>
-                            )
-                        ) : (
-                            <div className="tree-node loading-tree" style={{ paddingLeft: '28px' }}>
-                                Loading...
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                {/* Projects Dropdown dynamically positioned right below Root Drive */}
-                {renderProjectsSection()}
-            </div>
-        );
-    };
+    // Folder cards — only real data, never mock
+    const displayFolderCards = filteredFolders;
 
     return (
         <div className="app-container">
-            {/* Header Topbar Navigation */}
+            {/* Topbar Header */}
             <Navbar
                 searchQuery={searchQuery}
                 setSearchQuery={setSearchQuery}
@@ -489,156 +292,159 @@ export default function FolderView() {
                 onToggleSidebar={() => setMobileSidebarOpen(prev => !prev)}
             />
 
-            <div className="dashboard-layout">
-                {/* Backdrop for Mobile Drawer */}
+            <div className="cb-dashboard-wrapper">
+                {/* Mobile Sidebar Backdrop */}
                 {mobileSidebarOpen && (
                     <div className="sidebar-backdrop active" onClick={() => setMobileSidebarOpen(false)}></div>
                 )}
 
-                {/* Modern Sidebar */}
-                <aside className={`sidebar ${mobileSidebarOpen ? 'mobile-open' : ''}`}>
-                    {/* Mobile Drawer Header */}
-                    <div className="mobile-drawer-header">
-                        <div className="mobile-drawer-brand">
-                            <svg className="cloudbox-logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
-                            </svg>
-                            <span className="brand-name">CloudBox</span>
-                        </div>
+                {/* ─── 1. LEFT SIDEBAR ─────────────────────────────────────── */}
+                <aside className={`cb-left-sidebar ${mobileSidebarOpen ? 'mobile-open' : ''}`}>
+                    <nav className="cb-sidebar-nav">
                         <button
-                            className="mobile-drawer-close-btn"
-                            onClick={() => setMobileSidebarOpen(false)}
-                            aria-label="Close menu"
+                            type="button"
+                            className={`cb-nav-item ${activeNav === 'dashboard' ? 'active' : ''}`}
+                            onClick={() => {
+                                setActiveNav('dashboard');
+                                handleFolderSelect({ id: rootFolderId !== -1 ? rootFolderId : -1, name: "Root", pid: null });
+                                setMobileSidebarOpen(false);
+                            }}
                         >
-                            ✕
-                        </button>
-                    </div>
-
-                    {/* Sidebar Brand (desktop) */}
-                    <div className="sidebar-brand">
-                        <div className="sidebar-brand-icon">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M19.35,10.03C18.67,6.59 15.64,4 12,4C9.11,4 6.6,5.64 5.35,8.03C2.34,8.36 0,10.9 0,14C0,17.1 2.9,20 6,20H19C21.76,20 24,17.76 24,15C24,12.36 21.95,10.22 19.35,10.03Z" />
-                            </svg>
-                        </div>
-                        <span className="sidebar-brand-name">CloudBox</span>
-                    </div>
-
-                    {/* Main Nav */}
-                    <nav className="sidebar-nav">
-                        <div
-                            className={`sidebar-nav-item ${(currentFolderId === -1 || currentFolderId === rootFolderId) && !isSharedFolderContext ? 'active' : ''}`}
-                            onClick={() => handleFolderSelect({ id: rootFolderId !== -1 ? rootFolderId : -1, name: "Root", pid: null })}
-                        >
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <rect x="3" y="3" width="7" height="7" rx="1.5" />
-                                <rect x="14" y="3" width="7" height="7" rx="1.5" />
-                                <rect x="14" y="14" width="7" height="7" rx="1.5" />
-                                <rect x="3" y="14" width="7" height="7" rx="1.5" />
+                            <svg className="cb-nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
                             </svg>
                             <span>Dashboard</span>
-                        </div>
+                        </button>
 
-                        <div className="sidebar-nav-item" onClick={() => handleFolderSelect({ id: rootFolderId !== -1 ? rootFolderId : -1, name: "Root", pid: null })}>
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
-                                <polyline points="13 2 13 9 20 9" />
+                        <button
+                            type="button"
+                            className={`cb-nav-item ${activeNav === 'files' ? 'active' : ''}`}
+                            onClick={() => {
+                                setActiveNav('files');
+                                handleFolderSelect({ id: rootFolderId !== -1 ? rootFolderId : -1, name: "Root", pid: null });
+                                setMobileSidebarOpen(false);
+                            }}
+                        >
+                            <svg className="cb-nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
                             </svg>
-                            <span>All Files</span>
-                        </div>
+                            <span>My Files</span>
+                        </button>
 
-                        <div className="sidebar-nav-item" onClick={() => setSharedPanel('members')}>
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <button
+                            type="button"
+                            className={`cb-nav-item ${activeNav === 'projects' ? 'active' : ''}`}
+                            onClick={() => {
+                                setActiveNav('projects');
+                                setSharedPanel('create');
+                                setMobileSidebarOpen(false);
+                            }}
+                        >
+                            <svg className="cb-nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
                                 <circle cx="9" cy="7" r="4" />
                                 <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
                                 <path d="M16 3.13a4 4 0 0 1 0 7.75" />
                             </svg>
-                            <span>Shared with me</span>
-                        </div>
+                            <span>Projects</span>
+                        </button>
 
-                        <div className="sidebar-nav-item">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                        <button
+                            type="button"
+                            className={`cb-nav-item ${activeNav === 'shared' ? 'active' : ''}`}
+                            onClick={() => {
+                                setActiveNav('shared');
+                                setSharedPanel('members');
+                                setMobileSidebarOpen(false);
+                            }}
+                        >
+                            <svg className="cb-nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
                             </svg>
-                            <span>Starred</span>
-                        </div>
+                            <span>Shared with Me</span>
+                        </button>
 
-                        <div className="sidebar-nav-item">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <circle cx="12" cy="12" r="10" />
-                                <polyline points="12 6 12 12 16 14" />
-                            </svg>
-                            <span>Recent</span>
-                        </div>
-
-                        <div className="sidebar-nav-item" onClick={() => setShowTrash(true)}>
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <button
+                            type="button"
+                            className={`cb-nav-item ${activeNav === 'trash' ? 'active' : ''}`}
+                            onClick={() => {
+                                setActiveNav('trash');
+                                setShowTrash(true);
+                                setMobileSidebarOpen(false);
+                            }}
+                        >
+                            <svg className="cb-nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <polyline points="3 6 5 6 21 6" />
                                 <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
                                 <path d="M10 11v6" /><path d="M14 11v6" />
                                 <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
                             </svg>
                             <span>Trash</span>
-                        </div>
+                        </button>
                     </nav>
 
-                    {/* Projects Section */}
-                    <div className="sidebar-projects">
-                        <div className="sidebar-projects-header">
-                            <span className="sidebar-projects-label">Projects</span>
-                            <button type="button" className="sidebar-projects-add" onClick={() => setSharedPanel('create')} title="New Project">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                    <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-                                </svg>
+                    {/* Bottom Left Sidebar Storage & Profile */}
+                    <div className="cb-sidebar-bottom">
+                        {/* Donut Storage Widget */}
+                        <div className="cb-sidebar-storage-card">
+                            <div className="cb-storage-donut-row">
+                                <div className="cb-donut-wrapper">
+                                    <svg className="cb-donut-svg" width="48" height="48" viewBox="0 0 36 36">
+                                        <path
+                                            className="cb-donut-bg"
+                                            d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                                            fill="none"
+                                            strokeWidth="3.8"
+                                        />
+                                        <path
+                                            className="cb-donut-fill"
+                                            strokeDasharray={`${storagePercent}, 100`}
+                                            d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                                            fill="none"
+                                            strokeWidth="3.8"
+                                        />
+                                    </svg>
+                                </div>
+                                <div className="cb-donut-text">
+                                    <span className="cb-donut-title">
+                                        {limitStorageBytes > 0
+                                            ? `${formatBytes(usedStorageBytes)} of ${formatBytes(limitStorageBytes)} used`
+                                            : "Loading storage..."}
+                                    </span>
+                                    <div className="cb-donut-mini-bar">
+                                        <div className="cb-donut-mini-fill" style={{ width: `${storagePercent}%` }}></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button
+                                type="button"
+                                className="cb-manage-storage-btn"
+                                onClick={() => showToast(`Total Storage: ${formatBytes(limitStorageBytes)} (${storagePercent}% used)`, "info")}
+                            >
+                                Manage Storage
                             </button>
                         </div>
 
-                        {projectFolders.length === 0 ? (
-                            <div className="sidebar-no-projects">
-                                <button type="button" className="sidebar-no-projects-btn" onClick={() => setSharedPanel('create')}>+ Create project</button>
-                                <button type="button" className="sidebar-no-projects-btn" onClick={() => setSharedPanel('join')}>Join with code</button>
+                        {/* Bottom Profile Snippet */}
+                        <div className="cb-sidebar-user-row">
+                            <div className="cb-user-avatar-sm">
+                                {userName.charAt(0).toUpperCase()}
                             </div>
-                        ) : (
-                            <div className="sidebar-projects-list">
-                                {projectFolders.map((proj, i) => {
-                                    const isActive = currentFolderId === proj.id || history.some(h => h.id === proj.id);
-                                    const colors = ['#7c3aed', '#ec4899', '#3b82f6', '#10b981', '#f59e0b', '#ef4444'];
-                                    return (
-                                        <div key={`proj-${proj.id}`} className={`sidebar-project-item ${isActive ? 'active' : ''}`} onClick={() => handleFolderSelect(proj)}>
-                                            <span className="sidebar-project-dot" style={{ background: colors[i % colors.length] }} />
-                                            <span className="sidebar-project-name">{proj.name}</span>
-                                        </div>
-                                    );
-                                })}
-                                <div className="sidebar-projects-footer">
-                                    <button type="button" className="sidebar-no-projects-btn" onClick={() => setSharedPanel('create')}>+ New</button>
-                                    <button type="button" className="sidebar-no-projects-btn" onClick={() => setSharedPanel('join')}>Join</button>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-
-
-
-                    {/* Storage Widget */}
-                    <div className="sidebar-storage">
-                        <div className="sidebar-storage-header">
-                            <span className="sidebar-storage-label">Storage</span>
-                            <span className="sidebar-storage-pct">{storagePercent}%</span>
-                        </div>
-                        <div className="sidebar-storage-bar">
-                            <div className="sidebar-storage-fill" style={{ width: `${storagePercent}%` }} />
-                        </div>
-                        <div className="sidebar-storage-meta">
-                            {formatBytes(usedStorageBytes)} of {formatBytes(limitStorageBytes)} used
+                            <span className="cb-user-email-text" title={userEmail}>
+                                {userEmail}
+                            </span>
+                            <svg className="cb-user-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <polyline points="9 18 15 12 9 6" />
+                            </svg>
                         </div>
                     </div>
                 </aside>
 
-                {/* Main Workspace Content */}
+                {/* ─── 2. CENTER CONTENT (WORKSPACE) ───────────────────────── */}
                 <main
-                    className="main-content"
+                    className="cb-center-content"
                     onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
                     onDragLeave={() => setIsDragging(false)}
                     onDrop={(e) => {
@@ -649,259 +455,270 @@ export default function FolderView() {
                         }
                     }}
                 >
-                    {/* Welcome Banner / Project Workspace Header */}
-                    {isSharedFolderContext ? (
-                        <div className="project-workspace-header">
-                            <div className="project-header-top">
-                                <div className="project-header-icon-wrapper">
-                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
-                                        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                    {/* Welcome Hero Card */}
+                    <div className="cb-hero-card">
+                        <div className="cb-hero-left">
+                            <h1 className="cb-hero-title">
+                                {getGreeting()}, {userName}
+                            </h1>
+                            <p className="cb-hero-subtitle">
+                                Your files. Anywhere. Always with you.
+                            </p>
+
+                            <div className="cb-hero-actions">
+                                <button
+                                    type="button"
+                                    className="cb-btn-upload"
+                                    onClick={() => document.getElementById("file-picker").click()}
+                                    disabled={isUploading}
+                                >
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                        <polyline points="17 8 12 3 7 8" />
+                                        <line x1="12" y1="3" x2="12" y2="15" />
                                     </svg>
-                                </div>
-                                <div className="project-header-info">
-                                    <div className="project-header-title-row">
-                                        <h2>{currentFolderInfo?.name || "Project Workspace"}</h2>
-                                        <span className="project-role-badge">{currentFolderInfo?.userRole || "MEMBER"}</span>
-                                    </div>
-                                    <p className="project-header-subtitle">
-                                        Collaborative Workspace {currentFolderInfo?.user?.name ? `• Created by ${currentFolderInfo.user.name}` : ""}
-                                        {currentFolderInfo?.inviteCode ? ` • Invite Code: ${currentFolderInfo.inviteCode}` : ""}
-                                    </p>
-                                </div>
-                            </div>
-                            <div className="project-header-actions">
-                                <button type="button" className="btn btn-secondary btn-sm" onClick={() => setSharedPanel('members')}>
-                                    Project Members
+                                    <span>{isUploading ? "Uploading..." : "Upload File"}</span>
                                 </button>
-                                {currentFolderInfo?.userRole === 'OWNER' && (
-                                    <button type="button" className="btn btn-secondary btn-sm" onClick={() => setSharedPanel('owner-panel')}>
-                                        Owner Panel
-                                    </button>
-                                )}
-                                {currentFolderInfo?.userRole === 'ADMIN' && (
-                                    <button type="button" className="btn btn-secondary btn-sm" onClick={() => setSharedPanel('admin-panel')}>
-                                        Admin Panel
-                                    </button>
-                                )}
-                                {(currentFolderInfo?.userRole === 'OWNER' || currentFolderInfo?.userRole === 'ADMIN') && (
-                                    <button type="button" className="btn btn-secondary btn-sm" onClick={() => setSharedPanel('activities')}>
-                                        Activity Logs
-                                    </button>
-                                )}
-                                <button type="button" className="btn btn-secondary btn-sm" onClick={() => setSharedPanel('requests')}>
-                                    Requests
+
+                                <button
+                                    type="button"
+                                    className="cb-btn-outlined"
+                                    onClick={() => setShowCreator(true)}
+                                >
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                                    </svg>
+                                    <span>Create Folder</span>
                                 </button>
+
+                                <button
+                                    type="button"
+                                    className="cb-btn-outlined"
+                                    onClick={() => setSharedPanel('create')}
+                                >
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                                        <circle cx="8.5" cy="7" r="4" />
+                                        <line x1="20" y1="8" x2="20" y2="14" />
+                                        <line x1="23" y1="11" x2="17" y2="11" />
+                                    </svg>
+                                    <span>New Project</span>
+                                </button>
+
+                                <input
+                                    id="file-picker"
+                                    type="file"
+                                    style={{ display: "none" }}
+                                    onChange={(e) => {
+                                        if (e.target.files && e.target.files[0]) {
+                                            handleFileUpload(e.target.files[0]);
+                                        }
+                                    }}
+                                />
                             </div>
                         </div>
-                    ) : (
-                        <div className="dashboard-welcome-container">
-                            <div className="dashboard-welcome">
-                                <div className="welcome-text">
-                                    <h2>Welcome back, {userProfile?.name || "Test"} 👋</h2>
-                                    <p>Manage your cloud files, personal directories, and storage effortlessly.</p>
 
-                                    <div className="quick-action-buttons">
-                                        <button
-                                            type="button"
-                                            className="btn btn-primary btn-upload-main"
-                                            onClick={() => document.getElementById("file-picker").click()}
-                                            disabled={isUploading}
-                                        >
-                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                                <line x1="12" y1="5" x2="12" y2="19" />
-                                                <line x1="5" y1="12" x2="19" y2="12" />
-                                            </svg>
-                                            <span>{isUploading ? "Uploading..." : "Upload File"}</span>
-                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginLeft: "2px" }}>
-                                                <path d="M6 9l6 6 6-6" />
-                                            </svg>
-                                        </button>
-
-                                        <button type="button" className="btn btn-secondary" onClick={() => setShowCreator(true)}>
-                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-                                                <line x1="12" y1="11" x2="12" y2="17" />
-                                                <line x1="9" y1="14" x2="15" y2="14" />
-                                            </svg>
-                                            <span>Create Folder</span>
-                                        </button>
-
-                                        <button type="button" className="btn btn-secondary" onClick={() => setSharedPanel('create')}>
-                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-                                                <line x1="12" y1="11" x2="12" y2="17" />
-                                                <line x1="9" y1="14" x2="15" y2="14" />
-                                            </svg>
-                                            <span>New Project</span>
-                                        </button>
-
-                                        <button type="button" className="btn btn-secondary btn-icon-only" title="More options">
-                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                                                <circle cx="12" cy="5" r="2" />
-                                                <circle cx="12" cy="12" r="2" />
-                                                <circle cx="12" cy="19" r="2" />
-                                            </svg>
-                                        </button>
-
-                                        <input
-                                            id="file-picker"
-                                            type="file"
-                                            style={{ display: "none" }}
-                                            onChange={(e) => {
-                                                if (e.target.files && e.target.files[0]) {
-                                                    handleFileUpload(e.target.files[0]);
-                                                }
-                                            }}
-                                        />
-                                    </div>
-                                </div>
-
-                                {/* Top Right Storage Used Widget Card */}
-                                <div className="top-storage-card">
-                                    <div className="top-storage-header">
-                                        <span className="top-storage-title">Storage Used</span>
-                                        <span className="top-storage-values">
-                                            {formatBytes(usedStorageBytes)} / {formatBytes(limitStorageBytes)}
-                                        </span>
-                                    </div>
-                                    <div className="top-storage-bar">
-                                        <div className="top-storage-fill" style={{ width: `${storagePercent}%` }}></div>
-                                    </div>
-                                    <div className="top-storage-footer">
-                                        <span className="top-storage-percent-text">{storagePercent}%</span>
-                                        <button type="button" className="top-storage-arrow-btn" title="Storage Details">
-                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                                <polyline points="9 18 15 12 9 6" />
-                                            </svg>
-                                        </button>
-                                    </div>
-                                </div>
+                        {/* Scenic Landscape Illustration on Right */}
+                        <div className="cb-hero-right">
+                            <div className="cb-scenic-illustration">
+                                <svg viewBox="0 0 340 140" fill="none" xmlns="http://www.w3.org/2000/svg" className="cb-scenic-svg">
+                                    {/* Soft warm sun */}
+                                    <circle cx="210" cy="55" r="32" fill="url(#sun-grad)" opacity="0.85" />
+                                    {/* Mountain Layer 1 */}
+                                    <path
+                                        d="M110 140 C145 90 190 75 240 110 C270 128 310 135 340 140 Z"
+                                        fill="url(#mountain-grad-1)"
+                                        opacity="0.6"
+                                    />
+                                    {/* Mountain Layer 2 */}
+                                    <path
+                                        d="M170 140 C210 95 260 90 310 125 C325 132 335 137 340 140 Z"
+                                        fill="url(#mountain-grad-2)"
+                                        opacity="0.75"
+                                    />
+                                    {/* Mountain Foreground */}
+                                    <path
+                                        d="M140 140 C190 110 240 105 340 140 Z"
+                                        fill="url(#mountain-grad-3)"
+                                        opacity="0.9"
+                                    />
+                                    <defs>
+                                        <linearGradient id="sun-grad" x1="210" y1="23" x2="210" y2="87" gradientUnits="userSpaceOnUse">
+                                            <stop stopColor="#fed7aa" />
+                                            <stop offset="1" stopColor="#fbcfe8" />
+                                        </linearGradient>
+                                        <linearGradient id="mountain-grad-1" x1="110" y1="80" x2="340" y2="140" gradientUnits="userSpaceOnUse">
+                                            <stop stopColor="#c7d2fe" />
+                                            <stop offset="1" stopColor="#e0e7ff" />
+                                        </linearGradient>
+                                        <linearGradient id="mountain-grad-2" x1="170" y1="90" x2="340" y2="140" gradientUnits="userSpaceOnUse">
+                                            <stop stopColor="#a5b4fc" />
+                                            <stop offset="1" stopColor="#c7d2fe" />
+                                        </linearGradient>
+                                        <linearGradient id="mountain-grad-3" x1="140" y1="105" x2="340" y2="140" gradientUnits="userSpaceOnUse">
+                                            <stop stopColor="#818cf8" stopOpacity="0.4" />
+                                            <stop offset="1" stopColor="#c7d2fe" stopOpacity="0.2" />
+                                        </linearGradient>
+                                    </defs>
+                                </svg>
                             </div>
+                            <div className="cb-hero-quote">
+                                A more organized<br />you, a brighter tomorrow.
+                            </div>
+                        </div>
+                    </div>
 
-                            {/* 5 Category Stat Cards Row */}
-                            <div className="category-stats-grid">
-                                <div className="stat-card">
-                                    <div className="stat-card-icon-box stat-icon-blue">
-                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                                            <polyline points="14 2 14 8 20 8" />
-                                        </svg>
-                                    </div>
-                                    <div className="stat-card-content">
-                                        <span className="stat-card-label">Total Files</span>
-                                        <span className="stat-card-value">{files.length + folders.length}</span>
-                                    </div>
-                                </div>
-
-                                <div className="stat-card">
-                                    <div className="stat-card-icon-box stat-icon-green">
-                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                                            <circle cx="8.5" cy="8.5" r="1.5" />
-                                            <polyline points="21 15 16 10 5 21" />
-                                        </svg>
-                                    </div>
-                                    <div className="stat-card-content">
-                                        <span className="stat-card-label">Images</span>
-                                        <span className="stat-card-value">{files.filter(f => f.mimeType?.startsWith('image/')).length || (categoryStats.image ? Math.max(1, Math.round(categoryStats.image / 500000)) : 0)}</span>
-                                    </div>
-                                </div>
-
-                                <div className="stat-card">
-                                    <div className="stat-card-icon-box stat-icon-purple">
-                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                                            <polyline points="14 2 14 8 20 8" />
-                                            <line x1="16" y1="13" x2="8" y2="13" />
-                                            <line x1="16" y1="17" x2="8" y2="17" />
-                                        </svg>
-                                    </div>
-                                    <div className="stat-card-content">
-                                        <span className="stat-card-label">Documents</span>
-                                        <span className="stat-card-value">{files.filter(f => !f.mimeType?.startsWith('image/') && !f.mimeType?.startsWith('video/') && !f.mimeType?.startsWith('audio/')).length || (categoryStats.document ? Math.max(1, Math.round(categoryStats.document / 500000)) : 0)}</span>
-                                    </div>
-                                </div>
-
-                                <div className="stat-card">
-                                    <div className="stat-card-icon-box stat-icon-pink">
-                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                            <polygon points="23 7 16 12 23 17 23 7" />
-                                            <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
-                                        </svg>
-                                    </div>
-                                    <div className="stat-card-content">
-                                        <span className="stat-card-label">Videos</span>
-                                        <span className="stat-card-value">{files.filter(f => f.mimeType?.startsWith('video/')).length || (categoryStats.video ? Math.max(1, Math.round(categoryStats.video / 5000000)) : 0)}</span>
-                                    </div>
-                                </div>
-
-                                <div className="stat-card">
-                                    <div className="stat-card-icon-box stat-icon-orange">
-                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                            <path d="M9 18V5l12-2v13" />
-                                            <circle cx="6" cy="18" r="3" />
-                                            <circle cx="18" cy="16" r="3" />
-                                        </svg>
-                                    </div>
-                                    <div className="stat-card-content">
-                                        <span className="stat-card-label">Audio</span>
-                                        <span className="stat-card-value">{files.filter(f => f.mimeType?.startsWith('audio/')).length || (categoryStats.audio ? Math.max(1, Math.round(categoryStats.audio / 1000000)) : 0)}</span>
-                                    </div>
-                                </div>
+                    {/* Subfolder Breadcrumbs & Back Navigation */}
+                    {history.length > 0 && (
+                        <div className="cb-breadcrumbs-bar">
+                            <button onClick={goBack} className="cb-back-btn">
+                                &larr; Back
+                            </button>
+                            <div className="cb-breadcrumbs-list">
+                                <span
+                                    className="cb-breadcrumb-item"
+                                    onClick={() => handleFolderSelect({ id: rootFolderId !== -1 ? rootFolderId : -1, name: "Root" })}
+                                >
+                                    Root
+                                </span>
+                                {history.map((folder, idx) => (
+                                    <span key={folder.id} className="cb-breadcrumb-chunk">
+                                        <span className="cb-breadcrumb-sep">/</span>
+                                        <span
+                                            className={`cb-breadcrumb-item ${idx === history.length - 1 ? 'active' : ''}`}
+                                            onClick={() => handleFolderSelect(folder)}
+                                        >
+                                            {folder.name}
+                                        </span>
+                                    </span>
+                                ))}
                             </div>
                         </div>
                     )}
 
-                    {/* Toolbar Navigation & Breadcrumbs */}
-                    <div className="explorer-toolbar">
-                        <div className="breadcrumbs">
-                            {!isSharedFolderContext && (
-                                <span
-                                    className={`breadcrumb-item ${(currentFolderId === -1 || currentFolderId === rootFolderId) ? 'active' : ''} ${(dropTargetId === -1 || dropTargetId === rootFolderId) ? 'drag-over-target' : ''}`}
-                                    onClick={() => handleFolderSelect({ id: rootFolderId !== -1 ? rootFolderId : -1, name: "Root" })}
-                                    onDragOver={(e) => handleDragOverTarget(e, rootFolderId !== -1 ? rootFolderId : -1)}
-                                    onDragLeave={(e) => handleDragLeaveTarget(e, rootFolderId !== -1 ? rootFolderId : -1)}
-                                    onDrop={(e) => handleDropOnTarget(e, rootFolderId !== -1 ? rootFolderId : -1)}
-                                >
-                                    Root
-                                </span>
-                            )}
-                            {history.map((folder, index) => (
-                                <span key={folder.id} className="breadcrumb-wrapper">
-                                    {(!isSharedFolderContext || index > 0) && <span className="breadcrumb-separator">/</span>}
-                                    <span
-                                        className={`breadcrumb-item ${index === history.length - 1 ? 'active' : ''} ${dropTargetId === folder.id ? 'drag-over-target' : ''}`}
-                                        onClick={() => handleFolderSelect(folder)}
-                                        onDragOver={(e) => handleDragOverTarget(e, folder.id)}
-                                        onDragLeave={(e) => handleDragLeaveTarget(e, folder.id)}
-                                        onDrop={(e) => handleDropOnTarget(e, folder.id)}
-                                    >
-                                        {folder.name}
-                                    </span>
-                                </span>
-                            ))}
+                    {/* ─── "My Folders" Section ────────────────────────────── */}
+                    <section className="cb-section">
+                        <div className="cb-section-header">
+                            <h2 className="cb-section-title">
+                                {isSharedFolderContext ? "Project Folders" : "My Folders"}
+                            </h2>
+                            <button
+                                type="button"
+                                className="cb-view-all-link"
+                                onClick={() => handleFolderSelect({ id: rootFolderId !== -1 ? rootFolderId : -1, name: "Root" })}
+                            >
+                                View all &rarr;
+                            </button>
                         </div>
 
-                        <div className="toolbar-actions">
-                            {movingItem && (
-                                <div className="move-banner">
-                                    <span className="move-banner-text">
-                                        Moving <strong>{movingItem.name}</strong>
-                                    </span>
-                                    <button type="button" className="btn btn-primary btn-sm" onClick={executeMove}>Move Here</button>
-                                    <button type="button" className="btn btn-secondary btn-sm" onClick={() => setMovingItem(null)}>Cancel</button>
+                        <div className="cb-folders-row">
+                            {loading && filteredFolders.length === 0 ? (
+                                <div className="cb-folders-loading">
+                                    <div className="spinner" style={{ width: 28, height: 28 }}></div>
                                 </div>
-                            )}
+                            ) : displayFolderCards.length === 0 ? (
+                                <div className="cb-empty-folders-state">
+                                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--text-faint, #6b7280)", marginBottom: 10 }}>
+                                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                                    </svg>
+                                    <p style={{ margin: 0, color: "var(--text-muted)", fontSize: "13px" }}>No folders yet.</p>
+                                    <button
+                                        type="button"
+                                        className="cb-btn-outlined"
+                                        style={{ marginTop: 10, fontSize: "12px", padding: "6px 14px" }}
+                                        onClick={() => setShowCreator(true)}
+                                    >
+                                        + Create your first folder
+                                    </button>
+                                </div>
+                            ) : (
+                                displayFolderCards.slice(0, 3).map((folder) => {
+                                    const isEditing = editingItem && editingItem.type === 'folder' && editingItem.id === folder.id;
+                                    const isTarget = dropTargetId === folder.id;
+                                    return (
+                                        <div
+                                            key={folder.id}
+                                            className={`cb-folder-card ${isTarget ? 'drag-over' : ''}`}
+                                            onClick={() => { if (!isEditing) handleFolderSelect(folder); }}
+                                            draggable={!isEditing}
+                                            onDragStart={(e) => handleDragStartItem(e, { type: 'folder', id: folder.id, name: folder.name })}
+                                            onDragEnd={handleDragEndItem}
+                                            onDragOver={(e) => handleDragOverTarget(e, folder.id)}
+                                            onDragLeave={(e) => handleDragLeaveTarget(e, folder.id)}
+                                            onDrop={(e) => handleDropOnTarget(e, folder.id)}
+                                        >
+                                            <div className="cb-folder-icon-box">
+                                                <svg width="24" height="24" viewBox="0 0 24 24" fill="#6366f1">
+                                                    <path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" />
+                                                </svg>
+                                            </div>
 
-                            <div className="view-mode-toggle">
+                                            <div className="cb-folder-meta">
+                                                {isEditing ? (
+                                                    <form
+                                                        onSubmit={(e) => handleRenameSubmit(e, folder.id, 'folder')}
+                                                        onClick={(e) => e.stopPropagation()}
+                                                        className="cb-rename-form"
+                                                    >
+                                                        <input
+                                                            value={renameValue}
+                                                            onChange={(e) => setRenameValue(e.target.value)}
+                                                            className="cb-rename-input"
+                                                            autoFocus
+                                                        />
+                                                        <button type="submit" className="cb-rename-save">Save</button>
+                                                    </form>
+                                                ) : (
+                                                    <>
+                                                        <span className="cb-folder-name" title={folder.name}>
+                                                            {folder.name}
+                                                        </span>
+                                                        <span className="cb-folder-subtext">
+                                                            {`${folder.fileCount || 0} files • ${formatDate(folder.createdAt)}`}
+                                                        </span>
+                                                    </>
+                                                )}
+                                            </div>
+
+                                            {!isEditing && (
+                                                <button
+                                                    type="button"
+                                                    className="cb-card-dots-btn"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        openActionSheet(folder, 'folder');
+                                                    }}
+                                                    title="Folder Options"
+                                                >
+                                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                                                        <circle cx="12" cy="5" r="2" />
+                                                        <circle cx="12" cy="12" r="2" />
+                                                        <circle cx="12" cy="19" r="2" />
+                                                    </svg>
+                                                </button>
+                                            )}
+                                        </div>
+                                    );
+                                })
+                            )}
+                        </div>
+                    </section>
+
+                    {/* ─── "All Files" Section ─────────────────────────────── */}
+                    <section className="cb-section">
+                        <div className="cb-section-header">
+                            <h2 className="cb-section-title">
+                                {searchQuery.trim() ? "Search Results" : "All Files"}
+                            </h2>
+
+                            <div className="cb-view-toggle-group">
                                 <button
                                     type="button"
-                                    className={`view-toggle-btn ${viewMode === 'list' ? 'active' : ''}`}
+                                    className={`cb-view-btn ${viewMode === 'list' ? 'active' : ''}`}
                                     onClick={() => setViewMode('list')}
                                     title="List View"
                                 >
-                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                                         <line x1="8" y1="6" x2="21" y2="6" />
                                         <line x1="8" y1="12" x2="21" y2="12" />
                                         <line x1="8" y1="18" x2="21" y2="18" />
@@ -912,11 +729,11 @@ export default function FolderView() {
                                 </button>
                                 <button
                                     type="button"
-                                    className={`view-toggle-btn ${viewMode === 'grid' ? 'active' : ''}`}
+                                    className={`cb-view-btn ${viewMode === 'grid' ? 'active' : ''}`}
                                     onClick={() => setViewMode('grid')}
                                     title="Grid View"
                                 >
-                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                                         <rect x="3" y="3" width="7" height="7" />
                                         <rect x="14" y="3" width="7" height="7" />
                                         <rect x="14" y="14" width="7" height="7" />
@@ -925,624 +742,490 @@ export default function FolderView() {
                                 </button>
                             </div>
                         </div>
-                    </div>
 
-
-
-                    {/* Back button */}
-                    {currentFolderId !== -1 && currentFolderId !== 0 && currentFolderId !== rootFolderId && (
-                        <div className="back-button-bar">
-                            <button onClick={goBack} className="btn btn-secondary btn-sm">
-                                &larr; Back
-                            </button>
-                        </div>
-                    )}
-
-                    {/* Quick Folders Cards Grid ("My Folders" / "Project Folders") */}
-                    {!searchLoading && !searchError && displayFolders.length > 0 && (
-                        <section className="dashboard-section">
-                            <div className="section-title">{isSharedFolderContext ? "Project Folders" : "My Folders"}</div>
-                            <div className="folders-grid">
-                                {displayFolders.map(folder => {
-                                    const isEditing = editingItem && editingItem.type === 'folder' && editingItem.id === folder.id;
-                                    const isTarget = dropTargetId === folder.id;
-                                    return (
-                                        <div
-                                            key={`grid-folder-${folder.id}`}
-                                            className={`folder-card ${isTarget ? 'drag-over-target' : ''}`}
-                                            onClick={() => !isEditing && handleFolderSelect(folder)}
-                                            draggable={!isEditing}
-                                            onDragStart={(e) => handleDragStartItem(e, { type: 'folder', id: folder.id, name: folder.name })}
-                                            onDragEnd={handleDragEndItem}
-                                            onDragOver={(e) => handleDragOverTarget(e, folder.id)}
-                                            onDragLeave={(e) => handleDragLeaveTarget(e, folder.id)}
-                                            onDrop={(e) => handleDropOnTarget(e, folder.id)}
-                                        >
-                                            <div className="folder-card-top">
-                                                <svg className="folder-card-icon" viewBox="0 0 24 24">
-                                                    <path d="M10,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V8C22,6.89 21.1,6 20,6H12L10,4Z" />
-                                                </svg>
-
-                                                <div className="folder-card-actions">
-                                                    {!isEditing && (
-                                                        <button
-                                                            type="button"
-                                                            className="action-dots-btn"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                openActionSheet(folder, 'folder');
-                                                            }}
-                                                            title="Actions"
-                                                        >
-                                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                                                                <circle cx="12" cy="5" r="2" />
-                                                                <circle cx="12" cy="12" r="2" />
-                                                                <circle cx="12" cy="19" r="2" />
-                                                            </svg>
-                                                        </button>
-                                                    )}
-                                                </div>
-
-
-
-                                            </div>
-
-                                            {isEditing ? (
-                                                <form
-                                                    onSubmit={(e) => handleRenameSubmit(e, folder.id, 'folder')}
-                                                    onClick={(e) => e.stopPropagation()}
-                                                    className="folder-rename-form"
-                                                >
-                                                    <input
-                                                        value={renameValue}
-                                                        onChange={(e) => setRenameValue(e.target.value)}
-                                                        className="input-field input-field-sm"
-                                                        autoFocus
-                                                    />
-                                                    <button type="submit" className="btn btn-primary btn-sm">Save</button>
-                                                    <button type="button" className="btn btn-secondary btn-sm" onClick={() => setEditingItem(null)}>Cancel</button>
-                                                </form>
-                                            ) : (
-                                                <div className="folder-card-title">
-                                                    <span>{folder.name}</span>
-                                                    {folder.isShared && folder.inviteCode && (
-                                                        <span className="shared-badge">Shared</span>
-                                                    )}
-                                                </div>
-                                            )}
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </section>
-                    )}
-
-                    {/* Overall Storage Breakdown Bar (Only shown on main Dashboard / Root) */}
-                    {(currentFolderId === -1 || currentFolderId === 0 || currentFolderId === rootFolderId) && (
-                        <div className="category-breakdown-card">
-                            <div className="category-header">
-                                <span className="category-title">Storage Breakdown</span>
-                                <span className="category-total">{formatBytes(totalStorageUsed)}</span>
-                            </div>
-                            <div className="category-progress-bar">
-                                {totalStorageUsed > 0 ? (
-                                    <>
-                                        {categoryStats.image > 0 && (
-                                            <div
-                                                className="cat-fill cat-image"
-                                                style={{ width: `${(categoryStats.image / totalStorageUsed) * 100}%` }}
-                                                title={`Images: ${formatBytes(categoryStats.image)}`}
-                                            ></div>
-                                        )}
-                                        {categoryStats.document > 0 && (
-                                            <div
-                                                className="cat-fill cat-document"
-                                                style={{ width: `${(categoryStats.document / totalStorageUsed) * 100}%` }}
-                                                title={`Documents: ${formatBytes(categoryStats.document)}`}
-                                            ></div>
-                                        )}
-                                        {categoryStats.video > 0 && (
-                                            <div
-                                                className="cat-fill cat-video"
-                                                style={{ width: `${(categoryStats.video / totalStorageUsed) * 100}%` }}
-                                                title={`Videos: ${formatBytes(categoryStats.video)}`}
-                                            ></div>
-                                        )}
-                                        {categoryStats.audio > 0 && (
-                                            <div
-                                                className="cat-fill cat-audio"
-                                                style={{ width: `${(categoryStats.audio / totalStorageUsed) * 100}%` }}
-                                                title={`Audio: ${formatBytes(categoryStats.audio)}`}
-                                            ></div>
-                                        )}
-                                    </>
-                                ) : (
-                                    <div className="cat-fill" style={{ width: "0%" }}></div>
-                                )}
-                            </div>
-                            <div className="category-legend">
-                                <span className="legend-item"><span className="dot dot-image"></span> Images ({formatBytes(categoryStats.image)})</span>
-                                <span className="legend-item"><span className="dot dot-document"></span> Documents ({formatBytes(categoryStats.document)})</span>
-                                <span className="legend-item"><span className="dot dot-video"></span> Videos ({formatBytes(categoryStats.video)})</span>
-                                <span className="legend-item"><span className="dot dot-audio"></span> Audio ({formatBytes(categoryStats.audio)})</span>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Files Explorer Table ("All Files") */}
-                    <section className="dashboard-section">
-                        <div className="section-title-row">
-                            <span className="section-title">{searchQuery.trim() ? "Search Results" : "All Files"}</span>
-                            {searchQuery.trim() && (
-                                <span className="search-status-tag">
-                                    {searchLoading ? `Searching for "${searchQuery.trim()}"...` : `Results for "${searchQuery.trim()}"`}
-                                </span>
-                            )}
-                        </div>
-
-                        {searchQuery.trim() && searchLoading ? (
-                            <div className="loading-container">
+                        {/* Files Content Table */}
+                        {searchLoading ? (
+                            <div className="cb-loading-state">
                                 <div className="spinner"></div>
-                            </div>
-                        ) : searchQuery.trim() && searchError ? (
-                            <div className="empty-state">
-                                <svg className="empty-state-svg" viewBox="0 0 24 24" width="48" height="48">
-                                    <path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z" opacity="0.4" />
-                                </svg>
-                                <h3 className="empty-state-title">Search Error</h3>
-                                <p className="empty-state-text">{searchError}</p>
-                            </div>
-                        ) : searchQuery.trim() && filteredFolders.length === 0 && filteredFiles.length === 0 ? (
-                            <div className="empty-state">
-                                <svg className="empty-state-svg" viewBox="0 0 24 24" width="48" height="48">
-                                    <path fill="currentColor" d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" opacity="0.3" />
-                                </svg>
-                                <h3 className="empty-state-title">No results found</h3>
-                                <p className="empty-state-text">
-                                    No files or folders matched "{searchQuery.trim()}". Check your spelling or try a different search query.
-                                </p>
-                            </div>
-                        ) : !searchQuery.trim() && loading ? (
-                            <div className="loading-container">
-                                <div className="spinner"></div>
-                            </div>
-                        ) : !searchQuery.trim() && filteredFolders.length === 0 && filteredFiles.length === 0 ? (
-                            <div className="empty-state">
-                                <svg className="empty-state-svg" viewBox="0 0 24 24" width="48" height="48">
-                                    <path fill="currentColor" d="M19.35,10.03C18.67,6.59 15.64,4 12,4C9.11,4 6.6,5.64 5.35,8.03C2.34,8.36 0,10.9 0,14C0,17.1 2.9,20 6,20H19C21.76,20 24,17.76 24,15C24,12.36 21.95,10.22 19.35,10.03Z" opacity="0.3" />
-                                </svg>
-                                <h3 className="empty-state-title">No files yet</h3>
-                                <p className="empty-state-text">
-                                    Upload files or create a folder to get started.
-                                </p>
                             </div>
                         ) : viewMode === "grid" ? (
-                            <div className="files-grid-container">
-                                {filteredFiles.length === 0 ? (
-                                    <div className="empty-files-subtext" style={{ padding: "20px", textAlign: "center", color: "var(--text-muted)", fontSize: "13.5px" }}>
-                                        No files in this folder.
+                            <div className="cb-files-grid">
+                                {(hasRealContent ? filteredFiles : []).map(file => (
+                                    <div
+                                        key={file.id}
+                                        className="cb-file-grid-card"
+                                        onClick={(e) => previewFile(e, file)}
+                                    >
+                                        <div className="cb-grid-card-icon">
+                                            <FileIcon mimeType={file.mimeType} size={36} />
+                                        </div>
+                                        <div className="cb-grid-card-info">
+                                            <span className="cb-grid-file-name" title={file.orgName}>{file.orgName}</span>
+                                            <span className="cb-grid-file-size">{formatBytes(file.size)}</span>
+                                        </div>
                                     </div>
-                                ) : (
-                                    <div className="files-grid">
-                                        {filteredFiles.map(file => {
-                                            const isEditing = editingItem && editingItem.type === 'file' && editingItem.id === file.id;
-                                            return (
-                                                <div
-                                                    key={`grid-file-${file.id}`}
-                                                    className="file-grid-card"
-                                                    onClick={(e) => {
-                                                        if (e.target.closest('.file-card-actions') || e.target.closest('form')) return;
-                                                        previewFile(e, file);
-                                                    }}
-                                                    draggable={!isEditing}
-                                                    onDragStart={(e) => handleDragStartItem(e, { type: 'file', id: file.id, name: file.orgName })}
-                                                    onDragEnd={handleDragEndItem}
-                                                >
-                                                    <div className="file-card-top">
-                                                        <FileIcon mimeType={file.mimeType} size={32} />
-                                                        <div className="file-card-actions">
-                                                            {!isEditing && (
-                                                                <button
-                                                                    type="button"
-                                                                    className="action-dots-btn"
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        openActionSheet(file, 'file');
-                                                                    }}
-                                                                    title="Actions"
-                                                                >
-                                                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                                                                        <circle cx="12" cy="5" r="2" />
-                                                                        <circle cx="12" cy="12" r="2" />
-                                                                        <circle cx="12" cy="19" r="2" />
-                                                                    </svg>
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                    </div>
-
-                                                    {isEditing ? (
-                                                        <form
-                                                            onSubmit={(e) => handleRenameSubmit(e, file.id, 'file')}
-                                                            onClick={(e) => e.stopPropagation()}
-                                                            className="folder-rename-form"
-                                                        >
-                                                            <input
-                                                                value={renameValue}
-                                                                onChange={(e) => setRenameValue(e.target.value)}
-                                                                className="input-field input-field-sm"
-                                                                autoFocus
-                                                            />
-                                                            <button type="submit" className="btn btn-primary btn-sm">Save</button>
-                                                            <button type="button" className="btn btn-secondary btn-sm" onClick={() => setEditingItem(null)}>Cancel</button>
-                                                        </form>
-                                                    ) : (
-                                                        <div className="file-card-info">
-                                                            <span className="file-card-name" title={file.orgName}>{file.orgName}</span>
-                                                            <div className="file-card-meta">
-                                                                <span>{getFileTypeLabel(file.mimeType)}</span>
-                                                                <span>•</span>
-                                                                <span>{formatBytes(file.size)}</span>
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                )}
+                                ))}
                             </div>
                         ) : (
-                            <div className="files-table-container">
-                                <div className="files-table">
-                                    <div className="table-header">
-                                        <div className="col-icon"></div>
-                                        <div className="col-name">File Name</div>
-                                        <div className="col-type">Type</div>
-                                        <div className="col-size">Size</div>
-                                        <div className="col-date">Date Modified</div>
-                                        <div className="col-actions">Actions</div>
+                            <div className="cb-table-card">
+                                <div className="cb-table-header">
+                                    <div className="cb-col-check">
+                                        <input
+                                            type="checkbox"
+                                            className="cb-checkbox"
+                                            aria-label="Select all"
+                                            onChange={(e) => {
+                                                if (e.target.checked) {
+                                                    const allIds = hasRealContent
+                                                        ? [...filteredFolders.map(f => f.id), ...filteredFiles.map(f => f.id)]
+                                                        : fallbackFiles.map(f => f.id);
+                                                    setSelectedRows(new Set(allIds));
+                                                } else {
+                                                    setSelectedRows(new Set());
+                                                }
+                                            }}
+                                        />
                                     </div>
-
-                                    {/* Folders in Table */}
-                                    {filteredFolders.map(folder => {
-                                        const isEditing = editingItem && editingItem.type === 'folder' && editingItem.id === folder.id;
-                                        const isTarget = dropTargetId === folder.id;
-                                        return (
-                                            <div
-                                                key={`row-folder-${folder.id}`}
-                                                className={`table-row clickable-row ${isTarget ? 'drag-over-target' : ''} ${isEditing ? 'editing-row' : ''}`}
-                                                onClick={() => !isEditing && handleFolderSelect(folder)}
-                                                draggable={!isEditing}
-                                                onDragStart={(e) => handleDragStartItem(e, { type: 'folder', id: folder.id, name: folder.name })}
-                                                onDragEnd={handleDragEndItem}
-                                                onDragOver={(e) => handleDragOverTarget(e, folder.id)}
-                                                onDragLeave={(e) => handleDragLeaveTarget(e, folder.id)}
-                                                onDrop={(e) => handleDropOnTarget(e, folder.id)}
-                                            >
-                                                <div className="col-icon">
-                                                    <svg className="folder-table-icon" viewBox="0 0 24 24" width="20" height="20">
-                                                        <path fill="#f59e0b" d="M10,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V8C22,6.89 21.1,6 20,6H12L10,4Z" />
-                                                    </svg>
-                                                </div>
-
-                                                <div className="col-name">
-                                                    {isEditing ? (
-                                                        <form
-                                                            onSubmit={(e) => handleRenameSubmit(e, folder.id, 'folder')}
-                                                            onClick={(e) => e.stopPropagation()}
-                                                            className="row-rename-form"
-                                                        >
-                                                            <input
-                                                                value={renameValue}
-                                                                onChange={(e) => setRenameValue(e.target.value)}
-                                                                className="input-field input-field-sm"
-                                                                autoFocus
-                                                            />
-                                                            <button type="submit" className="btn btn-primary btn-sm">Save</button>
-                                                            <button type="button" className="btn btn-secondary btn-sm" onClick={() => setEditingItem(null)}>Cancel</button>
-                                                        </form>
-                                                    ) : (
-                                                        <span className="row-item-name">
-                                                            <span>{folder.name}</span>
-                                                            {folder.isShared && folder.inviteCode && (
-                                                                <span className="shared-badge">Shared</span>
-                                                            )}
-                                                        </span>
-                                                    )}
-                                                </div>
-
-                                                <div className="col-type">Folder</div>
-                                                <div className="col-size">-</div>
-                                                <div className="col-date">{formatDate(folder.createdAt)}</div>
-
-                                                <div className="col-actions">
-                                                    {!isEditing && (
-                                                        <button
-                                                            type="button"
-                                                            className="action-dots-btn"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                openActionSheet(folder, 'folder');
-                                                            }}
-                                                            title="Actions"
-                                                        >
-                                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                                                                <circle cx="12" cy="5" r="2" />
-                                                                <circle cx="12" cy="12" r="2" />
-                                                                <circle cx="12" cy="19" r="2" />
-                                                            </svg>
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-
-                                    {/* Files in Table */}
-                                    {filteredFiles.map(file => {
-                                        const isEditing = editingItem && editingItem.type === 'file' && editingItem.id === file.id;
-                                        return (
-                                            <div
-                                                key={`row-file-${file.id}`}
-                                                className={`table-row clickable-row ${isEditing ? 'editing-row' : ''}`}
-                                                onClick={(e) => {
-                                                    if (e.target.closest('.col-actions') || e.target.closest('form')) return;
-                                                    previewFile(e, file);
-                                                }}
-                                                onDoubleClick={(e) => {
-                                                    if (e.target.closest('.col-actions') || e.target.closest('form')) return;
-                                                    previewFile(e, file);
-                                                }}
-                                                title="Click to preview file"
-                                                draggable={!isEditing}
-                                                onDragStart={(e) => handleDragStartItem(e, { type: 'file', id: file.id, name: file.orgName })}
-                                                onDragEnd={handleDragEndItem}
-                                            >
-
-                                                <div className="col-icon">
-                                                    <FileIcon mimeType={file.mimeType} />
-                                                </div>
-
-                                                <div className="col-name">
-                                                    {isEditing ? (
-                                                        <form
-                                                            onSubmit={(e) => handleRenameSubmit(e, file.id, 'file')}
-                                                            className="row-rename-form"
-                                                        >
-                                                            <input
-                                                                value={renameValue}
-                                                                onChange={(e) => setRenameValue(e.target.value)}
-                                                                className="input-field input-field-sm"
-                                                                autoFocus
-                                                            />
-                                                            <button type="submit" className="btn btn-primary btn-sm">Save</button>
-                                                            <button type="button" className="btn btn-secondary btn-sm" onClick={() => setEditingItem(null)}>Cancel</button>
-                                                        </form>
-                                                    ) : (
-                                                        <span className="row-item-name">{file.orgName}</span>
-                                                    )}
-                                                </div>
-
-                                                <div className="col-type">{getFileTypeLabel(file.mimeType)}</div>
-                                                <div className="col-size">{formatBytes(file.size)}</div>
-                                                <div className="col-date">{formatDate(file.createdAt)}</div>
-
-                                                <div className="col-actions">
-                                                    {!isEditing && (
-                                                        <button
-                                                            type="button"
-                                                            className="action-dots-btn"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                openActionSheet(file, 'file');
-                                                            }}
-                                                            title="Actions"
-                                                        >
-                                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                                                                <circle cx="12" cy="5" r="2" />
-                                                                <circle cx="12" cy="12" r="2" />
-                                                                <circle cx="12" cy="19" r="2" />
-                                                            </svg>
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
+                                    <div className="cb-col-name">Name</div>
+                                    <div className="cb-col-type">Type</div>
+                                    <div className="cb-col-size">Size</div>
+                                    <div className="cb-col-date">Last Modified</div>
+                                    <div className="cb-col-actions">Actions</div>
                                 </div>
 
-                                <div className="files-table-footer">
-                                    <div className="table-footer-count">
-                                        Showing 1–{filteredFiles.length + filteredFolders.length} of {filteredFiles.length + filteredFolders.length} files
-                                    </div>
-                                    <div className="table-pagination">
-                                        <button type="button" className="pagination-arrow-btn" disabled>&lt;</button>
-                                        <button type="button" className="pagination-page-btn active">1</button>
-                                        <button type="button" className="pagination-page-btn">2</button>
-                                        <button type="button" className="pagination-page-btn">3</button>
-                                        <button type="button" className="pagination-page-btn">4</button>
-                                        <button type="button" className="pagination-page-btn">5</button>
-                                        <button type="button" className="pagination-arrow-btn">&gt;</button>
-                                    </div>
+                                <div className="cb-table-body">
+                                    {/* Real folders */}
+                                    {filteredFolders.map(folder => {
+                                        const isEditing = editingItem && editingItem.type === 'folder' && editingItem.id === folder.id;
+                                        const isChecked = selectedRows.has(folder.id);
+                                        return (
+                                            <div
+                                                key={`f-${folder.id}`}
+                                                className={`cb-table-row ${isChecked ? 'selected' : ''}`}
+                                                onClick={() => !isEditing && handleFolderSelect(folder)}
+                                            >
+                                                <div className="cb-col-check" onClick={(e) => e.stopPropagation()}>
+                                                    <input
+                                                        type="checkbox"
+                                                        className="cb-checkbox"
+                                                        checked={isChecked}
+                                                        onChange={() => toggleRowSelect(folder.id)}
+                                                    />
+                                                </div>
+                                                <div className="cb-col-name">
+                                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="#f59e0b" className="cb-row-type-icon">
+                                                        <path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" />
+                                                    </svg>
+                                                    {isEditing ? (
+                                                        <form onSubmit={(e) => handleRenameSubmit(e, folder.id, 'folder')} className="cb-rename-inline-form">
+                                                            <input
+                                                                value={renameValue}
+                                                                onChange={(e) => setRenameValue(e.target.value)}
+                                                                className="cb-rename-inline-input"
+                                                                autoFocus
+                                                            />
+                                                            <button type="submit" className="cb-rename-save-btn">Save</button>
+                                                        </form>
+                                                    ) : (
+                                                        <span className="cb-row-name-text">{folder.name}</span>
+                                                    )}
+                                                </div>
+                                                <div className="cb-col-type">Folder</div>
+                                                <div className="cb-col-size">—</div>
+                                                <div className="cb-col-date">{formatDate(folder.createdAt)}</div>
+                                                <div className="cb-col-actions" onClick={(e) => e.stopPropagation()}>
+                                                    <button
+                                                        type="button"
+                                                        className="cb-row-actions-btn"
+                                                        onClick={() => openActionSheet(folder, 'folder')}
+                                                    >
+                                                        ···
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+
+                                    {/* Real files */}
+                                    {filteredFiles.map(file => {
+                                        const isEditing = editingItem && editingItem.type === 'file' && editingItem.id === file.id;
+                                        const isChecked = selectedRows.has(file.id);
+                                        return (
+                                            <div
+                                                key={`file-${file.id}`}
+                                                className={`cb-table-row ${isChecked ? 'selected' : ''}`}
+                                                onClick={(e) => { if (!isEditing) previewFile(e, file); }}
+                                            >
+                                                <div className="cb-col-check" onClick={(e) => e.stopPropagation()}>
+                                                    <input
+                                                        type="checkbox"
+                                                        className="cb-checkbox"
+                                                        checked={isChecked}
+                                                        onChange={() => toggleRowSelect(file.id)}
+                                                    />
+                                                </div>
+                                                <div className="cb-col-name">
+                                                    <div className="cb-row-type-icon">
+                                                        <FileIcon mimeType={file.mimeType} size={18} />
+                                                    </div>
+                                                    {isEditing ? (
+                                                        <form onSubmit={(e) => handleRenameSubmit(e, file.id, 'file')} className="cb-rename-inline-form">
+                                                            <input
+                                                                value={renameValue}
+                                                                onChange={(e) => setRenameValue(e.target.value)}
+                                                                className="cb-rename-inline-input"
+                                                                autoFocus
+                                                            />
+                                                            <button type="submit" className="cb-rename-save-btn">Save</button>
+                                                        </form>
+                                                    ) : (
+                                                        <span className="cb-row-name-text">{file.orgName}</span>
+                                                    )}
+                                                </div>
+                                                <div className="cb-col-type">{getFileTypeLabel(file.mimeType, file.orgName)}</div>
+                                                <div className="cb-col-size">{formatBytes(file.size)}</div>
+                                                <div className="cb-col-date">{formatDate(file.createdAt)}</div>
+                                                <div className="cb-col-actions" onClick={(e) => e.stopPropagation()}>
+                                                    <button
+                                                        type="button"
+                                                        className="cb-row-actions-btn"
+                                                        onClick={() => openActionSheet(file, 'file')}
+                                                    >
+                                                        ···
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+
+                                    {/* Empty state — shown only when loading is done and no real content */}
+                                    {!loading && filteredFolders.length === 0 && filteredFiles.length === 0 && (
+                                        <div className="cb-table-empty-state">
+                                            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--text-faint, #9ca3af)", marginBottom: 8 }}>
+                                                <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
+                                                <polyline points="13 2 13 9 20 9" />
+                                            </svg>
+                                            <p style={{ margin: 0, color: "var(--text-muted)", fontSize: "13px" }}>No files yet. Upload or create your first folder to get started.</p>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         )}
                     </section>
                 </main>
 
-                {/* Drag and Drop Zone Overlay */}
-                {isDragging && (
-                    <div className="drag-overlay">
-                        <div className="drag-overlay-card">
-                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                <polyline points="17 8 12 3 7 8" />
-                                <line x1="12" y1="3" x2="12" y2="15" />
+                {/* ─── 3. RIGHT SIDEBAR ─────────────────────────────────────── */}
+                <aside className="cb-right-sidebar">
+                    {/* Card 1: Storage Usage */}
+                    <div className="cb-panel-card">
+                        <div className="cb-panel-card-header">
+                            <span className="cb-panel-title">Storage Usage</span>
+                            <span className="cb-panel-percentage">{storagePercent}%</span>
+                        </div>
+
+                        <div className="cb-storage-main-track">
+                            <div className="cb-storage-main-fill" style={{ width: `${storagePercent}%` }}></div>
+                        </div>
+
+                        <span className="cb-storage-used-caption">
+                            {formatBytes(usedStorageBytes)} of {formatBytes(limitStorageBytes)} used
+                        </span>
+
+                        <div className="cb-breakdown-section">
+                            <span className="cb-breakdown-heading">Breakdown</span>
+
+                            <div className="cb-breakdown-list">
+                                <div className="cb-breakdown-item">
+                                    <span className="cb-bullet-dot dot-documents"></span>
+                                    <span className="cb-breakdown-name">Documents</span>
+                                    <span className="cb-breakdown-val">{docSize}</span>
+                                </div>
+
+                                <div className="cb-breakdown-item">
+                                    <span className="cb-bullet-dot dot-images"></span>
+                                    <span className="cb-breakdown-name">Images</span>
+                                    <span className="cb-breakdown-val">{imgSize}</span>
+                                </div>
+
+                                <div className="cb-breakdown-item">
+                                    <span className="cb-bullet-dot dot-videos"></span>
+                                    <span className="cb-breakdown-name">Videos</span>
+                                    <span className="cb-breakdown-val">{vidSize}</span>
+                                </div>
+
+                                <div className="cb-breakdown-item">
+                                    <span className="cb-bullet-dot dot-audio"></span>
+                                    <span className="cb-breakdown-name">Audio</span>
+                                    <span className="cb-breakdown-val">{audSize}</span>
+                                </div>
+
+                                <div className="cb-breakdown-item">
+                                    <span className="cb-bullet-dot dot-others"></span>
+                                    <span className="cb-breakdown-name">Others</span>
+                                    <span className="cb-breakdown-val">0 Bytes</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Card 2: Recent Activity — real data from API */}
+                    <div className="cb-panel-card">
+                        <div className="cb-panel-card-header">
+                            <span className="cb-panel-title">Recent Activity</span>
+                            <button
+                                type="button"
+                                className="cb-view-all-link"
+                                onClick={() => rootFolderId && rootFolderId !== -1 && fetchRecentActivity(rootFolderId)}
+                            >
+                                Refresh &rarr;
+                            </button>
+                        </div>
+
+                        <div className="cb-activity-list">
+                            {activityLoading ? (
+                                <div style={{ display: "flex", justifyContent: "center", padding: "20px 0" }}>
+                                    <div className="spinner" style={{ width: 22, height: 22 }}></div>
+                                </div>
+                            ) : recentActivity.length === 0 ? (
+                                <div style={{ textAlign: "center", padding: "20px 0", color: "var(--text-muted)", fontSize: "13px" }}>
+                                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ display: "block", margin: "0 auto 8px" }}>
+                                        <path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                                    </svg>
+                                    No recent activity yet.
+                                </div>
+                            ) : (
+                                recentActivity.map((log) => {
+                                    const { color, icon } = getActivityMeta(log.action);
+                                    const label = (log.action || "").replace(/_/g, " ").toLowerCase().replace(/^./, c => c.toUpperCase());
+                                    const sub = `${log.description || ""} • ${formatDate(log.createdAt)}`;
+                                    return (
+                                        <div key={log.id} className="cb-activity-item">
+                                            <div className={`cb-activity-icon-circle ${color}`}>
+                                                {icon}
+                                            </div>
+                                            <div className="cb-activity-info">
+                                                <span className="cb-activity-label">{label}</span>
+                                                <span className="cb-activity-sub" title={sub}>{sub}</span>
+                                            </div>
+                                        </div>
+                                    );
+                                })
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Card 3: Promo / Collaboration Banner */}
+                    <div className="cb-promo-card">
+                        <div className="cb-promo-header">
+                            <span className="cb-promo-title">Store. Share. Collaborate.</span>
+                            <button
+                                type="button"
+                                className="cb-promo-arrow-btn"
+                                onClick={() => setSharedPanel('create')}
+                                title="Create Project"
+                            >
+                                &rarr;
+                            </button>
+                        </div>
+                        <p className="cb-promo-subtitle">
+                            Build something amazing together.
+                        </p>
+
+                        <div className="cb-promo-graphic">
+                            <svg viewBox="0 0 180 50" fill="none" xmlns="http://www.w3.org/2000/svg" className="cb-promo-svg">
+                                <path
+                                    d="M0 50 C40 30 80 15 120 35 C150 45 170 48 180 50 Z"
+                                    fill="url(#promo-grad-1)"
+                                    opacity="0.8"
+                                />
+                                <path
+                                    d="M50 50 C90 20 140 25 180 50 Z"
+                                    fill="url(#promo-grad-2)"
+                                    opacity="0.9"
+                                />
+                                <defs>
+                                    <linearGradient id="promo-grad-1" x1="0" y1="20" x2="180" y2="50" gradientUnits="userSpaceOnUse">
+                                        <stop stopColor="#c4b5fd" stopOpacity="0.4" />
+                                        <stop offset="1" stopColor="#a78bfa" stopOpacity="0.2" />
+                                    </linearGradient>
+                                    <linearGradient id="promo-grad-2" x1="50" y1="20" x2="180" y2="50" gradientUnits="userSpaceOnUse">
+                                        <stop stopColor="#a78bfa" stopOpacity="0.6" />
+                                        <stop offset="1" stopColor="#818cf8" stopOpacity="0.3" />
+                                    </linearGradient>
+                                </defs>
                             </svg>
-                            <h3>Drop file here to upload</h3>
-                            <p>Release file to start uploading to the active folder</p>
                         </div>
                     </div>
-                )}
+                </aside>
+            </div>
 
-                {/* File Preview Modal */}
-                <FilePreviewModal
-                    previewItem={previewItem}
-                    onClose={closePreview}
-                    onDownload={downloadFile}
-                    onShare={shareFile}
-                />
-
-                {/* Bottom Sheet Action Menu */}
-                {activeBottomSheet && (
-                    <ActionBottomSheet
-                        activeItem={activeBottomSheet}
-                        onClose={() => setActiveBottomSheet(null)}
-                    />
-                )}
-
-                {/* Full-Screen Directory Move Explorer Modal */}
-                {showMoveModal && movingItem && (
-                    <DirectoryMoveModal
-                        movingItem={movingItem}
-                        onClose={() => { setShowMoveModal(false); setMovingItem(null); }}
-                        showToast={showToast}
-                        onMoveSuccess={async (targetFolderId) => {
-                            await moveItemToFolder(movingItem, targetFolderId);
-                            setShowMoveModal(false);
-                            setMovingItem(null);
-                        }}
-                    />
-                )}
-
-                {/* Share Modal */}
-                {shareModalItem && (
-                    <ShareModal
-                        item={shareModalItem}
-                        onClose={closeShareModal}
-                        showToast={showToast}
-                    />
-                )}
-
-                {/* Trash Modal */}
-                {showTrash && (
-                    <TrashModal
-                        onClose={() => setShowTrash(false)}
-                        showToast={showToast}
-                        refreshDashboard={refreshAfterSharedAction}
-                    />
-                )}
-
-                {/* Create / Join Project & Shared Panels Popup Modal */}
-                {sharedPanel && (
-                    <div className="file-preview-modal-backdrop" onClick={() => setSharedPanel(null)}>
-                        <div className="file-preview-modal-card custom-modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "520px", width: "90%" }}>
-                            <div className="share-modal-header" style={{ marginBottom: "16px" }}>
-                                <div>
-                                    <h2 style={{ fontSize: "18px", fontWeight: "700", margin: 0, color: "var(--text-main)" }}>
-                                        {sharedPanel === 'create' && "Create Project"}
-                                        {sharedPanel === 'join' && "Join Project"}
-                                        {sharedPanel === 'owner-panel' && "Project Owner Panel"}
-                                        {sharedPanel === 'admin-panel' && "Project Admin Panel"}
-                                        {sharedPanel === 'activities' && "Project Activity Logs"}
-                                        {sharedPanel === 'requests' && "Project Join Requests"}
-                                        {sharedPanel === 'members' && "Project Members"}
-                                    </h2>
-                                </div>
-                                <button className="preview-close-btn" onClick={() => setSharedPanel(null)} aria-label="Close modal">✕</button>
+            {/* ─── MODALS & UTILITIES ─────────────────────────────────────── */}
+            {/* Create Normal Folder Popup Modal */}
+            {showCreator && (
+                <div className="file-preview-modal-backdrop" onClick={() => setShowCreator(false)}>
+                    <div className="file-preview-modal-card custom-modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "440px", width: "90%" }}>
+                        <div className="share-modal-header" style={{ marginBottom: "16px" }}>
+                            <div>
+                                <h2 style={{ fontSize: "18px", fontWeight: "700", margin: 0, color: "var(--text-main)" }}>Create New Folder</h2>
+                                <p style={{ fontSize: "12.5px", color: "var(--text-muted)", margin: "4px 0 0 0" }}>
+                                    Enter a name for your folder in {currentFolderInfo?.name || "Root"}
+                                </p>
                             </div>
-
-                            {sharedPanel === 'create' && (
-                                <CreateSharedFolder onFolderCreated={async () => { await handleSharedFolderCreated(); setSharedPanel(null); }} />
-                            )}
-                            {sharedPanel === 'join' && (
-                                <JoinSharedFolder onJoined={async () => { await handleSharedFolderJoined(); setSharedPanel(null); }} />
-                            )}
-                            {sharedPanel === 'owner-panel' && isSharedFolderContext && (
-                                <OwnerPanel
-                                    folderId={currentFolderId}
-                                    onNotify={(msg, type) => showToast(msg, type)}
-                                    onRefresh={refreshAfterSharedAction}
-                                />
-                            )}
-                            {sharedPanel === 'admin-panel' && isSharedFolderContext && (
-                                <AdminPanel
-                                    folderId={currentFolderId}
-                                    onNotify={(msg, type) => showToast(msg, type)}
-                                    onRefresh={refreshAfterSharedAction}
-                                />
-                            )}
-                            {sharedPanel === 'activities' && isSharedFolderContext && (
-                                <ActivityLogs
-                                    folderId={currentFolderId}
-                                />
-                            )}
-                            {sharedPanel === 'requests' && isSharedFolderContext && (
-                                <FolderRequests
-                                    folderId={currentFolderId}
-                                    onRequestHandled={handleRequestHandled}
-                                    onNotify={(msg, type) => showToast(msg, type)}
-                                />
-                            )}
-                            {sharedPanel === 'members' && isSharedFolderContext && (
-                                <FolderMembers folderId={currentFolderId} />
-                            )}
+                            <button className="preview-close-btn" onClick={() => setShowCreator(false)} aria-label="Close modal">✕</button>
                         </div>
-                    </div>
-                )}
 
-                {/* Create Normal Folder Popup Modal */}
-                {showCreator && (
-                    <div className="file-preview-modal-backdrop" onClick={() => setShowCreator(false)}>
-                        <div className="file-preview-modal-card custom-modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "440px", width: "90%" }}>
-                            <div className="share-modal-header" style={{ marginBottom: "16px" }}>
-                                <div>
-                                    <h2 style={{ fontSize: "18px", fontWeight: "700", margin: 0, color: "var(--text-main)" }}>Create New Folder</h2>
-                                    <p style={{ fontSize: "12.5px", color: "var(--text-muted)", margin: "4px 0 0 0" }}>
-                                        Enter a name for your folder in {currentFolderInfo?.name || "Root"}
-                                    </p>
-                                </div>
-                                <button className="preview-close-btn" onClick={() => setShowCreator(false)} aria-label="Close modal">✕</button>
+                        <form onSubmit={(e) => { createFolder(e); setShowCreator(false); }} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                            <input
+                                value={folderName}
+                                onChange={(e) => setFolderName(e.target.value)}
+                                placeholder="Enter folder name..."
+                                className="input-field"
+                                autoFocus
+                            />
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                                <button
+                                    type="button"
+                                    className="btn btn-secondary"
+                                    onClick={() => {
+                                        setFolderName("");
+                                        setShowCreator(false);
+                                    }}
+                                >
+                                    Cancel
+                                </button>
+                                <button type="submit" className="btn btn-primary">Create Folder</button>
                             </div>
-
-                            <form onSubmit={(e) => { createFolder(e); setShowCreator(false); }} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                                <input
-                                    value={folderName}
-                                    onChange={(e) => setFolderName(e.target.value)}
-                                    placeholder="Enter folder name..."
-                                    className="input-field"
-                                    autoFocus
-                                />
-                                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-                                    <button
-                                        type="button"
-                                        className="btn btn-secondary"
-                                        onClick={() => {
-                                            setFolderName("");
-                                            setShowCreator(false);
-                                        }}
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button type="submit" className="btn btn-primary">Create Folder</button>
-                                </div>
-                            </form>
-                        </div>
+                        </form>
                     </div>
-                )}
-
-
-
-
-                {/* Toast Container */}
-                <div className="toast-container">
-                    {toasts.map(toast => (
-                        <div key={toast.id} className={`toast toast-${toast.type}`}>
-                            <span>{toast.message}</span>
-                        </div>
-                    ))}
                 </div>
+            )}
+
+            {/* Drag and Drop Zone Overlay */}
+            {isDragging && (
+                <div className="drag-overlay">
+                    <div className="drag-overlay-card">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                            <polyline points="17 8 12 3 7 8" />
+                            <line x1="12" y1="3" x2="12" y2="15" />
+                        </svg>
+                        <h3>Drop file here to upload</h3>
+                        <p>Release file to start uploading to the active folder</p>
+                    </div>
+                </div>
+            )}
+
+            {/* File Preview Modal */}
+            <FilePreviewModal
+                previewItem={previewItem}
+                onClose={closePreview}
+                onDownload={downloadFile}
+                onShare={shareFile}
+            />
+
+            {/* Bottom Sheet Action Menu */}
+            {activeBottomSheet && (
+                <ActionBottomSheet
+                    activeItem={activeBottomSheet}
+                    onClose={() => setActiveBottomSheet(null)}
+                />
+            )}
+
+            {/* Full-Screen Directory Move Explorer Modal */}
+            {showMoveModal && movingItem && (
+                <DirectoryMoveModal
+                    movingItem={movingItem}
+                    onClose={() => { setShowMoveModal(false); setMovingItem(null); }}
+                    showToast={showToast}
+                    onMoveSuccess={async (targetFolderId) => {
+                        await moveItemToFolder(movingItem, targetFolderId);
+                        setShowMoveModal(false);
+                        setMovingItem(null);
+                    }}
+                />
+            )}
+
+            {/* Share Modal */}
+            {shareModalItem && (
+                <ShareModal
+                    item={shareModalItem}
+                    onClose={closeShareModal}
+                    showToast={showToast}
+                />
+            )}
+
+            {/* Trash Modal */}
+            {showTrash && (
+                <TrashModal
+                    onClose={() => setShowTrash(false)}
+                    showToast={showToast}
+                    refreshDashboard={refreshAfterSharedAction}
+                />
+            )}
+
+            {/* Create / Join Project Modal */}
+            {sharedPanel && (
+                <div className="file-preview-modal-backdrop" onClick={() => setSharedPanel(null)}>
+                    <div className="file-preview-modal-card custom-modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "520px", width: "90%" }}>
+                        <div className="share-modal-header" style={{ marginBottom: "16px" }}>
+                            <div>
+                                <h2 style={{ fontSize: "18px", fontWeight: "700", margin: 0, color: "var(--text-main)" }}>
+                                    {sharedPanel === 'create' && "Create Project"}
+                                    {sharedPanel === 'join' && "Join Project"}
+                                    {sharedPanel === 'owner-panel' && "Project Owner Panel"}
+                                    {sharedPanel === 'admin-panel' && "Project Admin Panel"}
+                                    {sharedPanel === 'activities' && "Project Activity Logs"}
+                                    {sharedPanel === 'requests' && "Project Join Requests"}
+                                    {sharedPanel === 'members' && "Project Members"}
+                                </h2>
+                            </div>
+                            <button className="preview-close-btn" onClick={() => setSharedPanel(null)} aria-label="Close modal">✕</button>
+                        </div>
+
+                        {sharedPanel === 'create' && (
+                            <CreateSharedFolder onFolderCreated={async () => { await handleSharedFolderCreated(); setSharedPanel(null); }} />
+                        )}
+                        {sharedPanel === 'join' && (
+                            <JoinSharedFolder onJoined={async () => { await handleSharedFolderJoined(); setSharedPanel(null); }} />
+                        )}
+                        {sharedPanel === 'owner-panel' && isSharedFolderContext && (
+                            <OwnerPanel
+                                folderId={currentFolderId}
+                                onNotify={(msg, type) => showToast(msg, type)}
+                                onRefresh={refreshAfterSharedAction}
+                            />
+                        )}
+                        {sharedPanel === 'admin-panel' && isSharedFolderContext && (
+                            <AdminPanel
+                                folderId={currentFolderId}
+                                onNotify={(msg, type) => showToast(msg, type)}
+                                onRefresh={refreshAfterSharedAction}
+                            />
+                        )}
+                        {sharedPanel === 'activities' && isSharedFolderContext && (
+                            <ActivityLogs folderId={currentFolderId} />
+                        )}
+                        {sharedPanel === 'requests' && isSharedFolderContext && (
+                            <FolderRequests
+                                folderId={currentFolderId}
+                                onRequestHandled={handleRequestHandled}
+                                onNotify={(msg, type) => showToast(msg, type)}
+                            />
+                        )}
+                        {sharedPanel === 'members' && isSharedFolderContext && (
+                            <FolderMembers folderId={currentFolderId} />
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* Toast Container */}
+            <div className="toast-container">
+                {toasts.map(toast => (
+                    <div key={toast.id} className={`toast toast-${toast.type}`}>
+                        <span>{toast.message}</span>
+                    </div>
+                ))}
             </div>
         </div>
     );
