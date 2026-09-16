@@ -1,0 +1,214 @@
+import React, { useState } from "react";
+import { formatBytes } from "../../utils/formatters";
+
+export default function Sidebar({
+    activeNav,
+    setActiveNav,
+    mobileSidebarOpen,
+    setMobileSidebarOpen,
+    rootFolderId,
+    handleFolderSelect,
+    setSharedPanel,
+    setShowTrash,
+    storagePercent = 0,
+    usedStorageBytes = 0,
+    limitStorageBytes = 0,
+    userName,
+    userEmail,
+    showToast,
+    sharedFolders = []
+}) {
+    const [projectsOpen, setProjectsOpen] = useState(true);
+
+    const displayPercent = storagePercent || 0;
+    const displayUsed = formatBytes(usedStorageBytes);
+    const displayLimit = limitStorageBytes > 0 ? formatBytes(limitStorageBytes) : "10 GB";
+
+    return (
+        <aside className={`cb-left-sidebar ${mobileSidebarOpen ? 'mobile-open' : ''}`}>
+            {/* Top Navigation Block */}
+            <div className="cb-sidebar-top">
+                <nav className="cb-sidebar-nav">
+                    {/* Dashboard */}
+                    <button
+                        type="button"
+                        className={`cb-nav-item ${activeNav === 'dashboard' ? 'active' : ''}`}
+                        onClick={() => {
+                            setActiveNav('dashboard');
+                            handleFolderSelect({ id: rootFolderId !== -1 ? rootFolderId : -1, name: "Root", pid: null });
+                            setMobileSidebarOpen(false);
+                        }}
+                    >
+                        <svg className="cb-nav-icon" width="19" height="19" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
+                        </svg>
+                        <span>Dashboard</span>
+                    </button>
+
+                    {/* My Drive */}
+                    <button
+                        type="button"
+                        className={`cb-nav-item ${activeNav === 'files' ? 'active' : ''}`}
+                        onClick={() => {
+                            setActiveNav('files');
+                            handleFolderSelect({ id: rootFolderId !== -1 ? rootFolderId : -1, name: "Root", pid: null });
+                            setMobileSidebarOpen(false);
+                        }}
+                    >
+                        <svg className="cb-nav-icon" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                        </svg>
+                        <span>My Drive</span>
+                    </button>
+
+                    {/* Projects (Expandable) */}
+                    <div className="cb-nav-group">
+                        <button
+                            type="button"
+                            className={`cb-nav-item cb-nav-group-header ${activeNav === 'projects' ? 'active' : ''}`}
+                            onClick={() => setProjectsOpen(prev => !prev)}
+                        >
+                            <svg className="cb-nav-icon" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <rect x="2" y="3" width="20" height="14" rx="2" />
+                                <line x1="8" y1="21" x2="16" y2="21" />
+                                <line x1="12" y1="17" x2="12" y2="21" />
+                            </svg>
+                            <span style={{ flex: 1 }}>Projects</span>
+                            <svg
+                                className={`cb-nav-chevron ${projectsOpen ? 'open' : ''}`}
+                                width="14"
+                                height="14"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2.5"
+                            >
+                                <polyline points="6 9 12 15 18 9" />
+                            </svg>
+                        </button>
+
+                        {projectsOpen && (
+                            <div className="cb-nav-sub-list">
+                                {sharedFolders.length > 0 ? (
+                                    sharedFolders.map((folder) => (
+                                        <button
+                                            key={folder.id}
+                                            type="button"
+                                            className="cb-nav-sub-item"
+                                            onClick={() => {
+                                                setActiveNav('projects');
+                                                handleFolderSelect(folder);
+                                                setMobileSidebarOpen(false);
+                                            }}
+                                        >
+                                            <svg width="15" height="15" viewBox="0 0 24 24" fill="#94a3b8">
+                                                <path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" />
+                                            </svg>
+                                            <span title={folder.name}>{folder.name}</span>
+                                        </button>
+                                    ))
+                                ) : null}
+
+                                <button
+                                    type="button"
+                                    className="cb-nav-sub-item cb-add-project-btn"
+                                    onClick={() => { setSharedPanel('create'); setMobileSidebarOpen(false); }}
+                                >
+                                    <span className="cb-add-plus">+</span>
+                                    <span>Add Project</span>
+                                </button>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Shared with me */}
+                    <button
+                        type="button"
+                        className={`cb-nav-item ${activeNav === 'shared' ? 'active' : ''}`}
+                        onClick={() => {
+                            setActiveNav('shared');
+                            setSharedPanel('members');
+                            setMobileSidebarOpen(false);
+                        }}
+                    >
+                        <svg className="cb-nav-icon" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="18" cy="5" r="3" />
+                            <circle cx="6" cy="12" r="3" />
+                            <circle cx="18" cy="19" r="3" />
+                            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+                            <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+                        </svg>
+                        <span>Shared with me</span>
+                    </button>
+
+                    {/* Starred */}
+                    <button
+                        type="button"
+                        className={`cb-nav-item ${activeNav === 'starred' ? 'active' : ''}`}
+                        onClick={() => setActiveNav('starred')}
+                    >
+                        <svg className="cb-nav-icon" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                        </svg>
+                        <span>Starred</span>
+                    </button>
+
+                    {/* Recent */}
+                    <button
+                        type="button"
+                        className={`cb-nav-item ${activeNav === 'recent' ? 'active' : ''}`}
+                        onClick={() => setActiveNav('recent')}
+                    >
+                        <svg className="cb-nav-icon" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="10" />
+                            <polyline points="12 6 12 12 16 14" />
+                        </svg>
+                        <span>Recent</span>
+                    </button>
+
+                    {/* Trash */}
+                    <button
+                        type="button"
+                        className={`cb-nav-item ${activeNav === 'trash' ? 'active' : ''}`}
+                        onClick={() => {
+                            setActiveNav('trash');
+                            setShowTrash(true);
+                            setMobileSidebarOpen(false);
+                        }}
+                    >
+                        <svg className="cb-nav-icon" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="3 6 5 6 21 6" />
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+                            <path d="M10 11v6" /><path d="M14 11v6" />
+                            <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+                        </svg>
+                        <span>Trash</span>
+                    </button>
+                </nav>
+            </div>
+
+            {/* Bottom Storage Widget (Matching Reference Image) */}
+            <div className="cb-sidebar-bottom">
+                <div className="cb-sidebar-storage-card">
+                    <div className="cb-storage-label-row">
+                        <span className="cb-storage-label-title">Storage</span>
+                        <span className="cb-storage-label-pct">{displayPercent}%</span>
+                    </div>
+                    <div className="cb-donut-mini-bar">
+                        <div className="cb-donut-mini-fill" style={{ width: `${displayPercent}%` }}></div>
+                    </div>
+                    <span className="cb-sidebar-storage-sub">
+                        {`${displayUsed} of ${displayLimit} used`}
+                    </span>
+                    <button
+                        type="button"
+                        className="cb-manage-storage-link"
+                        onClick={() => showToast(`Total Storage: ${displayLimit} (${displayPercent}% used)`, "info")}
+                    >
+                        Manage storage &gt;
+                    </button>
+                </div>
+            </div>
+        </aside>
+    );
+}

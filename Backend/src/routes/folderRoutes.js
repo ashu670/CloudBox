@@ -7,6 +7,10 @@ const router = Router();
 
 router.use(authenticate);
 
+// Dashboard Stats
+router.get("/stats", folderCon.getDashboardStatsController);
+
+
 // POST Routes
 router.post("/create", folderCon.create);
 router.post("/create-shared", folderCon.createSharedFolder);

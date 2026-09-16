@@ -412,3 +412,29 @@ export const updateInviteCodeTx = async (folderId, inviteCodeData, actorUserId, 
         return folder;
     });
 };
+
+/* ── Dashboard Stats ─────────────────────────────────────────────── */
+
+export const getDashboardStats = async (uid) => {
+    const [totalFolders, projects, sharedWithMe] = await Promise.all([
+        // All own folders (non-root, non-deleted)
+        prisma.folder.count({
+            where: { uid, isRoot: false, deletedAt: null }
+        }),
+        // Projects = own shared folders
+        prisma.folder.count({
+            where: { uid, isShared: true, deletedAt: null }
+        }),
+        // Shared with me = folders where user is a member but NOT the owner
+        prisma.folderMember.count({
+            where: {
+                userId: uid,
+                role: { not: "OWNER" },
+                folder: { deletedAt: null }
+            }
+        })
+    ]);
+
+    return { totalFolders, projects, sharedWithMe };
+};
+

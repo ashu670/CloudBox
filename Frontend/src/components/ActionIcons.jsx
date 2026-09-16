@@ -37,6 +37,19 @@ export const DeleteIcon = ({ size = 22 }) => (
     </svg>
 );
 
+export const OpenIcon = ({ size = 22 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" fill="rgba(59, 130, 246, 0.18)" stroke="#3b82f6" strokeWidth="2" strokeLinejoin="round" />
+    </svg>
+);
+
+export const PreviewIcon = ({ size = 22 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" fill="rgba(139, 92, 246, 0.18)" stroke="#8b5cf6" strokeWidth="2" strokeLinejoin="round" />
+        <circle cx="12" cy="12" r="3" stroke="#8b5cf6" strokeWidth="2" />
+    </svg>
+);
+
 export const BackArrowIcon = ({ size = 20, color = "currentColor" }) => (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M19 12H5" />

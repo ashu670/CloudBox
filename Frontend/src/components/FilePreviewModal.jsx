@@ -11,20 +11,28 @@ export default function FilePreviewModal({ previewItem, onClose, onDownload, onS
     useEffect(() => {
         if (!previewItem) return;
         lockBodyScroll();
+        const handleKeyDown = (e) => {
+            if (e.key === "Escape") onClose();
+        };
+        window.addEventListener("keydown", handleKeyDown);
         return () => {
             unlockBodyScroll();
+            window.removeEventListener("keydown", handleKeyDown);
         };
-    }, [previewItem]);
+    }, [previewItem, onClose]);
 
     useEffect(() => {
-        if (!previewItem || !previewItem.mimeType) return;
-        const { mimeType, url } = previewItem;
+        if (!previewItem) return;
+        const mimeType = previewItem.mimeType || "";
+        const fileName = (previewItem.file?.orgName || previewItem.file?.name || "").toLowerCase();
+        const { url } = previewItem;
 
         if (
             mimeType.startsWith("text/") ||
             mimeType === "application/json" ||
             mimeType.includes("javascript") ||
-            mimeType.includes("xml")
+            mimeType.includes("xml") ||
+            /\.(txt|json|js|jsx|ts|tsx|html|css|scss|md|py|java|c|cpp|go|rs|sql|xml|yaml|yml|sh|env)$/i.test(fileName)
         ) {
             setLoadingText(true);
             fetch(url)
@@ -42,10 +50,11 @@ export default function FilePreviewModal({ previewItem, onClose, onDownload, onS
 
     if (!previewItem) return null;
 
-    const { file, url, mimeType } = previewItem;
+    const { file, url, mimeType = "" } = previewItem;
+    const fileName = (file?.orgName || file?.name || "").toLowerCase();
 
     const renderFullViewportPreview = () => {
-        if (mimeType.startsWith("image/")) {
+        if (mimeType.startsWith("image/") || /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico)$/i.test(fileName)) {
             return (
                 <div style={{ width: "100%", height: "100%", display: "flex", justifyContent: "center", alignItems: "center", backgroundColor: "var(--bg-app)", padding: "16px" }}>
                     <img
@@ -57,11 +66,11 @@ export default function FilePreviewModal({ previewItem, onClose, onDownload, onS
             );
         }
 
-        if (mimeType === "application/pdf") {
+        if (mimeType === "application/pdf" || fileName.endsWith(".pdf")) {
             return <PdfPreview url={url} />;
         }
 
-        if (mimeType.startsWith("video/")) {
+        if (mimeType.startsWith("video/") || /\.(mp4|webm|mov|mkv|avi)$/i.test(fileName)) {
             return (
                 <div style={{ width: "100%", height: "100%", display: "flex", justifyContent: "center", alignItems: "center", backgroundColor: "#000" }}>
                     <video

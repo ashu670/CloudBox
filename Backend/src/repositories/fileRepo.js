@@ -135,3 +135,12 @@ export const findAllByUserId = async (userId) => {
     });
 };
 
+export const countByUserId = async (userId) => {
+    return await prisma.file.count({
+        where: {
+            uid: Number(userId),
+            deletedAt: null
+        }
+    });
+};
+

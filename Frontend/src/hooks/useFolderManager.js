@@ -7,6 +7,7 @@ export function useFolderManager() {
     const [files, setFiles] = useState([]);
     const [userProfile, setUserProfile] = useState(null);
     const [storageBreakdown, setStorageBreakdown] = useState({ image: 0, video: 0, audio: 0, document: 0 });
+    const [dashboardStats, setDashboardStats] = useState({ totalFiles: 0, totalFolders: 0, projects: 0, sharedWithMe: 0 });
     const [searchQuery, setSearchQuery] = useState("");
     const [searchResult, setSearchResult] = useState({
         folders: [],
@@ -67,6 +68,21 @@ export function useFolderManager() {
         }
     }, []);
 
+    const fetchDashboardStats = useCallback(async () => {
+        try {
+            const token = localStorage.getItem("accessToken");
+            if (!token) return;
+            const { data } = await axios.get("api/folder/stats", {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            if (data.success && data.data) {
+                setDashboardStats(data.data);
+            }
+        } catch (err) {
+            console.error("Failed to fetch dashboard stats:", err);
+        }
+    }, []);
+
     const fetchUserProfile = useCallback(async () => {
         try {
             const token = localStorage.getItem("accessToken");
@@ -84,10 +100,11 @@ export function useFolderManager() {
                 }
             }
             fetchStorageBreakdown();
+            fetchDashboardStats();
         } catch (err) {
             console.error("Failed to fetch user profile:", err);
         }
-    }, [fetchStorageBreakdown]);
+    }, [fetchStorageBreakdown, fetchDashboardStats]);
 
     const addToCache = useCallback((folderList) => {
         if (!folderList || !Array.isArray(folderList)) return;
@@ -257,22 +274,71 @@ export function useFolderManager() {
 
     const [previewItem, setPreviewItem] = useState(null);
 
+    const inferMimeType = (fileName = "") => {
+        const lower = (fileName || "").toLowerCase();
+        if (lower.endsWith(".pdf")) return "application/pdf";
+        if (lower.endsWith(".png")) return "image/png";
+        if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+        if (lower.endsWith(".gif")) return "image/gif";
+        if (lower.endsWith(".webp")) return "image/webp";
+        if (lower.endsWith(".svg")) return "image/svg+xml";
+        if (lower.endsWith(".mp4")) return "video/mp4";
+        if (lower.endsWith(".webm")) return "video/webm";
+        if (lower.endsWith(".mov")) return "video/quicktime";
+        if (lower.endsWith(".mp3")) return "audio/mpeg";
+        if (lower.endsWith(".wav")) return "audio/wav";
+        if (lower.endsWith(".ogg")) return "audio/ogg";
+        if (lower.endsWith(".txt")) return "text/plain";
+        if (lower.endsWith(".json")) return "application/json";
+        if (lower.endsWith(".js") || lower.endsWith(".jsx")) return "text/javascript";
+        if (lower.endsWith(".ts") || lower.endsWith(".tsx")) return "text/typescript";
+        if (lower.endsWith(".html") || lower.endsWith(".htm")) return "text/html";
+        if (lower.endsWith(".css")) return "text/css";
+        if (lower.endsWith(".md")) return "text/markdown";
+        return "application/octet-stream";
+    };
+
     const previewFile = async (e, file) => {
-        if (e) e.stopPropagation();
+        if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+
+        // Defensively normalize target file object or identifier
+        let target = file;
+        if (!target && e) {
+            if (e.id) target = e;
+            else if (typeof e === 'number' || typeof e === 'string') target = { id: e };
+        }
+
+        if (!target || !target.id) {
+            console.warn("previewFile called without a valid file object:", { e, file });
+            return;
+        }
+
         try {
             const token = localStorage.getItem("accessToken");
-            const res = await axios.get(`api/file/preview/${file.id}`, {
+            const res = await axios.get(`api/file/preview/${target.id}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             if (res.data?.success && res.data?.data?.url) {
-                const { url, mimeType } = res.data.data;
-                setPreviewItem({ file, url, mimeType: mimeType || file.mimeType, isSignedUrl: true });
+                const { url, mimeType, orgName, size } = res.data.data;
+                const fileName = orgName || target.orgName || target.name || "File";
+                const inferredMime = mimeType || target.mimeType || inferMimeType(fileName);
+                setPreviewItem({
+                    file: {
+                        ...target,
+                        orgName: fileName,
+                        size: size || target.size || 0,
+                        mimeType: inferredMime
+                    },
+                    url,
+                    mimeType: inferredMime,
+                    isSignedUrl: true
+                });
             } else {
-                throw new Error("Invalid preview data");
+                throw new Error("Invalid preview data received from server");
             }
         } catch (err) {
             console.error("Preview error:", err);
-            showToast("Failed to load file preview", "error");
+            showToast(err.response?.data?.message || err.response?.data?.Error || "Failed to load file preview", "error");
         }
     };
 
@@ -538,7 +604,7 @@ export function useFolderManager() {
         : files;
 
     return {
-        folders, files, filteredFolders, filteredFiles, userProfile, storageBreakdown, searchQuery, setSearchQuery,
+        folders, files, filteredFolders, filteredFiles, userProfile, storageBreakdown, dashboardStats, searchQuery, setSearchQuery,
         searchLoading, searchError,
         rootFolderId, currentFolderId, history, folderName, setFolderName,
         loading, isUploading, isDragging, setIsDragging, showCreator, setShowCreator,

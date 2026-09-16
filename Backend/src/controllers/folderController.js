@@ -1,5 +1,6 @@
-import { stat } from "fs";
 import * as service from "../services/folderService.js";
+import { getDashboardStats } from "../repositories/folderRepo.js";
+import { countByUserId as countFiles } from "../repositories/fileRepo.js";
 
 const getErrorStatus = (error) => {
     const msg = error?.message ? error.message.toLowerCase() : "";
@@ -459,5 +460,26 @@ export const getFolderActivities = async (req, res) => {
     } catch (err) {
         const status = getErrorStatus(err);
         return res.status(status).json({ success: false, error: err.message });
+    }
+};
+
+export const getDashboardStatsController = async (req, res) => {
+    const uid = req.user.id;
+    try {
+        const [folderStats, totalFiles] = await Promise.all([
+            getDashboardStats(uid),
+            countFiles(uid)
+        ]);
+        return res.status(200).json({
+            success: true,
+            data: {
+                totalFiles,
+                totalFolders: folderStats.totalFolders,
+                projects: folderStats.projects,
+                sharedWithMe: folderStats.sharedWithMe
+            }
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
     }
 };

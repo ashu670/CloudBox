@@ -1,14 +1,16 @@
 import React, { useEffect } from "react";
-import { DownloadIcon, ShareIcon, MoveIcon, RenameIcon, DeleteIcon } from "./ActionIcons";
+import { DownloadIcon, ShareIcon, MoveIcon, RenameIcon, DeleteIcon, OpenIcon, PreviewIcon } from "./ActionIcons";
 import { lockBodyScroll, unlockBodyScroll } from "../utils/scrollLock";
 
 const getIcon = (type) => {
     switch (type) {
-        case 'download': return <DownloadIcon size={22} />;
-        case 'share': return <ShareIcon size={22} />;
-        case 'move': return <MoveIcon size={22} />;
-        case 'rename': return <RenameIcon size={22} />;
-        case 'delete': return <DeleteIcon size={22} />;
+        case 'open': return <OpenIcon size={20} />;
+        case 'preview': return <PreviewIcon size={20} />;
+        case 'download': return <DownloadIcon size={20} />;
+        case 'share': return <ShareIcon size={20} />;
+        case 'move': return <MoveIcon size={20} />;
+        case 'rename': return <RenameIcon size={20} />;
+        case 'delete': return <DeleteIcon size={20} />;
         default: return null;
     }
 };
@@ -32,32 +34,52 @@ export default function ActionBottomSheet({ activeItem, onClose }) {
 
     if (!activeItem) return null;
 
-    const { name, actions } = activeItem;
+    const { name, isFolder, actions } = activeItem;
 
     return (
-        <div className="bottom-sheet-backdrop" onClick={onClose}>
-            <div className="bottom-sheet-container" onClick={(e) => e.stopPropagation()}>
-                <div className="bottom-sheet-handle"></div>
-
-                <div className="bottom-sheet-header">
-                    <span className="bottom-sheet-title">{name}</span>
-                    <button type="button" className="bottom-sheet-close" onClick={onClose}>✕</button>
+        <div className="cb-action-modal-backdrop" onClick={onClose}>
+            <div className="cb-action-modal-card" onClick={(e) => e.stopPropagation()}>
+                {/* Header */}
+                <div className="cb-action-modal-header">
+                    <div className="cb-action-item-info">
+                        <div className={`cb-action-type-badge ${isFolder ? 'folder-badge' : 'file-badge'}`}>
+                            {isFolder ? (
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="#8b5cf6">
+                                    <path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" />
+                                </svg>
+                            ) : (
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2">
+                                    <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
+                                    <polyline points="13 2 13 9 20 9" />
+                                </svg>
+                            )}
+                        </div>
+                        <div className="cb-action-header-texts">
+                            <h3 className="cb-action-item-title" title={name}>{name}</h3>
+                            <span className="cb-action-item-sub">{isFolder ? "Folder Options" : "File Options"}</span>
+                        </div>
+                    </div>
+                    <button type="button" className="preview-close-btn" onClick={onClose} aria-label="Close menu">✕</button>
                 </div>
 
-                <div className="bottom-sheet-actions">
+                {/* Actions Grid */}
+                <div className="cb-action-modal-list">
                     {actions.map((act, idx) => (
                         <button
                             key={idx}
                             type="button"
-                            className={`bottom-sheet-btn ${act.danger ? 'danger' : ''}`}
+                            className={`cb-action-option-btn ${act.danger ? 'danger-action' : ''}`}
                             onClick={(e) => {
                                 e.stopPropagation();
                                 onClose();
                                 act.onClick(e);
                             }}
                         >
-                            <span className="sheet-btn-icon">{act.icon || getIcon(act.type)}</span>
-                            <span className="sheet-btn-label">{act.label}</span>
+                            <span className="cb-action-icon-box">{act.icon || getIcon(act.type)}</span>
+                            <div className="cb-action-label-box">
+                                <span className="cb-action-label">{act.label}</span>
+                            </div>
+                            <span className="cb-action-chevron">&rsaquo;</span>
                         </button>
                     ))}
                 </div>

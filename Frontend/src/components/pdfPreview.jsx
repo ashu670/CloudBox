@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import * as pdfjsLib from "pdfjs-dist";
+import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 
 // Initialize worker for pdfjs-dist v6 ESM support
 if (typeof window !== "undefined" && !pdfjsLib.GlobalWorkerOptions.workerSrc) {
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version || '4.10.38'}/build/pdf.worker.min.mjs`;
+    pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker || `https://unpkg.com/pdfjs-dist@${pdfjsLib.version || '6.3.289'}/build/pdf.worker.min.mjs`;
 }
 
 export default function PdfPreview({ url }) {
@@ -42,17 +43,27 @@ export default function PdfPreview({ url }) {
                 let pdfInitParam;
 
                 if (typeof url === "string") {
-                    const response = await fetch(url);
-                    if (!response.ok) {
-                        throw new Error(`Failed to fetch PDF resource (HTTP status ${response.status})`);
+                    try {
+                        const response = await fetch(url);
+                        if (!response.ok) {
+                            throw new Error(`Failed to fetch PDF resource (HTTP status ${response.status})`);
+                        }
+                        const arrayBuffer = await response.arrayBuffer();
+                        pdfInitParam = {
+                            data: new Uint8Array(arrayBuffer),
+                            cMapUrl: "https://unpkg.com/pdfjs-dist@6.3.289/cmaps/",
+                            cMapPacked: true,
+                            standardFontDataUrl: "https://unpkg.com/pdfjs-dist@6.3.289/standard_fonts/"
+                        };
+                    } catch (fetchErr) {
+                        console.warn("Direct fetch for PDF buffer failed, falling back to URL parameter:", fetchErr);
+                        pdfInitParam = {
+                            url: url,
+                            cMapUrl: "https://unpkg.com/pdfjs-dist@6.3.289/cmaps/",
+                            cMapPacked: true,
+                            standardFontDataUrl: "https://unpkg.com/pdfjs-dist@6.3.289/standard_fonts/"
+                        };
                     }
-                    const arrayBuffer = await response.arrayBuffer();
-                    pdfInitParam = {
-                        data: new Uint8Array(arrayBuffer),
-                        cMapUrl: "https://unpkg.com/pdfjs-dist@6.3.289/cmaps/",
-                        cMapPacked: true,
-                        standardFontDataUrl: "https://unpkg.com/pdfjs-dist@6.3.289/standard_fonts/"
-                    };
                 } else if (url instanceof ArrayBuffer) {
                     pdfInitParam = {
                         data: new Uint8Array(url),

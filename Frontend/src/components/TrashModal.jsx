@@ -186,113 +186,74 @@ export default function TrashModal({ onClose, showToast, refreshDashboard }) {
 
                                     return (
                                         <div key={item.id} className="trash-item-row">
-                                            {/* Item top header: Icon, Name, Type + Mobile Restore button */}
-                                            <div className="trash-item-top">
-                                                <div className="trash-item-main">
-                                                    <div className="trash-item-icon">
-                                                        {isFolder ? (
-                                                            <svg width="22" height="22" viewBox="0 0 24 24" fill="#3b82f6">
-                                                                <path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" />
-                                                            </svg>
-                                                        ) : (
-                                                            <FileIcon mimeType={item.mimeType || ""} size={22} />
-                                                        )}
-                                                    </div>
-                                                    <div className="trash-item-name-group">
-                                                        <span className="trash-item-name" title={item.name}>
-                                                            {item.name}
-                                                        </span>
-                                                        <span className="trash-item-type-badge">
-                                                            {isFolder ? "Folder" : "File"}
-                                                        </span>
-                                                    </div>
+                                            {/* Col 1: Item Name */}
+                                            <div className="trash-col-name">
+                                                <div className="trash-item-icon">
+                                                    {isFolder ? (
+                                                        <svg width="20" height="20" viewBox="0 0 24 20" fill="#8b5cf6">
+                                                            <path d="M20 4h-7.586l-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2z" />
+                                                        </svg>
+                                                    ) : (
+                                                        <FileIcon mimeType={item.mimeType || ""} size={20} />
+                                                    )}
                                                 </div>
-
-                                                {/* Mobile Actions */}
-                                                <div className="trash-item-action-mobile">
-                                                    <button
-                                                        className="trash-restore-btn"
-                                                        onClick={() => handleRestoreItem(item.id, item.name)}
-                                                        disabled={isRestoringThis || deletingId === item.id || restoringAll}
-                                                        title="Restore"
-                                                    >
-                                                        {isRestoringThis ? (
-                                                            <span className="spinner-sm" />
-                                                        ) : (
-                                                            <>
-                                                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                                                    <polyline points="1 4 1 10 7 10" />
-                                                                    <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
-                                                                </svg>
-                                                                Restore
-                                                            </>
-                                                        )}
-                                                    </button>
-                                                    <button
-                                                        className="trash-delete-btn"
-                                                        onClick={() => handleDeletePermanentItem(item.id, item.name)}
-                                                        disabled={isRestoringThis || deletingId === item.id || restoringAll}
-                                                        title="Delete Permanently"
-                                                    >
-                                                        {deletingId === item.id ? (
-                                                            <span className="spinner-sm" />
-                                                        ) : (
-                                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                                                <polyline points="3 6 5 6 21 6" />
-                                                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
-                                                            </svg>
-                                                        )}
-                                                    </button>
-                                                </div>
+                                                <span className="trash-item-name" title={item.name}>
+                                                    {item.name}
+                                                </span>
+                                                <span className="trash-item-type-badge">
+                                                    {isFolder ? "Folder" : "File"}
+                                                </span>
                                             </div>
 
-                                            {/* Details Metadata (Location, Size, Expiry) */}
-                                            <div className="trash-item-details">
-                                                <div className="col-location trash-item-location">
-                                                    <span className="location-pill" title={item.location}>
-                                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-                                                        </svg>
-                                                        {item.location || "Root"}
-                                                    </span>
-                                                </div>
+                                            {/* Col 2: Location */}
+                                            <div className="trash-col-location">
+                                                <span className="location-pill" title={item.location}>
+                                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                                                    </svg>
+                                                    <span>{item.location || "Root"}</span>
+                                                </span>
+                                            </div>
 
-                                                <div className="col-size trash-item-size">
-                                                    <span className="meta-pill size-pill">
-                                                        {isFolder ? "—" : formatBytes(item.size || 0)}
-                                                    </span>
-                                                </div>
+                                            {/* Col 3: Size */}
+                                            <div className="trash-col-size">
+                                                <span className="meta-pill">
+                                                    {isFolder ? "—" : formatBytes(item.size || 0)}
+                                                </span>
+                                            </div>
 
-                                                <div className="col-expiry trash-item-expiry">
-                                                    <span className={`expiry-badge ${(item.secondsLeft <= 60 || item.daysLeft <= 3) ? "urgent" : ""}`}>
-                                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                                            <circle cx="12" cy="12" r="10" />
-                                                            <polyline points="12 6 12 12 16 14" />
-                                                        </svg>
+                                            {/* Col 4: Expiry */}
+                                            <div className="trash-col-expiry">
+                                                <span className={`expiry-badge ${(item.secondsLeft <= 60 || item.daysLeft <= 3) ? "urgent" : ""}`}>
+                                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                        <circle cx="12" cy="12" r="10" />
+                                                        <polyline points="12 6 12 12 16 14" />
+                                                    </svg>
+                                                    <span>
                                                         {item.secondsLeft !== undefined && item.secondsLeft <= 60
                                                             ? (item.secondsLeft === 0 ? "Expiring now" : `${item.secondsLeft}s left`)
                                                             : (item.daysLeft === 0 ? "Expires today" : `${item.daysLeft} ${item.daysLeft === 1 ? "day" : "days"}`)}
                                                     </span>
-                                                </div>
+                                                </span>
                                             </div>
 
-                                            {/* Desktop Actions */}
-                                            <div className="col-action trash-item-action-desktop">
+                                            {/* Col 5: Actions */}
+                                            <div className="trash-col-actions">
                                                 <button
                                                     className="trash-restore-btn"
                                                     onClick={() => handleRestoreItem(item.id, item.name)}
                                                     disabled={isRestoringThis || deletingId === item.id || restoringAll}
-                                                    title="Restore"
+                                                    title="Restore item"
                                                 >
                                                     {isRestoringThis ? (
                                                         <span className="spinner-sm" />
                                                     ) : (
                                                         <>
-                                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
                                                                 <polyline points="1 4 1 10 7 10" />
                                                                 <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
                                                             </svg>
-                                                            Restore
+                                                            <span>Restore</span>
                                                         </>
                                                     )}
                                                 </button>
@@ -305,7 +266,7 @@ export default function TrashModal({ onClose, showToast, refreshDashboard }) {
                                                     {deletingId === item.id ? (
                                                         <span className="spinner-sm" />
                                                     ) : (
-                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
                                                             <polyline points="3 6 5 6 21 6" />
                                                             <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
                                                         </svg>
