@@ -7,6 +7,8 @@ import StatsRow from "../components/dashboard/StatsRow";
 import FoldersSection from "../components/dashboard/FoldersSection";
 import FilesSection from "../components/dashboard/FilesSection";
 import RightSidebar from "../components/dashboard/RightSidebar";
+import MyDriveView from "../components/dashboard/MyDriveView";
+import ProjectView from "../components/dashboard/ProjectView";
 
 import CreateSharedFolder from "../components/CreateSharedFolder";
 import JoinSharedFolder from "../components/JoinSharedFolder";
@@ -25,7 +27,7 @@ import axios from "../api/axios";
 
 export default function Dashboard() {
     const {
-        folders, files, filteredFolders, filteredFiles, userProfile, storageBreakdown, dashboardStats, searchQuery, setSearchQuery,
+        folders, files, rootFolders, filteredFolders, filteredFiles, userProfile, storageBreakdown, dashboardStats, searchQuery, setSearchQuery,
         searchLoading, searchError,
         rootFolderId, currentFolderId, history, folderName, setFolderName,
         loading, isUploading, isDragging, setIsDragging, showCreator, setShowCreator,
@@ -34,10 +36,11 @@ export default function Dashboard() {
         toasts, currentFolderInfo,
         createFolder, deleteFolder, deleteFile,
         downloadFile, shareFile, openShareModal, closeShareModal, shareModalItem, handleRenameSubmit, executeMove, moveItemToFolder, handleFileUpload,
-        handleFolderSelect, goBack, refreshAfterSharedAction, showToast
+        handleFolderSelect, prefetchFolder, goBack, refreshAfterSharedAction, showToast
     } = useFolderManager();
 
     const [sharedPanel, setSharedPanel] = useState(null);
+    const [activeProject, setActiveProject] = useState(null); // { id, name, userRole }
     const [draggedItem, setDraggedItem] = useState(null);
     const [dropTargetId, setDropTargetId] = useState(null);
     const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -133,6 +136,16 @@ export default function Dashboard() {
         await refreshAfterSharedAction();
     };
 
+    // ── Project click from sidebar ────────────────────────────────────────
+    const handleProjectClick = useCallback((folder) => {
+        setActiveProject({
+            id: folder.id,
+            name: folder.name,
+            userRole: folder.userRole || "OWNER",
+        });
+        setActiveNav("projects");
+    }, []);
+
     const handleSharedFolderJoined = async () => {
         await refreshAfterSharedAction();
     };
@@ -222,15 +235,18 @@ export default function Dashboard() {
     };
 
     // Calculate Storage metrics — only use real values from API
-    const usedStorageBytes = userProfile?.usedStorage || 0;
-    const limitStorageBytes = userProfile?.storageLimit || 0;
+    const usedStorageBytes = Number(userProfile?.usedStorage || 0);
+    const limitStorageBytes = Number(userProfile?.storageLimit || 0);
     const storagePercent = limitStorageBytes > 0
-        ? Math.min(100, Math.round((usedStorageBytes / limitStorageBytes) * 100))
+        ? Math.min(100, Math.max(0, Math.round((usedStorageBytes / limitStorageBytes) * 100)))
         : 0;
 
     // Real user info
     const userName = userProfile?.name || "";
     const userEmail = userProfile?.email || "";
+    const userInitials = userName
+        ? userName.split(" ").filter(Boolean).map(w => w[0]).join("").toUpperCase().slice(0, 2)
+        : "U";
 
     // Checkbox toggling
     const toggleRowSelect = (id) => {
@@ -290,6 +306,7 @@ export default function Dashboard() {
                     setMobileSidebarOpen={setMobileSidebarOpen}
                     rootFolderId={rootFolderId}
                     handleFolderSelect={handleFolderSelect}
+                    prefetchFolder={prefetchFolder}
                     setSharedPanel={setSharedPanel}
                     setShowTrash={setShowTrash}
                     storagePercent={storagePercent}
@@ -298,12 +315,13 @@ export default function Dashboard() {
                     userName={userName}
                     userEmail={userEmail}
                     showToast={showToast}
-                    sharedFolders={(folders || []).filter(f => f.isShared)}
+                    sharedFolders={(rootFolders.length > 0 ? rootFolders : folders).filter(f => f.isShared)}
+                    onProjectClick={handleProjectClick}
                 />
 
                 {/* ─── 2. CENTER CONTENT (WORKSPACE) ───────────────────────── */}
                 <main
-                    className="cb-center-content"
+                    className={`cb-center-content ${activeNav === 'files' ? 'cb-mydrive-main-full' : ''}`}
                     onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
                     onDragLeave={() => setIsDragging(false)}
                     onDrop={(e) => {
@@ -314,106 +332,163 @@ export default function Dashboard() {
                         }
                     }}
                 >
-                    {/* Welcome Hero Banner */}
-                    <HeroBanner
-                        userName={userName}
-                        isUploading={isUploading}
-                        onUploadClick={() => document.getElementById("file-picker").click()}
-                        onCreateFolderClick={() => setShowCreator(true)}
-                        onNewProjectClick={() => setSharedPanel('create')}
-                        onFileInputChange={(e) => {
-                            if (e.target.files && e.target.files[0]) {
-                                handleFileUpload(e.target.files[0]);
-                            }
-                        }}
-                    />
+                    {activeNav === 'projects' && activeProject ? (
+                        /* ─── PROJECT VIEW ─── */
+                        <ProjectView
+                            project={activeProject}
+                            onClose={() => { setActiveProject(null); setActiveNav('dashboard'); }}
+                            showToast={showToast}
+                            prefetchFolder={prefetchFolder}
+                            previewFile={previewFile}
+                            userRole={activeProject.userRole}
+                            onRefresh={refreshAfterSharedAction}
+                            onProjectDeleted={() => {
+                                setActiveProject(null);
+                                setActiveNav('dashboard');
+                                refreshAfterSharedAction();
+                            }}
+                        />
+                    ) : activeNav === 'files' ? (
+                        /* ─── DEDICATED MY DRIVE FILE MANAGER VIEW ─── */
+                        <MyDriveView
+                            folders={filteredFolders}
+                            files={filteredFiles}
+                            loading={loading}
+                            currentFolderId={currentFolderId}
+                            rootFolderId={rootFolderId}
+                            history={history}
+                            currentFolderInfo={currentFolderInfo}
+                            handleFolderSelect={handleFolderSelect}
+                            prefetchFolder={prefetchFolder}
+                            goBack={goBack}
+                            onUploadClick={() => document.getElementById("file-picker").click()}
+                            onCreateFolderClick={() => setShowCreator(true)}
+                            previewFile={previewFile}
+                            downloadFile={downloadFile}
+                            openActionSheet={openActionSheet}
+                            editingItem={editingItem}
+                            renameValue={renameValue}
+                            setRenameValue={setRenameValue}
+                            handleRenameSubmit={handleRenameSubmit}
+                            viewMode={viewMode}
+                            setViewMode={setViewMode}
+                            userName={userName}
+                            userInitials={userInitials}
+                            dropTargetId={dropTargetId}
+                            handleDragStartItem={handleDragStartItem}
+                            handleDragEndItem={handleDragEndItem}
+                            handleDragOverTarget={handleDragOverTarget}
+                            handleDragLeaveTarget={handleDragLeaveTarget}
+                            handleDropOnTarget={handleDropOnTarget}
+                        />
+                    ) : (
+                        /* ─── DASHBOARD OVERVIEW & QUICK ACCESS VIEW ─── */
+                        <>
+                            {/* Welcome Hero Banner */}
+                            <HeroBanner
+                                userName={userName}
+                                isUploading={isUploading}
+                                onUploadClick={() => document.getElementById("file-picker").click()}
+                                onCreateFolderClick={() => setShowCreator(true)}
+                                onNewProjectClick={() => setSharedPanel('create')}
+                                onFileInputChange={(e) => {
+                                    if (e.target.files && e.target.files[0]) {
+                                        handleFileUpload(e.target.files[0]);
+                                    }
+                                }}
+                            />
 
-                    {/* Stats Row — 3 cards with trend badges */}
-                    <StatsRow dashboardStats={dashboardStats} />
+                            {/* Stats Row — 3 cards with trend badges */}
+                            <StatsRow dashboardStats={dashboardStats} />
 
-                    {/* Subfolder Breadcrumbs & Back Navigation */}
-                    {history.length > 0 && (
-                        <div className="cb-breadcrumbs-bar">
-                            <button onClick={goBack} className="cb-back-btn">
-                                &larr; Back
-                            </button>
-                            <div className="cb-breadcrumbs-list">
-                                <span
-                                    className="cb-breadcrumb-item"
-                                    onClick={() => handleFolderSelect({ id: rootFolderId !== -1 ? rootFolderId : -1, name: "Root" })}
-                                >
-                                    Root
-                                </span>
-                                {history.map((folder, idx) => (
-                                    <span key={folder.id} className="cb-breadcrumb-chunk">
-                                        <span className="cb-breadcrumb-sep">/</span>
+                            {/* Subfolder Breadcrumbs & Back Navigation */}
+                            {history.length > 0 && (
+                                <div className="cb-breadcrumbs-bar">
+                                    <button onClick={goBack} className="cb-back-btn">
+                                        &larr; Back
+                                    </button>
+                                    <div className="cb-breadcrumbs-list">
                                         <span
-                                            className={`cb-breadcrumb-item ${idx === history.length - 1 ? 'active' : ''}`}
-                                            onClick={() => handleFolderSelect(folder)}
+                                            className="cb-breadcrumb-item"
+                                            onClick={() => handleFolderSelect({ id: rootFolderId !== -1 ? rootFolderId : -1, name: "Root" })}
                                         >
-                                            {folder.name}
+                                            Root
                                         </span>
-                                    </span>
-                                ))}
-                            </div>
-                        </div>
+                                        {history.map((folder, idx) => (
+                                            <span key={folder.id} className="cb-breadcrumb-chunk">
+                                                <span className="cb-breadcrumb-sep">/</span>
+                                                <span
+                                                    className={`cb-breadcrumb-item ${idx === history.length - 1 ? 'active' : ''}`}
+                                                    onClick={() => handleFolderSelect(folder)}
+                                                >
+                                                    {folder.name}
+                                                </span>
+                                            </span>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* "My Folders" Section */}
+                            <FoldersSection
+                                isSharedFolderContext={isSharedFolderContext}
+                                rootFolderId={rootFolderId}
+                                handleFolderSelect={handleFolderSelect}
+                                prefetchFolder={prefetchFolder}
+                                loading={loading}
+                                filteredFolders={filteredFolders}
+                                editingItem={editingItem}
+                                renameValue={renameValue}
+                                setRenameValue={setRenameValue}
+                                handleRenameSubmit={handleRenameSubmit}
+                                openActionSheet={openActionSheet}
+                                dropTargetId={dropTargetId}
+                                handleDragStartItem={handleDragStartItem}
+                                handleDragEndItem={handleDragEndItem}
+                                handleDragOverTarget={handleDragOverTarget}
+                                handleDragLeaveTarget={handleDragLeaveTarget}
+                                handleDropOnTarget={handleDropOnTarget}
+                            />
+
+                            {/* "All Files" Section */}
+                            <FilesSection
+                                searchQuery={searchQuery}
+                                searchLoading={searchLoading}
+                                viewMode={viewMode}
+                                setViewMode={setViewMode}
+                                filteredFiles={filteredFiles}
+                                filteredFolders={filteredFolders}
+                                selectedRows={selectedRows}
+                                setSelectedRows={setSelectedRows}
+                                toggleRowSelect={toggleRowSelect}
+                                editingItem={editingItem}
+                                renameValue={renameValue}
+                                setRenameValue={setRenameValue}
+                                handleRenameSubmit={handleRenameSubmit}
+                                handleFolderSelect={handleFolderSelect}
+                                previewFile={previewFile}
+                                openActionSheet={openActionSheet}
+                                getFileTypeLabel={getFileTypeLabel}
+                                userName={userName}
+                            />
+                        </>
                     )}
-
-                    {/* "My Folders" Section */}
-                    <FoldersSection
-                        isSharedFolderContext={isSharedFolderContext}
-                        rootFolderId={rootFolderId}
-                        handleFolderSelect={handleFolderSelect}
-                        loading={loading}
-                        filteredFolders={filteredFolders}
-                        editingItem={editingItem}
-                        renameValue={renameValue}
-                        setRenameValue={setRenameValue}
-                        handleRenameSubmit={handleRenameSubmit}
-                        openActionSheet={openActionSheet}
-                        dropTargetId={dropTargetId}
-                        handleDragStartItem={handleDragStartItem}
-                        handleDragEndItem={handleDragEndItem}
-                        handleDragOverTarget={handleDragOverTarget}
-                        handleDragLeaveTarget={handleDragLeaveTarget}
-                        handleDropOnTarget={handleDropOnTarget}
-                    />
-
-                    {/* "All Files" Section */}
-                    <FilesSection
-                        searchQuery={searchQuery}
-                        searchLoading={searchLoading}
-                        viewMode={viewMode}
-                        setViewMode={setViewMode}
-                        filteredFiles={filteredFiles}
-                        filteredFolders={filteredFolders}
-                        selectedRows={selectedRows}
-                        setSelectedRows={setSelectedRows}
-                        toggleRowSelect={toggleRowSelect}
-                        editingItem={editingItem}
-                        renameValue={renameValue}
-                        setRenameValue={setRenameValue}
-                        handleRenameSubmit={handleRenameSubmit}
-                        handleFolderSelect={handleFolderSelect}
-                        previewFile={previewFile}
-                        openActionSheet={openActionSheet}
-                        getFileTypeLabel={getFileTypeLabel}
-                        userName={userName}
-                    />
                 </main>
 
-                {/* ─── 3. RIGHT SIDEBAR ─────────────────────────────────────── */}
-                <RightSidebar
-                    storagePercent={storagePercent}
-                    usedStorageBytes={usedStorageBytes}
-                    limitStorageBytes={limitStorageBytes}
-                    storageBreakdown={storageBreakdown}
-                    recentActivity={recentActivity}
-                    activityLoading={activityLoading}
-                    rootFolderId={rootFolderId}
-                    fetchRecentActivity={fetchRecentActivity}
-                    setSharedPanel={setSharedPanel}
-                />
+                {/* ─── 3. RIGHT SIDEBAR (Dashboard Only) ────────────────────── */}
+                {activeNav === 'dashboard' && (
+                    <RightSidebar
+                        storagePercent={storagePercent}
+                        usedStorageBytes={usedStorageBytes}
+                        limitStorageBytes={limitStorageBytes}
+                        storageBreakdown={storageBreakdown}
+                        recentActivity={recentActivity}
+                        activityLoading={activityLoading}
+                        rootFolderId={rootFolderId}
+                        fetchRecentActivity={fetchRecentActivity}
+                        setSharedPanel={setSharedPanel}
+                    />
+                )}
             </div>
 
             {/* ─── MODALS & UTILITIES ─────────────────────────────────────── */}

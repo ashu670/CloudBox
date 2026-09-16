@@ -40,7 +40,7 @@ export default function Navbar({ searchQuery, setSearchQuery, userProfile, onTog
 
     const displayName = userProfile?.name || (userProfile?.email ? userProfile.email.split("@")[0] : "User");
     const avatarInitials = userProfile?.name
-        ? userProfile.name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()
+        ? userProfile.name.split(" ").filter(Boolean).map(w => w[0]).join("").slice(0, 2).toUpperCase()
         : (userProfile?.email ? userProfile.email.slice(0, 2).toUpperCase() : "U");
 
     return (

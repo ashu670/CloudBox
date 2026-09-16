@@ -3,11 +3,84 @@ import axios from "../api/axios";
 import { formatBytes, formatDate } from "../utils/formatters";
 import { lockBodyScroll, unlockBodyScroll } from "../utils/scrollLock";
 
+// Helper to get matching file type badge and icon
+const getFileIconInfo = (name = "", mimeType = "") => {
+    const lower = (name || "").toLowerCase();
+    const mime = (mimeType || "").toLowerCase();
+
+    if (lower.endsWith(".pdf") || mime === "application/pdf") {
+        return {
+            bg: "rgba(239, 68, 68, 0.15)",
+            color: "#ef4444",
+            border: "rgba(239, 68, 68, 0.25)",
+            label: "PDF",
+            icon: (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M20 2H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8.5 7.5c0 .83-.67 1.5-1.5 1.5H9v2H7.5V7H10c.83 0 1.5.67 1.5 1.5v1zm5 2c0 .83-.67 1.5-1.5 1.5h-2.5V7H15c.83 0 1.5.67 1.5 1.5v3zm4-3H19v1h1.5V11H19v2h-1.5V7h3v1.5z" />
+                </svg>
+            )
+        };
+    }
+    if (lower.match(/\.(png|jpg|jpeg|gif|webp|svg)$/) || mime.startsWith("image/")) {
+        return {
+            bg: "rgba(16, 185, 129, 0.15)",
+            color: "#10b981",
+            border: "rgba(16, 185, 129, 0.25)",
+            label: "Image",
+            icon: (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z" />
+                </svg>
+            )
+        };
+    }
+    if (lower.match(/\.(mp4|mov|webm|mkv)$/) || mime.startsWith("video/")) {
+        return {
+            bg: "rgba(168, 85, 247, 0.15)",
+            color: "#a855f7",
+            border: "rgba(168, 85, 247, 0.25)",
+            label: "Video",
+            icon: (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <polygon points="5 3 19 12 5 21 5 3" />
+                </svg>
+            )
+        };
+    }
+    if (lower.match(/\.(zip|tar|gz|rar|7z)$/) || mime.includes("zip")) {
+        return {
+            bg: "rgba(236, 72, 153, 0.15)",
+            color: "#ec4899",
+            border: "rgba(236, 72, 153, 0.25)",
+            label: "Archive",
+            icon: (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M21 8v13H3V8" />
+                    <path d="M1 3h22v5H1z" />
+                    <path d="M10 12h4" />
+                </svg>
+            )
+        };
+    }
+    return {
+        bg: "rgba(99, 102, 241, 0.15)",
+        color: "#6366f1",
+        border: "rgba(99, 102, 241, 0.25)",
+        label: "Document",
+        icon: (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z" />
+            </svg>
+        )
+    };
+};
+
 export default function ShareModal({ item, onClose, showToast }) {
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState(false);
     const [duration, setDuration] = useState("1d");
     const [shareData, setShareData] = useState(null);
+    const [copied, setCopied] = useState(false);
 
     useEffect(() => {
         if (!item) return;
@@ -44,6 +117,10 @@ export default function ShareModal({ item, onClose, showToast }) {
 
     if (!item) return null;
 
+    const fileName = item.orgName || item.name || "File";
+    const fileSize = formatBytes(item.size || 0);
+    const badge = getFileIconInfo(fileName, item.mimeType);
+
     const handleCreateOrUpdateShare = async (overrideDuration) => {
         const durToUse = overrideDuration || duration;
         try {
@@ -63,8 +140,10 @@ export default function ShareModal({ item, onClose, showToast }) {
 
                 if (navigator.clipboard && navigator.clipboard.writeText) {
                     await navigator.clipboard.writeText(newShare.shareUrl);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 3000);
                 }
-                showToast("Share link copied to clipboard!", "success");
+                showToast("Share link generated and copied to clipboard!", "success");
             }
         } catch (err) {
             const msg = err.response?.data?.message || "Failed to generate share link.";
@@ -83,10 +162,11 @@ export default function ShareModal({ item, onClose, showToast }) {
             });
             if (res.data?.success) {
                 setShareData(null);
-                showToast("File is now private. Share link revoked.", "success");
+                setCopied(false);
+                showToast("File is now private. Public link revoked.", "success");
             }
         } catch (err) {
-            const msg = err.response?.data?.message || "Failed to make file private.";
+            const msg = err.response?.data?.message || "Failed to revoke link.";
             showToast(msg, "error");
         } finally {
             setActionLoading(false);
@@ -97,6 +177,8 @@ export default function ShareModal({ item, onClose, showToast }) {
         if (shareData?.shareUrl) {
             try {
                 await navigator.clipboard.writeText(shareData.shareUrl);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 3000);
                 showToast("Link copied to clipboard!", "success");
             } catch {
                 showToast("Failed to copy link.", "error");
@@ -119,110 +201,202 @@ export default function ShareModal({ item, onClose, showToast }) {
         return `Expires on ${formatDate(expiresAt)}`;
     };
 
+    const durationOptions = [
+        { key: "1h", label: "1 Hour", desc: "Short-lived link" },
+        { key: "1d", label: "24 Hours", desc: "Standard access" },
+        { key: "1w", label: "7 Days", desc: "Weekly project" },
+        { key: "never", label: "No Expiry", desc: "Permanent link" }
+    ];
+
     return (
-        <div className="file-preview-modal-backdrop" onClick={onClose}>
-            <div className="file-preview-modal-card share-modal-card" onClick={(e) => e.stopPropagation()}>
-                <div className="share-modal-header">
-                    <div style={{ minWidth: 0, flex: 1 }}>
-                        <h2 style={{ fontSize: "18px", fontWeight: "700", margin: 0, color: "var(--text-main)" }}>Share File</h2>
-                        <p style={{ fontSize: "12.5px", color: "var(--text-muted)", margin: "4px 0 0 0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {item.orgName || item.name} ({formatBytes(item.size || 0)})
-                        </p>
+        <div className="cb-share-modal-backdrop" onClick={onClose}>
+            <div className="cb-share-modal-card" onClick={(e) => e.stopPropagation()}>
+                {/* ─── MODAL HEADER ───────────────────────────────── */}
+                <div className="cb-share-modal-header">
+                    <div className="cb-share-file-meta">
+                        <div
+                            className="cb-share-file-badge"
+                            style={{ background: badge.bg, color: badge.color, borderColor: badge.border }}
+                        >
+                            {badge.icon}
+                        </div>
+                        <div className="cb-share-file-details">
+                            <h2 className="cb-share-modal-title">Share File</h2>
+                            <div className="cb-share-file-sub">
+                                <span className="cb-share-file-name" title={fileName}>{fileName}</span>
+                                <span className="cb-share-dot-sep">•</span>
+                                <span className="cb-share-file-size">{fileSize}</span>
+                            </div>
+                        </div>
                     </div>
-                    <button className="preview-close-btn" onClick={onClose} aria-label="Close modal">✕</button>
+                    <button className="cb-share-close-btn" onClick={onClose} aria-label="Close modal">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                            <line x1="18" y1="6" x2="6" y2="18" />
+                            <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
+                    </button>
                 </div>
 
-                {loading ? (
-                    <div style={{ textAlign: "center", padding: "30px 0" }}>
-                        <div className="spinner" style={{ margin: "0 auto" }}></div>
-                        <p style={{ marginTop: "12px", color: "var(--text-secondary)", fontSize: "14px" }}>Loading share details...</p>
-                    </div>
-                ) : (
-                    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-                        {shareData && shareData.isActive && shareData.shareUrl ? (
-                            <div style={{ padding: "14px", borderRadius: "10px", backgroundColor: "var(--bg-app)", border: "1px solid var(--border-color)" }}>
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px", flexWrap: "wrap", gap: "4px" }}>
-                                    <span style={{ fontSize: "12px", fontWeight: "600", color: "#10b981", display: "flex", alignItems: "center", gap: "6px" }}>
-                                        <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "#10b981" }}></span>
-                                        Public Link Active
-                                    </span>
-                                    <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>
-                                        {formatExpirationText(shareData.expiresAt)}
-                                    </span>
-                                </div>
-                                <div className="share-url-row">
-                                    <input
-                                        type="text"
-                                        readOnly
-                                        value={shareData.shareUrl}
-                                        className="input-field"
-                                        style={{ flex: 1, minWidth: 0, fontSize: "12.5px" }}
-                                    />
-                                    <button onClick={handleCopy} className="btn btn-secondary btn-sm" style={{ whiteSpace: "nowrap" }}>
-                                        Copy Link
-                                    </button>
-                                </div>
-                            </div>
-                        ) : (
-                            <div style={{ padding: "14px", borderRadius: "10px", backgroundColor: "var(--bg-app)", border: "1px solid var(--border-color)", textAlign: "center" }}>
-                                <p style={{ margin: 0, fontSize: "13px", color: "var(--text-secondary)" }}>
-                                    This file is currently <strong>Private</strong>. Generate a public link below to share it.
-                                </p>
-                            </div>
-                        )}
-
-                        <div>
-                            <label style={{ fontSize: "13px", fontWeight: "600", color: "var(--text-main)", marginBottom: "8px", display: "block" }}>
-                                Link Expiration Duration
-                            </label>
-                            <div className="duration-grid">
-                                {[
-                                    { key: "1h", label: "1 Hour" },
-                                    { key: "1d", label: "1 Day" },
-                                    { key: "1w", label: "1 Week" },
-                                    { key: "never", label: "Never" }
-                                ].map((opt) => (
-                                    <button
-                                        key={opt.key}
-                                        type="button"
-                                        onClick={() => setDuration(opt.key)}
-                                        className={`btn ${duration === opt.key ? "btn-primary" : "btn-secondary"}`}
-                                        style={{
-                                            padding: "8px 4px",
-                                            fontSize: "12.5px",
-                                            fontWeight: duration === opt.key ? "600" : "400",
-                                            justifyContent: "center"
-                                        }}
-                                    >
-                                        {opt.label}
-                                    </button>
-                                ))}
-                            </div>
+                {/* ─── MODAL BODY ─────────────────────────────────── */}
+                <div className="cb-share-modal-body">
+                    {loading ? (
+                        <div className="cb-share-loading-state">
+                            <div className="spinner" style={{ width: 28, height: 28 }}></div>
+                            <span>Checking link status...</span>
                         </div>
+                    ) : (
+                        <>
+                            {/* Status Card: Active vs Private */}
+                            {shareData && shareData.isActive && shareData.shareUrl ? (
+                                <div className="cb-share-status-card active">
+                                    <div className="cb-share-status-top">
+                                        <div className="cb-share-status-pill active">
+                                            <span className="cb-pulse-indicator"></span>
+                                            <span>Public Link Active</span>
+                                        </div>
+                                        <span className="cb-share-expiry-tag">
+                                            {formatExpirationText(shareData.expiresAt)}
+                                        </span>
+                                    </div>
 
-                        <div className="share-footer-actions">
-                            {shareData && shareData.isActive && (
-                                <button
-                                    onClick={handleMakePrivate}
-                                    disabled={actionLoading}
-                                    className="btn btn-secondary btn-revoke"
-                                >
-                                    Make Private
-                                </button>
+                                    {/* URL Input Box with Copy Button */}
+                                    <div className="cb-share-link-box">
+                                        <input
+                                            type="text"
+                                            readOnly
+                                            value={shareData.shareUrl}
+                                            className="cb-share-url-input"
+                                            onClick={(e) => e.target.select()}
+                                        />
+                                        <button
+                                            type="button"
+                                            className={`cb-share-copy-btn ${copied ? 'copied' : ''}`}
+                                            onClick={handleCopy}
+                                        >
+                                            {copied ? (
+                                                <>
+                                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                                        <polyline points="20 6 9 17 4 12" />
+                                                    </svg>
+                                                    <span>Copied!</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                                    </svg>
+                                                    <span>Copy Link</span>
+                                                </>
+                                            )}
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="cb-share-status-card private">
+                                    <div className="cb-share-private-icon">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                                            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                                        </svg>
+                                    </div>
+                                    <div className="cb-share-private-text">
+                                        <h4>This file is currently private</h4>
+                                        <p>Generate a secure public URL below to share access with anyone.</p>
+                                    </div>
+                                </div>
                             )}
-                            <button onClick={onClose} className="btn btn-secondary btn-cancel">
-                                Cancel
-                            </button>
-                            <button
-                                onClick={() => handleCreateOrUpdateShare()}
-                                disabled={actionLoading}
-                                className="btn btn-primary btn-submit"
-                            >
-                                {actionLoading ? "Processing..." : shareData?.isActive ? "Update Link Expiry" : "Generate Public URL"}
-                            </button>
-                        </div>
-                    </div>
-                )}
+
+                            {/* ─── EXPIRATION DURATION SELECTOR ──────────────── */}
+                            <div className="cb-share-section">
+                                <label className="cb-share-section-label">
+                                    <span>Link Expiration Duration</span>
+                                    <span className="cb-share-section-hint">Auto-revokes when time expires</span>
+                                </label>
+                                
+                                <div className="cb-duration-segmented-grid">
+                                    {durationOptions.map((opt) => {
+                                        const isSelected = duration === opt.key;
+                                        return (
+                                            <button
+                                                key={opt.key}
+                                                type="button"
+                                                onClick={() => setDuration(opt.key)}
+                                                className={`cb-duration-tab ${isSelected ? "active" : ""}`}
+                                            >
+                                                <span className="cb-duration-tab-title">{opt.label}</span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            {/* ─── FOOTER ACTIONS ────────────────────────────── */}
+                            <div className="cb-share-modal-footer">
+                                {shareData && shareData.isActive ? (
+                                    <button
+                                        type="button"
+                                        onClick={handleMakePrivate}
+                                        disabled={actionLoading}
+                                        className="cb-share-btn-danger"
+                                        title="Revoke the public link and make this file private"
+                                    >
+                                        Revoke Access
+                                    </button>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={onClose}
+                                        className="cb-share-btn-secondary"
+                                    >
+                                        Cancel
+                                    </button>
+                                )}
+
+                                <div className="cb-share-footer-right">
+                                    {shareData && shareData.isActive && (
+                                        <button
+                                            type="button"
+                                            onClick={onClose}
+                                            className="cb-share-btn-secondary"
+                                        >
+                                            Done
+                                        </button>
+                                    )}
+                                    <button
+                                        type="button"
+                                        onClick={() => handleCreateOrUpdateShare()}
+                                        disabled={actionLoading}
+                                        className="cb-share-btn-primary"
+                                    >
+                                        {actionLoading ? (
+                                            <>
+                                                <div className="spinner" style={{ width: 15, height: 15 }}></div>
+                                                <span>Processing...</span>
+                                            </>
+                                        ) : shareData?.isActive ? (
+                                            <>
+                                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3">
+                                                    <polyline points="23 4 23 10 17 10" />
+                                                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+                                                </svg>
+                                                <span>Update Expiry</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3">
+                                                    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                                                    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                                                </svg>
+                                                <span>Generate Public URL</span>
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
+                            </div>
+                        </>
+                    )}
+                </div>
             </div>
         </div>
     );

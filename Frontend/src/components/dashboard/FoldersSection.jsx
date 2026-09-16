@@ -5,6 +5,7 @@ export default function FoldersSection({
     isSharedFolderContext,
     rootFolderId,
     handleFolderSelect,
+    prefetchFolder,
     loading,
     filteredFolders = [],
     editingItem,
@@ -36,6 +37,7 @@ export default function FoldersSection({
                     type="button"
                     className="cb-view-all-link-modern"
                     onClick={() => handleFolderSelect({ id: rootFolderId !== -1 ? rootFolderId : -1, name: "Root" })}
+                    onMouseEnter={() => prefetchFolder && prefetchFolder(rootFolderId !== -1 ? rootFolderId : -1)}
                 >
                     View all &rarr;
                 </button>
@@ -72,6 +74,7 @@ export default function FoldersSection({
                                 onClick={() => {
                                     if (!isEditing) handleFolderSelect(folder);
                                 }}
+                                onMouseEnter={() => prefetchFolder && prefetchFolder(folder.id)}
                                 draggable={!isEditing}
                                 onDragStart={(e) => handleDragStartItem && handleDragStartItem(e, { type: 'folder', id: folder.id, name: folder.name })}
                                 onDragEnd={handleDragEndItem}

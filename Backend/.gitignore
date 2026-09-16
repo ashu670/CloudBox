@@ -20,6 +20,13 @@ frontend/node_modules/
 
 serviceAccKey.json
 googleSecrets.json
+*serviceAcc*.json
+*service-account*.json
+*credentials*.json
+*.pem
+*.key
+*.cert
+*.p12
 
 # ==========================
 # Logs

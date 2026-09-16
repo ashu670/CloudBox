@@ -8,6 +8,7 @@ export default function Sidebar({
     setMobileSidebarOpen,
     rootFolderId,
     handleFolderSelect,
+    prefetchFolder,
     setSharedPanel,
     setShowTrash,
     storagePercent = 0,
@@ -16,7 +17,8 @@ export default function Sidebar({
     userName,
     userEmail,
     showToast,
-    sharedFolders = []
+    sharedFolders = [],
+    onProjectClick,
 }) {
     const [projectsOpen, setProjectsOpen] = useState(true);
 
@@ -38,6 +40,7 @@ export default function Sidebar({
                             handleFolderSelect({ id: rootFolderId !== -1 ? rootFolderId : -1, name: "Root", pid: null });
                             setMobileSidebarOpen(false);
                         }}
+                        onMouseEnter={() => prefetchFolder && prefetchFolder(rootFolderId !== -1 ? rootFolderId : -1)}
                     >
                         <svg className="cb-nav-icon" width="19" height="19" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
@@ -54,6 +57,7 @@ export default function Sidebar({
                             handleFolderSelect({ id: rootFolderId !== -1 ? rootFolderId : -1, name: "Root", pid: null });
                             setMobileSidebarOpen(false);
                         }}
+                        onMouseEnter={() => prefetchFolder && prefetchFolder(rootFolderId !== -1 ? rootFolderId : -1)}
                     >
                         <svg className="cb-nav-icon" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
@@ -94,12 +98,17 @@ export default function Sidebar({
                                         <button
                                             key={folder.id}
                                             type="button"
-                                            className="cb-nav-sub-item"
+                                            className={`cb-nav-sub-item ${activeNav === 'projects' ? 'cb-project-item-active' : ''}`}
                                             onClick={() => {
                                                 setActiveNav('projects');
-                                                handleFolderSelect(folder);
                                                 setMobileSidebarOpen(false);
+                                                if (onProjectClick) {
+                                                    onProjectClick(folder);
+                                                } else {
+                                                    handleFolderSelect(folder);
+                                                }
                                             }}
+                                            onMouseEnter={() => prefetchFolder && prefetchFolder(folder.id)}
                                         >
                                             <svg width="15" height="15" viewBox="0 0 24 24" fill="#94a3b8">
                                                 <path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" />
