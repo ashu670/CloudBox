@@ -164,35 +164,52 @@ export default function FilePreviewModal({ previewItem, onClose, onDownload, onS
             {/* Modal Full-Width Header */}
             <header
                 className="preview-modal-header"
+                style={{
+                    display: "flex",
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    padding: "10px 24px",
+                    borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
+                    backgroundColor: "#111217",
+                    color: "#f3f4f6",
+                    height: "58px",
+                    minHeight: "58px",
+                    maxHeight: "58px",
+                    boxSizing: "border-box",
+                    flexShrink: 0,
+                    zIndex: 10
+                }}
                 onClick={(e) => e.stopPropagation()}
             >
-                <div className="preview-header-info">
-                    <div className="preview-file-icon">
-                        <FileIcon mimeType={mimeType} />
+                <div style={{ display: "flex", alignItems: "center", gap: "12px", minWidth: 0, flex: 1 }}>
+                    <div style={{ width: "32px", height: "32px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, background: "rgba(255, 255, 255, 0.06)", borderRadius: "8px" }}>
+                        <FileIcon mimeType={mimeType} size={20} />
                     </div>
-                    <div className="preview-title-container">
-                        <h2 className="preview-file-name" title={file.orgName}>
+                    <div style={{ display: "flex", flexDirection: "column", minWidth: 0, gap: "2px" }}>
+                        <h2 style={{ fontSize: "14.5px", fontWeight: "600", color: "#f9fafb", margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "450px" }} title={file.orgName}>
                             {file.orgName}
                         </h2>
-                        <div className="preview-file-meta">
-                            {formatBytes(file.size)} <span className="preview-meta-mime">• {mimeType}</span>
+                        <div style={{ fontSize: "12px", color: "#9ca3af", margin: 0 }}>
+                            {formatBytes(file.size)} <span style={{ color: "#6b7280", fontSize: "11px" }}>• {mimeType}</span>
                         </div>
                     </div>
                 </div>
 
-                <div className="preview-header-actions">
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", flexShrink: 0 }}>
                     {onShare && (
-                        <button className="btn btn-secondary preview-action-btn" onClick={() => onShare(file.id)}>
+                        <button className="btn btn-secondary" onClick={() => onShare(file.id)} style={{ padding: "6px 14px", fontSize: "13px" }}>
                             Share
                         </button>
                     )}
-                    <button className="btn btn-primary preview-action-btn" onClick={() => onDownload(null, file.id, file.orgName)}>
+                    <button className="btn btn-primary" onClick={() => onDownload(null, file.id, file.orgName)} style={{ padding: "6px 16px", fontSize: "13px" }}>
                         Download
                     </button>
                     <button
                         className="preview-close-btn"
                         onClick={onClose}
                         aria-label="Close preview"
+                        style={{ padding: "4px 10px", fontSize: "16px", cursor: "pointer", background: "rgba(255, 255, 255, 0.08)", border: "1px solid rgba(255, 255, 255, 0.12)", borderRadius: "6px", color: "#e5e7eb" }}
                     >
                         ✕
                     </button>
@@ -201,7 +218,7 @@ export default function FilePreviewModal({ previewItem, onClose, onDownload, onS
 
             {/* Main Full Viewport Preview Body */}
             <main
-                style={{ flex: 1, width: "100%", height: "calc(100vh - 60px)", overflow: "hidden", position: "relative" }}
+                style={{ flex: 1, width: "100%", height: "calc(100vh - 58px)", overflow: "hidden", position: "relative" }}
                 onClick={(e) => e.stopPropagation()}
             >
                 {renderFullViewportPreview()}

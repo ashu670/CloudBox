@@ -1,7 +1,11 @@
-export default function FileIcon({ mimeType = "", size }) {
-    const iconStyle = size
-        ? { width: `${size}px`, height: `${size}px`, minWidth: `${size}px`, flexShrink: 0 }
-        : undefined;
+export default function FileIcon({ mimeType = "", size = 24 }) {
+    const iconStyle = {
+        width: `${size}px`,
+        height: `${size}px`,
+        minWidth: `${size}px`,
+        maxWidth: `${size}px`,
+        flexShrink: 0
+    };
 
     if (mimeType.startsWith("image/")) {
         return (

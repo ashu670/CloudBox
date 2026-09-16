@@ -18,8 +18,8 @@ frontend/node_modules/
 # Google / Cloud Credentials
 # ==========================
 
-Backend/serviceAccKey.json
-Backend/googleSecrets.json
+serviceAccKey.json
+googleSecrets.json
 
 # ==========================
 # Logs

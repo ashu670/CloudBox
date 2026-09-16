@@ -75,6 +75,8 @@
   --bg-card:          rgba(255, 255, 255, 0.88);
   --bg-card-hover:    rgba(255, 255, 255, 0.96);
   --bg-card-solid:    #ffffff;
+  --bg-surface:       #ffffff;
+  --bg-surface-hover: #fafbfe;
   --bg-glass:         rgba(255, 255, 255, 0.82);
   --bg-glass-heavy:   rgba(255, 255, 255, 0.94);
   --bg-input:         rgba(255, 255, 255, 0.95);
@@ -83,6 +85,7 @@
   --bg-muted:         rgba(233, 225, 255, 0.85);
   --bg-table-header:  rgba(248, 244, 255, 0.92);
   --bg-table-hover:   rgba(240, 235, 255, 0.6);
+  --border-color:     rgba(124, 58, 237, 0.15);
   --text-main:        #1e1b4b;
   --text-heading:     #0f0a2a;
   --text-muted:       #5b5380;
@@ -99,6 +102,8 @@
   --bg-card:          #131c2e;
   --bg-card-hover:    #18233a;
   --bg-card-solid:    #131c2e;
+  --bg-surface:       #131c2e;
+  --bg-surface-hover: #18233a;
   --bg-glass:         rgba(19, 28, 46, 0.85);
   --bg-glass-heavy:   rgba(19, 28, 46, 0.95);
   --bg-input:         #18233a;
@@ -110,6 +115,7 @@
   --border-subtle:    rgba(255, 255, 255, 0.08);
   --border-medium:    rgba(255, 255, 255, 0.15);
   --border-glow:      rgba(99, 102, 241, 0.45);
+  --border-color:     rgba(255, 255, 255, 0.1);
   --text-main:        #e2e8f0;
   --text-heading:     #f8fafc;
   --text-muted:       #94a3b8;
@@ -132,6 +138,8 @@
   --bg-card:          #ffffff;
   --bg-card-hover:    #fafbfe;
   --bg-card-solid:    #ffffff;
+  --bg-surface:       #ffffff;
+  --bg-surface-hover: #fafbfe;
   --bg-glass:         rgba(255, 255, 255, 0.9);
   --bg-glass-heavy:   rgba(255, 255, 255, 0.98);
   --bg-input:         #f3f4f8;
@@ -143,6 +151,7 @@
   --border-subtle:    #eef1f6;
   --border-medium:    #e2e8f0;
   --border-glow:      rgba(99, 102, 241, 0.3);
+  --border-color:     #e2e8f0;
   --text-main:        #1e293b;
   --text-heading:     #0f172a;
   --text-muted:       #64748b;
