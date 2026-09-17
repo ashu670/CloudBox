@@ -30,7 +30,7 @@ import axios from "../api/axios";
 
 export default function Dashboard() {
     const {
-        folders, files, rootFolders, projects, filteredFolders, filteredFiles, userProfile, storageBreakdown, dashboardStats, searchQuery, setSearchQuery,
+        folders, files, rootFolders, projects, ownedProjects, sharedWithMe, filteredFolders, filteredFiles, userProfile, storageBreakdown, dashboardStats, searchQuery, setSearchQuery,
         searchLoading, searchError,
         rootFolderId, currentFolderId, history, folderName, setFolderName,
         loading, isUploading, isDragging, setIsDragging, showCreator, setShowCreator,
@@ -41,7 +41,7 @@ export default function Dashboard() {
         deleteModalState, promptDelete, closeDeleteModal, executeDeleteConfirm,
         downloadFile, shareFile, openShareModal, closeShareModal, shareModalItem, handleRenameSubmit, executeMove, moveItemToFolder, handleFileUpload,
         uploads, retryUpload, dismissUpload, clearCompletedUploads,
-        handleFolderSelect, prefetchFolder, goBack, refreshAfterSharedAction, showToast
+        handleFolderSelect, prefetchFolder, fetchProjects, goBack, refreshAfterSharedAction, showToast
     } = useFolderManager();
 
     const [sharedPanel, setSharedPanel] = useState(null);
@@ -86,6 +86,11 @@ export default function Dashboard() {
             return () => unlockBodyScroll();
         }
     }, [mobileSidebarOpen]);
+
+    // Refresh projects whenever switching between sections
+    useEffect(() => {
+        fetchProjects?.();
+    }, [activeNav, fetchProjects]);
 
     // Front of Dashboard always considers and resets current folder to Root
     useEffect(() => {
@@ -397,8 +402,52 @@ export default function Dashboard() {
         }
     }, [rootFolderId, fetchRecentActivity]);
 
+    const currentUserId = userProfile?.id;
+
+    // Gather all shared folder records from all available sources
+    const allSharedSources = [
+        ...(projects || []),
+        ...(ownedProjects || []),
+        ...(sharedWithMe || []),
+        ...(rootFolders || []).filter(f => f.isShared),
+        ...(folders || []).filter(f => f.isShared),
+    ];
+
+    const uniqueSharedMap = new Map();
+    for (const f of allSharedSources) {
+        if (f && f.id && !uniqueSharedMap.has(f.id)) {
+            uniqueSharedMap.set(f.id, f);
+        }
+    }
+    const allSharedFolders = Array.from(uniqueSharedMap.values());
+
+    // 1. Projects Dropdown: shared folders where user is the OWNER
+    const displayOwnedProjects = allSharedFolders.filter(f => {
+        if (currentUserId && f.uid) {
+            return f.uid === currentUserId;
+        }
+        return f.userRole === "OWNER" || !f.userRole;
+    });
+
+    // 2. Shared with me: shared folders where user is NOT the owner
+    const displaySharedWithMe = allSharedFolders.filter(f => {
+        if (currentUserId && f.uid) {
+            return f.uid !== currentUserId;
+        }
+        return f.userRole && f.userRole !== "OWNER";
+    });
+
     return (
         <div className="app-container cb-dashboard-page">
+            {/* Topbar Header */}
+            <Navbar
+                searchQuery={searchQuery}
+                setSearchQuery={setSearchQuery}
+                userProfile={userProfile}
+                onToggleSidebar={() => setMobileSidebarOpen(prev => !prev)}
+                storagePercent={storagePercent}
+            />
+
             {/* Hidden Central File Input */}
             <input
                 id="file-picker"
@@ -425,15 +474,6 @@ export default function Dashboard() {
                 }}
             />
 
-            {/* Topbar Header */}
-            <Navbar
-                searchQuery={searchQuery}
-                setSearchQuery={setSearchQuery}
-                userProfile={userProfile}
-                onToggleSidebar={() => setMobileSidebarOpen(prev => !prev)}
-                storagePercent={storagePercent}
-            />
-
             <div className="cb-dashboard-wrapper">
                 {/* Mobile Sidebar Backdrop */}
                 {mobileSidebarOpen && (
@@ -457,7 +497,7 @@ export default function Dashboard() {
                     userName={userName}
                     userEmail={userEmail}
                     showToast={showToast}
-                    sharedFolders={projects && projects.length > 0 ? projects : (rootFolders.length > 0 ? rootFolders : folders).filter(f => f.isShared)}
+                    sharedFolders={displayOwnedProjects}
                     activeProjectId={activeProject?.id}
                     onProjectClick={handleProjectClick}
                     onSharedClick={() => {
@@ -478,7 +518,11 @@ export default function Dashboard() {
                         /* ─── SHARED FOLDER WORKSPACE VIEW ─── */
                         <ProjectView
                             project={activeProject}
-                            onClose={() => { setActiveProject(null); setActiveNav('shared'); }}
+                            onClose={() => {
+                                const returnNav = activeProject?.userRole === 'OWNER' ? 'dashboard' : 'shared';
+                                setActiveProject(null);
+                                setActiveNav(returnNav);
+                            }}
                             showToast={showToast}
                             prefetchFolder={prefetchFolder}
                             previewFile={previewFile}
@@ -496,7 +540,7 @@ export default function Dashboard() {
                     ) : activeNav === 'shared' ? (
                         /* ─── SHARED WITH ME WORKSPACES LIST ─── */
                         <SharedWithMeView
-                            sharedFolders={projects && projects.length > 0 ? projects : (rootFolders.length > 0 ? rootFolders : folders).filter(f => f.isShared)}
+                            sharedFolders={displaySharedWithMe}
                             userProfile={userProfile}
                             onSelectSharedFolder={handleProjectClick}
                             onJoinClick={() => setSharedPanel('join')}
@@ -759,10 +803,18 @@ export default function Dashboard() {
                         </div>
 
                         {sharedPanel === 'create' && (
-                            <CreateSharedFolder onFolderCreated={async () => { await handleSharedFolderCreated(); setSharedPanel(null); }} />
+                            <CreateSharedFolder
+                                onFolderCreated={async () => { await handleSharedFolderCreated(); }}
+                                onClose={() => setSharedPanel(null)}
+                            />
                         )}
                         {sharedPanel === 'join' && (
-                            <JoinSharedFolder onJoined={async () => { await handleSharedFolderJoined(); setSharedPanel(null); }} />
+                            <JoinSharedFolder onJoined={async () => {
+                                await handleSharedFolderJoined();
+                                setSharedPanel(null);
+                                setActiveProject(null);
+                                setActiveNav('shared');
+                            }} />
                         )}
                         {sharedPanel === 'owner-panel' && isSharedFolderContext && (
                             <OwnerPanel

@@ -26,6 +26,8 @@ export function useFolderManager() {
     const [files, setFiles] = useState([]);
     const [rootFolders, setRootFolders] = useState([]); // always root-level children
     const [projects, setProjects] = useState([]); // all shared & collaborative folders accessible to user
+    const [ownedProjects, setOwnedProjects] = useState([]); // ONLY folders where current user is OWNER
+    const [sharedWithMe, setSharedWithMe] = useState([]); // ONLY folders where current user is MEMBER (not owner)
     const [userProfile, setUserProfile] = useState(null);
     const [storageBreakdown, setStorageBreakdown] = useState({ image: 0, video: 0, audio: 0, document: 0 });
     const [dashboardStats, setDashboardStats] = useState({ totalFiles: 0, totalFolders: 0, projects: 0, sharedWithMe: 0 });
@@ -189,9 +191,15 @@ export function useFolderManager() {
             const { data } = await axios.get("api/folder/projects", {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            if (data.success && Array.isArray(data.projects)) {
-                setProjects(data.projects);
-                addToCache(data.projects);
+            if (data.success) {
+                const owned = Array.isArray(data.ownedProjects) ? data.ownedProjects : [];
+                const shared = Array.isArray(data.sharedWithMe) ? data.sharedWithMe : [];
+                const allProjects = Array.isArray(data.projects) ? data.projects : [...owned, ...shared];
+                
+                setOwnedProjects(owned);
+                setSharedWithMe(shared);
+                setProjects(allProjects);
+                addToCache(allProjects);
             }
         } catch (err) {
             console.error("Failed to fetch projects:", err);
@@ -380,7 +388,9 @@ export function useFolderManager() {
 
     useEffect(() => {
         fetchUserProfile();
-    }, [fetchUserProfile]);
+        fetchProjects();
+        fetchDashboardStats();
+    }, [fetchUserProfile, fetchProjects, fetchDashboardStats]);
 
     const isInitialMount = useRef(true);
     useEffect(() => {
@@ -1050,8 +1060,9 @@ export function useFolderManager() {
             await fetchTreeSubfolders(currentFolderId);
         }
         await fetchProjects();
+        await fetchDashboardStats();
         fetchUserProfile();
-    }, [currentFolderId, rootFolderId, fetchFolders, fetchTreeSubfolders, fetchProjects, fetchUserProfile, invalidateCache]);
+    }, [currentFolderId, rootFolderId, fetchFolders, fetchTreeSubfolders, fetchProjects, fetchDashboardStats, fetchUserProfile, invalidateCache]);
 
     const currentFolderInfo = currentFolderId > 0 ? foldersCache[currentFolderId] : null;
 
@@ -1117,7 +1128,7 @@ export function useFolderManager() {
         : files;
 
     return {
-        folders, files, rootFolders, projects, filteredFolders, filteredFiles, userProfile, storageBreakdown, dashboardStats, searchQuery, setSearchQuery,
+        folders, files, rootFolders, projects, ownedProjects, sharedWithMe, filteredFolders, filteredFiles, userProfile, storageBreakdown, dashboardStats, searchQuery, setSearchQuery,
         searchLoading, searchError,
         rootFolderId, currentFolderId, history, folderName, setFolderName,
         loading, isUploading, isDragging, setIsDragging, showCreator, setShowCreator,

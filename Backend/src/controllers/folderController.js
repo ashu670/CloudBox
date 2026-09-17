@@ -485,12 +485,14 @@ export const getDashboardStatsController = async (req, res) => {
 };
 
 export const getUserProjects = async (req, res) => {
-    const uid = req.user.id;
+    const uid = Number(req.user.id);
     try {
-        const projects = await service.getUserProjects(uid);
+        const result = await service.getUserProjects(uid);
         return res.status(200).json({
             success: true,
-            projects
+            ownedProjects: result.ownedProjects || [],
+            sharedWithMe: result.sharedWithMe || [],
+            projects: result.projects || []
         });
     } catch (err) {
         return res.status(500).json({ success: false, error: err.message });

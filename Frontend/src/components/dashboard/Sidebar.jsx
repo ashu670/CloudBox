@@ -146,7 +146,7 @@ export default function Sidebar({
                                         );
                                     })
                                 ) : (
-                                    <div className="cb-nav-sub-empty">No shared projects yet</div>
+                                    <div className="cb-nav-sub-empty">No projects yet</div>
                                 )}
 
                                 <button

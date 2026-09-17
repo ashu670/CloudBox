@@ -298,31 +298,45 @@ export const joinSharedFolder = async (inviteCode, uid) => {
     if (!folder.isInviteActive) {
         throw new Error("Invite code is disabled.");
     }
+    if (folder.uid === userId) {
+        return {
+            folderName: folder.name,
+            status: "OWNER",
+            message: "You already own this project.",
+        };
+    }
 
     const member = await memberRepo.findMember(folder.id, userId);
     if (member) {
         return {
             folderName: folder.name,
             status: member.role === "OWNER" ? "OWNER" : "MEMBER",
+            role: member.role,
             message: member.role === "OWNER"
-                ? "You already own this folder."
-                : "You are already a member of this folder.",
+                ? "You already own this project."
+                : "You are already a member of this project.",
         };
     }
 
-    const pendingRequest = await requestRepo.findPendingRequest(folder.id, userId);
-    if (pendingRequest) {
-        return {
-            folderName: folder.name,
-            status: "PENDING",
-            message: "Join request already pending approval.",
-        };
-    }
+    // Direct join by code: Create FolderMember record immediately
+    const user = await userRepo.findNameById(userId);
+    const userName = user?.name || user?.email || `User #${userId}`;
 
-    await requestRepo.create({
+    await memberRepo.create({
         folderId: folder.id,
-        requestedBy: userId,
+        userId,
+        role: "VIEWER"
     });
+
+    // Clean up any pending join request if exists
+    try {
+        const pendingRequest = await requestRepo.findPendingRequest(folder.id, userId);
+        if (pendingRequest) {
+            await requestRepo.updateStatus(pendingRequest.id, "ACCEPTED");
+        }
+    } catch {
+        // Ignore request cleanup errors
+    }
 
     await activityService.log({
         folderId: folder.id,
@@ -330,13 +344,15 @@ export const joinSharedFolder = async (inviteCode, uid) => {
         action: ActivityType.JOIN_REQUEST,
         target: TargetType.FOLDER,
         targetId: folder.id,
-        message: `Requested to join folder "${folder.name}"`
+        message: `${userName} joined the project via invite code.`
     });
 
     return {
         folderName: folder.name,
-        status: "PENDING",
-        message: "Join request sent successfully.",
+        status: "MEMBER",
+        role: "VIEWER",
+        folderId: folder.id,
+        message: `Successfully joined "${folder.name}"!`,
     };
 };
 
