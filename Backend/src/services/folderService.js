@@ -783,3 +783,7 @@ export const setInviteStatus = async (folderId, isInviteActive, actionType, acto
 export const getFolderActivities = async (folderId, uid) => {
     return await activityService.getFolderActivities(folderId, uid);
 };
+
+export const getUserProjects = async (uid) => {
+    return await repo.getUserProjects(uid);
+};

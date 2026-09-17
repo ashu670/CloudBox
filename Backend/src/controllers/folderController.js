@@ -483,3 +483,16 @@ export const getDashboardStatsController = async (req, res) => {
         return res.status(500).json({ success: false, error: err.message });
     }
 };
+
+export const getUserProjects = async (req, res) => {
+    const uid = req.user.id;
+    try {
+        const projects = await service.getUserProjects(uid);
+        return res.status(200).json({
+            success: true,
+            projects
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+};

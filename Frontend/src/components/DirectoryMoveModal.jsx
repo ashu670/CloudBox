@@ -23,8 +23,11 @@ export default function DirectoryMoveModal({ movingItem, onClose, onMoveSuccess,
     const [subfolders, setSubfolders] = useState([]);
     const [loading, setLoading] = useState(false);
 
+    const isUploadMode = movingItem?.type === 'upload_file';
+    const isCreateMode = movingItem?.type === 'create_folder';
+
     // Inline folder creation
-    const [showCreateForm, setShowCreateForm] = useState(false);
+    const [showCreateForm, setShowCreateForm] = useState(isCreateMode);
     const [newFolderName, setNewFolderName] = useState("");
     const [creating, setCreating] = useState(false);
 
@@ -87,8 +90,11 @@ export default function DirectoryMoveModal({ movingItem, onClose, onMoveSuccess,
     };
 
     const handleCreateFolderSubmit = async (e) => {
-        e.preventDefault();
-        if (!newFolderName.trim()) return;
+        e?.preventDefault();
+        if (!newFolderName.trim()) {
+            showToast?.("Please enter a folder name", "error");
+            return;
+        }
         setCreating(true);
         try {
             const targetPid = (pickerFolderId === -1 || pickerFolderId === 0) ? (rootFolderId !== -1 ? rootFolderId : null) : pickerFolderId;
@@ -101,7 +107,11 @@ export default function DirectoryMoveModal({ movingItem, onClose, onMoveSuccess,
             showToast?.(`Folder "${newFolderName}" created successfully`, "success");
             setNewFolderName("");
             setShowCreateForm(false);
-            fetchSubfolders(pickerFolderId);
+            if (isCreateMode) {
+                await onMoveSuccess?.(targetPid);
+            } else {
+                fetchSubfolders(pickerFolderId);
+            }
         } catch (err) {
             showToast?.(err.response?.data?.error || "Failed to create folder", "error");
         } finally {
@@ -109,9 +119,27 @@ export default function DirectoryMoveModal({ movingItem, onClose, onMoveSuccess,
         }
     };
 
-    const handleMoveHere = async () => {
+    const handleActionClick = async () => {
         if (!movingItem) return;
         const targetPid = (pickerFolderId === -1 || pickerFolderId === 0) ? (rootFolderId !== -1 ? rootFolderId : 0) : pickerFolderId;
+
+        if (isUploadMode) {
+            if (targetPid === 0) {
+                showToast?.("Files cannot be uploaded to Root level. Please select a folder.", "error");
+                return;
+            }
+            await onMoveSuccess(targetPid);
+            return;
+        }
+
+        if (isCreateMode) {
+            if (showCreateForm && newFolderName.trim()) {
+                await handleCreateFolderSubmit();
+            } else {
+                setShowCreateForm(true);
+            }
+            return;
+        }
 
         if (movingItem.type === 'file' && targetPid === 0) {
             showToast?.("Files cannot be moved to Root level", "error");
@@ -133,13 +161,22 @@ export default function DirectoryMoveModal({ movingItem, onClose, onMoveSuccess,
         ? subfolders.filter(f => f.id !== movingItem.id)
         : subfolders;
 
+    const badgeLabel = isUploadMode ? "Uploading" : isCreateMode ? "New Folder" : "Moving";
+    const badgeStyle = isUploadMode
+        ? { background: "rgba(59, 130, 246, 0.12)", color: "#3b82f6" }
+        : isCreateMode
+            ? { background: "rgba(139, 92, 246, 0.12)", color: "#8b5cf6" }
+            : {};
+
+    const buttonLabel = isUploadMode ? "Upload Here" : isCreateMode ? "+ New Folder" : "Move Here";
+
     return (
         <div className="directory-move-backdrop">
             <div className="directory-move-modal" onClick={(e) => e.stopPropagation()}>
                 {/* Header */}
                 <div className="move-modal-header">
                     <div className="move-header-info">
-                        <span className="move-badge">Moving</span>
+                        <span className="move-badge" style={badgeStyle}>{badgeLabel}</span>
                         <span className="move-item-name">{movingItem.name}</span>
                     </div>
                     <button type="button" className="move-close-btn" onClick={onClose}>✕</button>
@@ -213,7 +250,11 @@ export default function DirectoryMoveModal({ movingItem, onClose, onMoveSuccess,
                         <div className="move-empty-directory">
                             <p>No subfolders in this directory.</p>
                             <p style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "4px" }}>
-                                You can tap "Move Here" below to place "{movingItem.name}" in this directory.
+                                {isUploadMode
+                                    ? `You can tap "Upload Here" below to upload "${movingItem.name}" to this folder.`
+                                    : isCreateMode
+                                        ? `You can tap "+ New Folder" above to create a folder here.`
+                                        : `You can tap "Move Here" below to place "${movingItem.name}" in this directory.`}
                             </p>
                         </div>
                     ) : (
@@ -244,9 +285,23 @@ export default function DirectoryMoveModal({ movingItem, onClose, onMoveSuccess,
                         <button type="button" className="btn btn-secondary" onClick={onClose}>
                             Cancel
                         </button>
-                        <button type="button" className="btn btn-primary" onClick={handleMoveHere} style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
-                            <MoveIcon size={16} color="#ffffff" />
-                            <span>Move Here</span>
+                        <button type="button" className="btn btn-primary" onClick={handleActionClick} style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+                            {isUploadMode ? (
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                    <polyline points="17 8 12 3 7 8" />
+                                    <line x1="12" y1="3" x2="12" y2="15" />
+                                </svg>
+                            ) : isCreateMode ? (
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                                    <line x1="12" y1="11" x2="12" y2="17" />
+                                    <line x1="9" y1="14" x2="15" y2="14" />
+                                </svg>
+                            ) : (
+                                <MoveIcon size={16} color="#ffffff" />
+                            )}
+                            <span>{buttonLabel}</span>
                         </button>
                     </div>
                 </div>

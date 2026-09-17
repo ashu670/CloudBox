@@ -18,7 +18,9 @@ export default function Sidebar({
     userEmail,
     showToast,
     sharedFolders = [],
+    activeProjectId = null,
     onProjectClick,
+    onSharedClick,
 }) {
     const [projectsOpen, setProjectsOpen] = useState(true);
 
@@ -28,6 +30,24 @@ export default function Sidebar({
 
     return (
         <aside className={`cb-left-sidebar ${mobileSidebarOpen ? 'mobile-open' : ''}`}>
+            {/* Mobile Drawer Header */}
+            <div className="cb-sidebar-mobile-header">
+                <div className="cb-sidebar-mobile-brand">
+                    <svg className="cloudbox-logo" viewBox="0 0 24 24" width="22" height="22">
+                        <path fill="#6366f1" d="M19.35,10.03C18.67,6.59 15.64,4 12,4C9.11,4 6.6,5.64 5.35,8.03C2.34,8.36 0,10.9 0,14C0,17.1 2.9,20 6,20H19C21.76,20 24,17.76 24,15C24,12.36 21.95,10.22 19.35,10.03Z" />
+                    </svg>
+                    <span className="brand-name" style={{ fontSize: "17px", fontWeight: "800", color: "var(--text-heading)" }}>CloudBox</span>
+                </div>
+                <button
+                    type="button"
+                    className="cb-sidebar-close-btn"
+                    onClick={() => setMobileSidebarOpen(false)}
+                    aria-label="Close menu"
+                >
+                    ✕
+                </button>
+            </div>
+
             {/* Top Navigation Block */}
             <div className="cb-sidebar-top">
                 <nav className="cb-sidebar-nav">
@@ -94,29 +114,40 @@ export default function Sidebar({
                         {projectsOpen && (
                             <div className="cb-nav-sub-list">
                                 {sharedFolders.length > 0 ? (
-                                    sharedFolders.map((folder) => (
-                                        <button
-                                            key={folder.id}
-                                            type="button"
-                                            className={`cb-nav-sub-item ${activeNav === 'projects' ? 'cb-project-item-active' : ''}`}
-                                            onClick={() => {
-                                                setActiveNav('projects');
-                                                setMobileSidebarOpen(false);
-                                                if (onProjectClick) {
-                                                    onProjectClick(folder);
-                                                } else {
-                                                    handleFolderSelect(folder);
-                                                }
-                                            }}
-                                            onMouseEnter={() => prefetchFolder && prefetchFolder(folder.id)}
-                                        >
-                                            <svg width="15" height="15" viewBox="0 0 24 24" fill="#94a3b8">
-                                                <path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" />
-                                            </svg>
-                                            <span title={folder.name}>{folder.name}</span>
-                                        </button>
-                                    ))
-                                ) : null}
+                                    sharedFolders.map((folder) => {
+                                        const isActive = activeNav === 'projects' && activeProjectId === folder.id;
+                                        const role = folder.userRole;
+                                        return (
+                                            <button
+                                                key={folder.id}
+                                                type="button"
+                                                className={`cb-nav-sub-item ${isActive ? 'cb-project-item-active' : ''}`}
+                                                onClick={() => {
+                                                    setActiveNav('projects');
+                                                    setMobileSidebarOpen(false);
+                                                    if (onProjectClick) {
+                                                        onProjectClick(folder);
+                                                    } else {
+                                                        handleFolderSelect(folder);
+                                                    }
+                                                }}
+                                                onMouseEnter={() => prefetchFolder && prefetchFolder(folder.id)}
+                                            >
+                                                <svg width="15" height="15" viewBox="0 0 24 24" fill={isActive ? "#7c3aed" : "#94a3b8"}>
+                                                    <path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" />
+                                                </svg>
+                                                <span className="cb-project-name" title={folder.name}>{folder.name}</span>
+                                                {role && (
+                                                    <span className="cb-project-role-pill">
+                                                        {role.toLowerCase()}
+                                                    </span>
+                                                )}
+                                            </button>
+                                        );
+                                    })
+                                ) : (
+                                    <div className="cb-nav-sub-empty">No shared projects yet</div>
+                                )}
 
                                 <button
                                     type="button"
@@ -136,7 +167,7 @@ export default function Sidebar({
                         className={`cb-nav-item ${activeNav === 'shared' ? 'active' : ''}`}
                         onClick={() => {
                             setActiveNav('shared');
-                            setSharedPanel('members');
+                            onSharedClick?.();
                             setMobileSidebarOpen(false);
                         }}
                     >

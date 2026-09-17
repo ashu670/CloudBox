@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useFolderManager } from "../hooks/useFolderManager";
 import Navbar from "../components/navbar";
 import Sidebar from "../components/dashboard/Sidebar";
@@ -9,6 +9,7 @@ import FilesSection from "../components/dashboard/FilesSection";
 import RightSidebar from "../components/dashboard/RightSidebar";
 import MyDriveView from "../components/dashboard/MyDriveView";
 import ProjectView from "../components/dashboard/ProjectView";
+import SharedWithMeView from "../components/dashboard/SharedWithMeView";
 
 import CreateSharedFolder from "../components/CreateSharedFolder";
 import JoinSharedFolder from "../components/JoinSharedFolder";
@@ -22,12 +23,14 @@ import ActionBottomSheet from "../components/ActionBottomSheet";
 import DirectoryMoveModal from "../components/DirectoryMoveModal";
 import ShareModal from "../components/ShareModal";
 import TrashModal from "../components/TrashModal";
+import DeleteConfirmationModal from "../components/DeleteConfirmationModal";
+import UploadProgressWidget from "../components/UploadProgressWidget";
 import { lockBodyScroll, unlockBodyScroll } from "../utils/scrollLock";
 import axios from "../api/axios";
 
 export default function Dashboard() {
     const {
-        folders, files, rootFolders, filteredFolders, filteredFiles, userProfile, storageBreakdown, dashboardStats, searchQuery, setSearchQuery,
+        folders, files, rootFolders, projects, filteredFolders, filteredFiles, userProfile, storageBreakdown, dashboardStats, searchQuery, setSearchQuery,
         searchLoading, searchError,
         rootFolderId, currentFolderId, history, folderName, setFolderName,
         loading, isUploading, isDragging, setIsDragging, showCreator, setShowCreator,
@@ -35,7 +38,9 @@ export default function Dashboard() {
         previewItem, previewFile, closePreview,
         toasts, currentFolderInfo,
         createFolder, deleteFolder, deleteFile,
+        deleteModalState, promptDelete, closeDeleteModal, executeDeleteConfirm,
         downloadFile, shareFile, openShareModal, closeShareModal, shareModalItem, handleRenameSubmit, executeMove, moveItemToFolder, handleFileUpload,
+        uploads, retryUpload, dismissUpload, clearCompletedUploads,
         handleFolderSelect, prefetchFolder, goBack, refreshAfterSharedAction, showToast
     } = useFolderManager();
 
@@ -47,9 +52,33 @@ export default function Dashboard() {
     const [showMoveModal, setShowMoveModal] = useState(false);
     const [activeBottomSheet, setActiveBottomSheet] = useState(null);
     const [showTrash, setShowTrash] = useState(false);
-    const [viewMode, setViewMode] = useState("list");
+    const dragCounterRef = useRef(0);
+    const [viewMode, setViewModeState] = useState(() => {
+        try {
+            return localStorage.getItem("cloudbox_view_mode") || "list";
+        } catch {
+            return "list";
+        }
+    });
+
+    const setViewMode = (mode) => {
+        setViewModeState(mode);
+        try {
+            localStorage.setItem("cloudbox_view_mode", mode);
+        } catch {}
+    };
     const [activeNav, setActiveNav] = useState("dashboard");
     const [selectedRows, setSelectedRows] = useState(new Set());
+    const globalFileInputRef = useRef(null);
+
+    const triggerFileUpload = useCallback(() => {
+        if (globalFileInputRef.current) {
+            globalFileInputRef.current.click();
+        } else {
+            const el = document.getElementById("file-picker");
+            if (el) el.click();
+        }
+    }, []);
 
     useEffect(() => {
         if (mobileSidebarOpen) {
@@ -57,6 +86,16 @@ export default function Dashboard() {
             return () => unlockBodyScroll();
         }
     }, [mobileSidebarOpen]);
+
+    // Front of Dashboard always considers and resets current folder to Root
+    useEffect(() => {
+        if (activeNav === 'dashboard') {
+            const rootId = rootFolderId !== -1 ? rootFolderId : (Number(localStorage.getItem("rootFolderId")) || -1);
+            if (rootId !== -1 && currentFolderId !== rootId) {
+                handleFolderSelect({ id: rootId, name: "Root", pid: null });
+            }
+        }
+    }, [activeNav, rootFolderId, currentFolderId, handleFolderSelect]);
 
     const openActionSheet = (item, itemType) => {
         const isFolder = itemType === 'folder';
@@ -87,7 +126,7 @@ export default function Dashboard() {
                 type: 'delete',
                 label: "Delete",
                 danger: true,
-                onClick: (e) => deleteFolder(e, item.id)
+                onClick: () => promptDelete(item, 'folder')
             }
         ] : [
             {
@@ -125,7 +164,7 @@ export default function Dashboard() {
                 type: 'delete',
                 label: "Delete",
                 danger: true,
-                onClick: (e) => deleteFile(e, item.id)
+                onClick: () => promptDelete(item, 'file')
             }
         ];
 
@@ -165,13 +204,17 @@ export default function Dashboard() {
     // Drag & Drop event handlers
     const handleDragStartItem = (e, item) => {
         setDraggedItem(item);
+        setIsDragging(false);
+        dragCounterRef.current = 0;
         e.dataTransfer.effectAllowed = "move";
         e.dataTransfer.setData("application/json", JSON.stringify(item));
+        e.dataTransfer.setData("application/x-cloudbox-item", JSON.stringify(item));
     };
 
     const handleDragEndItem = () => {
         setDraggedItem(null);
         setDropTargetId(null);
+        dragCounterRef.current = 0;
     };
 
     const handleDragOverTarget = (e, targetFolderId) => {
@@ -195,8 +238,11 @@ export default function Dashboard() {
         e.preventDefault();
         e.stopPropagation();
         setDropTargetId(null);
+        setIsDragging(false);
+        dragCounterRef.current = 0;
 
-        if (e.dataTransfer.files && e.dataTransfer.files.length > 0 && !draggedItem) {
+        // A. External file drop onto a specific folder
+        if (!draggedItem && !e.dataTransfer.types?.includes("application/x-cloudbox-item") && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
             if (targetFolderId > 0) {
                 handleFileUpload(e.dataTransfer.files[0], targetFolderId);
             } else {
@@ -205,10 +251,11 @@ export default function Dashboard() {
             return;
         }
 
+        // B. Internal CloudBox item move
         let item = draggedItem;
         if (!item) {
             try {
-                const rawData = e.dataTransfer.getData("application/json");
+                const rawData = e.dataTransfer.getData("application/x-cloudbox-item") || e.dataTransfer.getData("application/json");
                 if (rawData) item = JSON.parse(rawData);
             } catch {
                 item = null;
@@ -216,8 +263,77 @@ export default function Dashboard() {
         }
 
         if (item) {
+            if (item.type === 'folder' && item.id === targetFolderId) {
+                showToast("Cannot move a folder into itself.", "error");
+                setDraggedItem(null);
+                return;
+            }
             moveItemToFolder(item, targetFolderId);
             setDraggedItem(null);
+        }
+    };
+
+    const handleWorkspaceDragEnter = (e) => {
+        if (draggedItem || Array.from(e.dataTransfer.types || []).includes("application/x-cloudbox-item")) {
+            return;
+        }
+        if (Array.from(e.dataTransfer.types || []).includes("Files")) {
+            e.preventDefault();
+            e.stopPropagation();
+            dragCounterRef.current += 1;
+            if (dragCounterRef.current === 1) {
+                setIsDragging(true);
+            }
+        }
+    };
+
+    const handleWorkspaceDragOver = (e) => {
+        if (draggedItem || Array.from(e.dataTransfer.types || []).includes("application/x-cloudbox-item")) {
+            return;
+        }
+        if (Array.from(e.dataTransfer.types || []).includes("Files")) {
+            e.preventDefault();
+            e.stopPropagation();
+            e.dataTransfer.dropEffect = "copy";
+        }
+    };
+
+    const handleWorkspaceDragLeave = (e) => {
+        if (draggedItem || Array.from(e.dataTransfer.types || []).includes("application/x-cloudbox-item")) {
+            return;
+        }
+        e.preventDefault();
+        e.stopPropagation();
+        dragCounterRef.current -= 1;
+        if (dragCounterRef.current <= 0) {
+            dragCounterRef.current = 0;
+            setIsDragging(false);
+        }
+    };
+
+    const handleWorkspaceDrop = (e) => {
+        dragCounterRef.current = 0;
+        setIsDragging(false);
+
+        if (draggedItem || Array.from(e.dataTransfer.types || []).includes("application/x-cloudbox-item")) {
+            return;
+        }
+
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            e.preventDefault();
+            e.stopPropagation();
+            const filesList = Array.from(e.dataTransfer.files);
+            if (activeNav === 'dashboard') {
+                setMovingItem({
+                    type: 'upload_file',
+                    file: filesList[0],
+                    files: filesList,
+                    name: filesList.length === 1 ? filesList[0].name : `${filesList.length} files`
+                });
+                setShowMoveModal(true);
+            } else {
+                filesList.forEach(file => handleFileUpload(file));
+            }
         }
     };
 
@@ -283,6 +399,32 @@ export default function Dashboard() {
 
     return (
         <div className="app-container cb-dashboard-page">
+            {/* Hidden Central File Input */}
+            <input
+                id="file-picker"
+                type="file"
+                multiple
+                ref={globalFileInputRef}
+                style={{ display: "none" }}
+                onChange={(e) => {
+                    if (e.target.files && e.target.files.length > 0) {
+                        const filesList = Array.from(e.target.files);
+                        if (activeNav === 'dashboard') {
+                            setMovingItem({
+                                type: 'upload_file',
+                                file: filesList[0],
+                                files: filesList,
+                                name: filesList.length === 1 ? filesList[0].name : `${filesList.length} files`
+                            });
+                            setShowMoveModal(true);
+                        } else {
+                            filesList.forEach(file => handleFileUpload(file));
+                        }
+                        e.target.value = "";
+                    }
+                }}
+            />
+
             {/* Topbar Header */}
             <Navbar
                 searchQuery={searchQuery}
@@ -315,38 +457,50 @@ export default function Dashboard() {
                     userName={userName}
                     userEmail={userEmail}
                     showToast={showToast}
-                    sharedFolders={(rootFolders.length > 0 ? rootFolders : folders).filter(f => f.isShared)}
+                    sharedFolders={projects && projects.length > 0 ? projects : (rootFolders.length > 0 ? rootFolders : folders).filter(f => f.isShared)}
+                    activeProjectId={activeProject?.id}
                     onProjectClick={handleProjectClick}
+                    onSharedClick={() => {
+                        setActiveProject(null);
+                        setActiveNav('shared');
+                    }}
                 />
 
                 {/* ─── 2. CENTER CONTENT (WORKSPACE) ───────────────────────── */}
                 <main
                     className={`cb-center-content ${activeNav === 'files' ? 'cb-mydrive-main-full' : ''}`}
-                    onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-                    onDragLeave={() => setIsDragging(false)}
-                    onDrop={(e) => {
-                        e.preventDefault();
-                        setIsDragging(false);
-                        if (e.dataTransfer.files && e.dataTransfer.files[0] && !draggedItem) {
-                            handleFileUpload(e.dataTransfer.files[0]);
-                        }
-                    }}
+                    onDragEnter={handleWorkspaceDragEnter}
+                    onDragOver={handleWorkspaceDragOver}
+                    onDragLeave={handleWorkspaceDragLeave}
+                    onDrop={handleWorkspaceDrop}
                 >
                     {activeNav === 'projects' && activeProject ? (
-                        /* ─── PROJECT VIEW ─── */
+                        /* ─── SHARED FOLDER WORKSPACE VIEW ─── */
                         <ProjectView
                             project={activeProject}
-                            onClose={() => { setActiveProject(null); setActiveNav('dashboard'); }}
+                            onClose={() => { setActiveProject(null); setActiveNav('shared'); }}
                             showToast={showToast}
                             prefetchFolder={prefetchFolder}
                             previewFile={previewFile}
+                            downloadFile={downloadFile}
+                            openActionSheet={openActionSheet}
+                            handleFileUpload={handleFileUpload}
                             userRole={activeProject.userRole}
                             onRefresh={refreshAfterSharedAction}
                             onProjectDeleted={() => {
                                 setActiveProject(null);
-                                setActiveNav('dashboard');
+                                setActiveNav('shared');
                                 refreshAfterSharedAction();
                             }}
+                        />
+                    ) : activeNav === 'shared' ? (
+                        /* ─── SHARED WITH ME WORKSPACES LIST ─── */
+                        <SharedWithMeView
+                            sharedFolders={projects && projects.length > 0 ? projects : (rootFolders.length > 0 ? rootFolders : folders).filter(f => f.isShared)}
+                            userProfile={userProfile}
+                            onSelectSharedFolder={handleProjectClick}
+                            onJoinClick={() => setSharedPanel('join')}
+                            onNewProjectClick={() => setSharedPanel('create')}
                         />
                     ) : activeNav === 'files' ? (
                         /* ─── DEDICATED MY DRIVE FILE MANAGER VIEW ─── */
@@ -361,7 +515,7 @@ export default function Dashboard() {
                             handleFolderSelect={handleFolderSelect}
                             prefetchFolder={prefetchFolder}
                             goBack={goBack}
-                            onUploadClick={() => document.getElementById("file-picker").click()}
+                            onUploadClick={triggerFileUpload}
                             onCreateFolderClick={() => setShowCreator(true)}
                             previewFile={previewFile}
                             downloadFile={downloadFile}
@@ -388,46 +542,22 @@ export default function Dashboard() {
                             <HeroBanner
                                 userName={userName}
                                 isUploading={isUploading}
-                                onUploadClick={() => document.getElementById("file-picker").click()}
-                                onCreateFolderClick={() => setShowCreator(true)}
-                                onNewProjectClick={() => setSharedPanel('create')}
-                                onFileInputChange={(e) => {
-                                    if (e.target.files && e.target.files[0]) {
-                                        handleFileUpload(e.target.files[0]);
-                                    }
+                                onUploadClick={triggerFileUpload}
+                                onCreateFolderClick={() => {
+                                    setMovingItem({ type: 'create_folder', name: 'New Folder' });
+                                    setShowMoveModal(true);
                                 }}
+                                onNewProjectClick={() => setSharedPanel('create')}
                             />
 
-                            {/* Stats Row — 3 cards with trend badges */}
-                            <StatsRow dashboardStats={dashboardStats} />
-
-                            {/* Subfolder Breadcrumbs & Back Navigation */}
-                            {history.length > 0 && (
-                                <div className="cb-breadcrumbs-bar">
-                                    <button onClick={goBack} className="cb-back-btn">
-                                        &larr; Back
-                                    </button>
-                                    <div className="cb-breadcrumbs-list">
-                                        <span
-                                            className="cb-breadcrumb-item"
-                                            onClick={() => handleFolderSelect({ id: rootFolderId !== -1 ? rootFolderId : -1, name: "Root" })}
-                                        >
-                                            Root
-                                        </span>
-                                        {history.map((folder, idx) => (
-                                            <span key={folder.id} className="cb-breadcrumb-chunk">
-                                                <span className="cb-breadcrumb-sep">/</span>
-                                                <span
-                                                    className={`cb-breadcrumb-item ${idx === history.length - 1 ? 'active' : ''}`}
-                                                    onClick={() => handleFolderSelect(folder)}
-                                                >
-                                                    {folder.name}
-                                                </span>
-                                            </span>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
+                            {/* Stats Row — 4 cards with click handlers */}
+                            <StatsRow
+                                dashboardStats={dashboardStats}
+                                onStatClick={(tab) => {
+                                    setActiveProject(null);
+                                    setActiveNav(tab);
+                                }}
+                            />
 
                             {/* "My Folders" Section */}
                             <FoldersSection
@@ -435,6 +565,7 @@ export default function Dashboard() {
                                 rootFolderId={rootFolderId}
                                 handleFolderSelect={handleFolderSelect}
                                 prefetchFolder={prefetchFolder}
+                                setActiveNav={setActiveNav}
                                 loading={loading}
                                 filteredFolders={filteredFolders}
                                 editingItem={editingItem}
@@ -456,6 +587,7 @@ export default function Dashboard() {
                                 searchLoading={searchLoading}
                                 viewMode={viewMode}
                                 setViewMode={setViewMode}
+                                setActiveNav={setActiveNav}
                                 filteredFiles={filteredFiles}
                                 filteredFolders={filteredFolders}
                                 selectedRows={selectedRows}
@@ -570,7 +702,19 @@ export default function Dashboard() {
                     onClose={() => { setShowMoveModal(false); setMovingItem(null); }}
                     showToast={showToast}
                     onMoveSuccess={async (targetFolderId) => {
-                        await moveItemToFolder(movingItem, targetFolderId);
+                        if (movingItem.type === 'upload_file') {
+                            if (movingItem.files && movingItem.files.length > 0) {
+                                for (const f of movingItem.files) {
+                                    handleFileUpload(f, targetFolderId);
+                                }
+                            } else if (movingItem.file) {
+                                handleFileUpload(movingItem.file, targetFolderId);
+                            }
+                        } else if (movingItem.type === 'create_folder') {
+                            await refreshAfterSharedAction();
+                        } else {
+                            await moveItemToFolder(movingItem, targetFolderId);
+                        }
                         setShowMoveModal(false);
                         setMovingItem(null);
                     }}
@@ -650,6 +794,25 @@ export default function Dashboard() {
                     </div>
                 </div>
             )}
+
+            {/* Custom Delete Confirmation Modal (Theme-aware, supports recursive force delete) */}
+            <DeleteConfirmationModal
+                isOpen={deleteModalState.isOpen}
+                item={deleteModalState.item}
+                type={deleteModalState.type}
+                containsFiles={deleteModalState.containsFiles}
+                isDeleting={deleteModalState.isDeleting}
+                onClose={closeDeleteModal}
+                onConfirm={executeDeleteConfirm}
+            />
+
+            {/* Live Upload Progress Manager Widget */}
+            <UploadProgressWidget
+                uploads={uploads}
+                onRetry={retryUpload}
+                onDismiss={dismissUpload}
+                onClearCompleted={clearCompletedUploads}
+            />
 
             {/* Toast Container */}
             <div className="toast-container">

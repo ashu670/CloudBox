@@ -89,35 +89,35 @@ export default function RightSidebar({
     fetchRecentActivity,
     setSharedPanel,
 }) {
-    const numUsed  = Number(usedStorageBytes  || 0);
+    const numUsed = Number(usedStorageBytes || 0);
     const numLimit = Number(limitStorageBytes || 0);
-    const displayUsed  = formatBytes(numUsed);
+    const displayUsed = formatBytes(numUsed);
     const displayLimit = numLimit > 0 ? formatBytes(numLimit) : "500 MB";
 
-    const stats    = storageBreakdown?.stats || storageBreakdown || {};
-    const imgBytes = Number(stats.image    || 0);
+    const stats = storageBreakdown?.stats || storageBreakdown || {};
+    const imgBytes = Number(stats.image || 0);
     const docBytes = Number(stats.document || 0);
-    const vidBytes = Number(stats.video    || 0);
-    const audBytes = Number(stats.audio    || 0);
+    const vidBytes = Number(stats.video || 0);
+    const audBytes = Number(stats.audio || 0);
     const sumKnown = imgBytes + docBytes + vidBytes + audBytes;
     const otherBytes = Math.max(0, numUsed - sumKnown);
 
     const base = numLimit > 0 ? numLimit : Math.max(numUsed, 1);
     function seg(b) { return Math.max(0, (b / base) * CIRC); }
 
-    const imgLen   = seg(imgBytes);
-    const docLen   = seg(docBytes);
-    const vidLen   = seg(vidBytes);
-    const audLen   = seg(audBytes);
+    const imgLen = seg(imgBytes);
+    const docLen = seg(docBytes);
+    const vidLen = seg(vidBytes);
+    const audLen = seg(audBytes);
     const otherLen = seg(otherBytes);
 
     // Offsets: each arc starts after previous (negative offset = rotate CW)
     const SEGS = [
-        { len: imgLen,   off: 0,                                      color: "#6366f1", dot: "dot-indigo", label: "Images",    bytes: imgBytes   },
-        { len: docLen,   off: -(imgLen),                              color: "#ec4899", dot: "dot-pink",   label: "Documents", bytes: docBytes   },
-        { len: vidLen,   off: -(imgLen + docLen),                     color: "#f97316", dot: "dot-orange", label: "Videos",    bytes: vidBytes   },
-        { len: audLen,   off: -(imgLen + docLen + vidLen),            color: "#eab308", dot: "dot-yellow", label: "Audio",     bytes: audBytes   },
-        { len: otherLen, off: -(imgLen + docLen + vidLen + audLen),   color: "#22c55e", dot: "dot-green",  label: "Other",     bytes: otherBytes },
+        { len: imgLen, off: 0, color: "#6366f1", dot: "dot-indigo", label: "Images", bytes: imgBytes },
+        { len: docLen, off: -(imgLen), color: "#ec4899", dot: "dot-pink", label: "Documents", bytes: docBytes },
+        { len: vidLen, off: -(imgLen + docLen), color: "#f97316", dot: "dot-orange", label: "Videos", bytes: vidBytes },
+        { len: audLen, off: -(imgLen + docLen + vidLen), color: "#eab308", dot: "dot-yellow", label: "Audio", bytes: audBytes },
+        { len: otherLen, off: -(imgLen + docLen + vidLen + audLen), color: "#22c55e", dot: "dot-green", label: "Other", bytes: otherBytes },
     ];
 
     const hasUsage = numUsed > 0;
@@ -231,12 +231,12 @@ export default function RightSidebar({
 
                 <div className="cb-work-avatars-graphic">
                     <svg viewBox="0 0 130 90" fill="none" className="cb-avatars-svg" preserveAspectRatio="xMidYMax meet" aria-hidden="true">
-                        <circle cx="28"  cy="38" r="10" fill="#c4b5fd" fillOpacity="0.55" />
-                        <path   d="M8 90 C8 64,48 64,48 90 Z"          fill="#c4b5fd" fillOpacity="0.55" />
+                        <circle cx="28" cy="38" r="10" fill="#c4b5fd" fillOpacity="0.55" />
+                        <path d="M8 90 C8 64,48 64,48 90 Z" fill="#c4b5fd" fillOpacity="0.55" />
                         <circle cx="102" cy="40" r="10" fill="#c4b5fd" fillOpacity="0.45" />
-                        <path   d="M82 90 C82 66,122 66,122 90 Z"       fill="#c4b5fd" fillOpacity="0.45" />
-                        <circle cx="65"  cy="30" r="13" fill="#a78bfa" fillOpacity="0.85" />
-                        <path   d="M38 90 C38 56,92 56,92 90 Z"         fill="#a78bfa" fillOpacity="0.85" />
+                        <path d="M82 90 C82 66,122 66,122 90 Z" fill="#c4b5fd" fillOpacity="0.45" />
+                        <circle cx="65" cy="30" r="13" fill="#a78bfa" fillOpacity="0.85" />
+                        <path d="M38 90 C38 56,92 56,92 90 Z" fill="#a78bfa" fillOpacity="0.85" />
                     </svg>
                 </div>
             </div>

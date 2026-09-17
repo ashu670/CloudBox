@@ -110,12 +110,13 @@ export const searchChild = async (uid, name) => {
 };
 
 export const findChildren = async (uid, pid) => {
-
+    let isRootContext = false;
     if (pid === null || pid === 0 || pid === -1) {
         const rootFolder = await findRootFolder(uid);
 
         if (rootFolder) {
             pid = rootFolder.id;
+            isRootContext = true;
         }
     }
 
@@ -127,22 +128,29 @@ export const findChildren = async (uid, pid) => {
                 uid,
                 deletedAt: null
             },
+            include: {
+                user: { select: { id: true, name: true, email: true } }
+            }
         });
 
         const memberships = await prisma.folderMember.findMany({
             where: {
-                userId: uid
+                userId: uid,
+                folder: { deletedAt: null }
             },
             include: {
-                folder: true
+                folder: {
+                    include: {
+                        user: { select: { id: true, name: true, email: true } }
+                    }
+                }
             },
         });
 
         const sharedRootFolders = memberships
-            .map(m => m.folder)
+            .map(m => ({ ...m.folder, userRole: m.role, isShared: true }))
             .filter(
                 f =>
-                    f.pid === null &&
                     f.uid !== uid &&
                     f.deletedAt === null
             );
@@ -182,8 +190,12 @@ export const findChildren = async (uid, pid) => {
             children: {
                 where: {
                     deletedAt: null
+                },
+                include: {
+                    user: { select: { id: true, name: true, email: true } }
                 }
             },
+            user: { select: { id: true, name: true, email: true } }
         },
     });
 
@@ -199,6 +211,53 @@ export const findChildren = async (uid, pid) => {
 
     if (!hasAccess) {
         throw new Error("Folder access denied");
+    }
+
+    if (folder.isRoot || isRootContext) {
+        const memberships = await prisma.folderMember.findMany({
+            where: {
+                userId: uid,
+                folder: { deletedAt: null }
+            },
+            include: {
+                folder: {
+                    include: {
+                        user: { select: { id: true, name: true, email: true } }
+                    }
+                }
+            },
+        });
+
+        const ownShared = await prisma.folder.findMany({
+            where: {
+                uid,
+                isShared: true,
+                deletedAt: null,
+                pid: null
+            },
+            include: {
+                user: { select: { id: true, name: true, email: true } }
+            }
+        });
+
+        const seen = new Set(folder.children.map(f => f.id));
+        const allChildren = [...folder.children];
+
+        for (const f of ownShared) {
+            if (!seen.has(f.id)) {
+                allChildren.push({ ...f, userRole: "OWNER", isShared: true });
+                seen.add(f.id);
+            }
+        }
+
+        for (const m of memberships) {
+            if (m.folder && !seen.has(m.folder.id)) {
+                allChildren.push({ ...m.folder, userRole: m.role, isShared: true });
+                seen.add(m.folder.id);
+            }
+        }
+
+        folder.children = allChildren;
     }
 
     return folder;
@@ -436,5 +495,63 @@ export const getDashboardStats = async (uid) => {
     ]);
 
     return { totalFolders, projects, sharedWithMe };
+};
+
+/* ── All User Projects (Owned + Member of) ─────────────────────────── */
+
+export const getUserProjects = async (uid) => {
+    const ownedProjects = await prisma.folder.findMany({
+        where: {
+            uid,
+            isShared: true,
+            deletedAt: null
+        },
+        include: {
+            user: { select: { id: true, name: true, email: true } }
+        },
+        orderBy: { updatedAt: 'desc' }
+    });
+
+    const memberships = await prisma.folderMember.findMany({
+        where: {
+            userId: uid,
+            folder: { deletedAt: null }
+        },
+        include: {
+            folder: {
+                include: {
+                    user: { select: { id: true, name: true, email: true } }
+                }
+            }
+        },
+        orderBy: { createdAt: 'desc' }
+    });
+
+    const projectMap = new Map();
+
+    for (const folder of ownedProjects) {
+        projectMap.set(folder.id, {
+            ...folder,
+            userRole: "OWNER",
+            isShared: true
+        });
+    }
+
+    for (const m of memberships) {
+        if (m.folder) {
+            const existing = projectMap.get(m.folder.id);
+            if (!existing) {
+                projectMap.set(m.folder.id, {
+                    ...m.folder,
+                    userRole: m.role || "MEMBER",
+                    isShared: true
+                });
+            } else if (existing.userRole !== "OWNER") {
+                existing.userRole = m.role || existing.userRole;
+            }
+        }
+    }
+
+    return Array.from(projectMap.values());
 };
 

@@ -25,6 +25,7 @@ export function useFolderManager() {
     const [folders, setFolders] = useState([]);
     const [files, setFiles] = useState([]);
     const [rootFolders, setRootFolders] = useState([]); // always root-level children
+    const [projects, setProjects] = useState([]); // all shared & collaborative folders accessible to user
     const [userProfile, setUserProfile] = useState(null);
     const [storageBreakdown, setStorageBreakdown] = useState({ image: 0, video: 0, audio: 0, document: 0 });
     const [dashboardStats, setDashboardStats] = useState({ totalFiles: 0, totalFolders: 0, projects: 0, sharedWithMe: 0 });
@@ -53,6 +54,7 @@ export function useFolderManager() {
     const [folderName, setFolderName] = useState("");
     const [loading, setLoading] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
+    const [uploads, setUploads] = useState([]);
     const [isDragging, setIsDragging] = useState(false);
     const [showCreator, setShowCreator] = useState(false);
     const [editingItem, setEditingItem] = useState(null);
@@ -66,6 +68,16 @@ export function useFolderManager() {
     // Fast in-memory & sessionStorage cache for 0ms instant folder loading
     const contentCacheRef = useRef(getInitialCache());
     const activeFolderIdRef = useRef(currentFolderId);
+    const fetchSequenceRef = useRef(0);
+
+    // Custom Delete Confirmation Modal State (replaces native window.confirm & alert)
+    const [deleteModalState, setDeleteModalState] = useState({
+        isOpen: false,
+        item: null,
+        type: "folder",
+        containsFiles: false,
+        isDeleting: false
+    });
 
     const navigate = useNavigate();
 
@@ -170,7 +182,24 @@ export function useFolderManager() {
         }
     }, []);
 
+    const fetchProjects = useCallback(async () => {
+        try {
+            const token = localStorage.getItem("accessToken");
+            if (!token) return;
+            const { data } = await axios.get("api/folder/projects", {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            if (data.success && Array.isArray(data.projects)) {
+                setProjects(data.projects);
+                addToCache(data.projects);
+            }
+        } catch (err) {
+            console.error("Failed to fetch projects:", err);
+        }
+    }, [addToCache]);
+
     const fetchFolders = useCallback(async (id = null, isBackgroundSync = false) => {
+        const seqId = ++fetchSequenceRef.current;
         const targetId = (id !== null && id !== undefined) ? id : activeFolderIdRef.current;
         const fetchId = (targetId === -1 || targetId === 0) ? (rootFolderId !== -1 ? rootFolderId : -1) : targetId;
         if (fetchId === -1 || fetchId === 0 || !fetchId) {
@@ -188,8 +217,10 @@ export function useFolderManager() {
         // Synchronous render from cache
         const cached = contentCacheRef.current[fetchId] || (fetchId === rootFolderId ? contentCacheRef.current[-1] : null);
         if (cached) {
-            setFolders(cached.folders || []);
-            setFiles(cached.files || []);
+            if (activeFolderIdRef.current === fetchId || (fetchId === rootFolderId && (activeFolderIdRef.current === -1 || activeFolderIdRef.current === 0))) {
+                setFolders(cached.folders || []);
+                setFiles(cached.files || []);
+            }
             // Populate rootFolders from cache too
             if (fetchId === rootFolderId) {
                 setRootFolders(cached.folders || []);
@@ -197,10 +228,10 @@ export function useFolderManager() {
             if (cached.folderInfo && cached.folderInfo.id) {
                 setFoldersCache(prev => ({ ...prev, [cached.folderInfo.id]: cached.folderInfo }));
             }
-            if (!isBackgroundSync) {
+            if (!isBackgroundSync && activeFolderIdRef.current === fetchId) {
                 setLoading(false);
             }
-        } else if (!isBackgroundSync) {
+        } else if (!isBackgroundSync && activeFolderIdRef.current === fetchId) {
             setLoading(true);
         }
 
@@ -213,6 +244,12 @@ export function useFolderManager() {
             const { data } = await axios.get(`api/folder/fetch/${fetchId}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
+
+            // Guard against stale asynchronous responses: if a newer navigation/fetch was fired, discard this result
+            if (seqId !== fetchSequenceRef.current) {
+                return;
+            }
+
             const fetchedChildren = data.children?.children || [];
             const fetchedFiles = data.children?.files || [];
             const fetchedInfo = data.children || null;
@@ -247,6 +284,9 @@ export function useFolderManager() {
                 setLoading(false);
             }
         } catch (err) {
+            if (seqId !== fetchSequenceRef.current) {
+                return;
+            }
             if (err.response?.status === 401) {
                 showToast("Session expired. Please log in again.", "error");
                 navigate("/login");
@@ -260,7 +300,7 @@ export function useFolderManager() {
                 showToast(err.response?.data?.message || err.response?.data?.error || "Unable to fetch contents.", "error");
             }
         } finally {
-            if (activeFolderIdRef.current === fetchId) {
+            if (seqId === fetchSequenceRef.current && activeFolderIdRef.current === fetchId) {
                 setLoading(false);
             }
         }
@@ -332,10 +372,11 @@ export function useFolderManager() {
             }
             fetchStorageBreakdown();
             fetchDashboardStats();
+            fetchProjects();
         } catch (err) {
             console.error("Failed to fetch user profile:", err);
         }
-    }, [fetchStorageBreakdown, fetchDashboardStats, fetchFolders]);
+    }, [fetchStorageBreakdown, fetchDashboardStats, fetchProjects, fetchFolders]);
 
     useEffect(() => {
         fetchUserProfile();
@@ -403,59 +444,154 @@ export function useFolderManager() {
     }, [history, handleFolderSelect, rootFolderId]);
 
     const createFolder = async (e) => {
-        e.preventDefault();
-        if (!folderName.trim()) return;
+        if (e && typeof e.preventDefault === 'function') e.preventDefault();
+        const trimmedName = folderName.trim();
+        if (!trimmedName) return;
+
+        const folderAtRequest = activeFolderIdRef.current;
+        const targetPid = (folderAtRequest === -1 || folderAtRequest === 0)
+            ? (rootFolderId !== -1 ? rootFolderId : null)
+            : folderAtRequest;
+
+        // Optimistic item
+        const tempId = `temp-${Date.now()}`;
+        const optimisticFolder = {
+            id: tempId,
+            name: trimmedName,
+            pid: targetPid,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            fileCount: 0,
+            _isOptimistic: true
+        };
+
+        // Instantly add to state only if user is still inside the target folder
+        const isStillInTarget = (activeFolderIdRef.current === targetPid || (targetPid === rootFolderId && (activeFolderIdRef.current === -1 || activeFolderIdRef.current === 0)));
+        if (isStillInTarget) {
+            setFolders(prev => [optimisticFolder, ...prev]);
+        }
+        setFolderName("");
+        setShowCreator(false);
+
         try {
             const token = localStorage.getItem("accessToken");
-            const targetPid = (currentFolderId === -1 || currentFolderId === 0) ? (rootFolderId !== -1 ? rootFolderId : null) : currentFolderId;
             await axios.post("api/folder/create", {
-                name: folderName,
+                name: trimmedName,
                 pid: targetPid
             }, { headers: { Authorization: `Bearer ${token}` } });
-            showToast("Folder created successfully", "success");
-            setFolderName("");
-            setShowCreator(false);
+
+            showToast(`Folder "${trimmedName}" created successfully`, "success");
             invalidateCache(targetPid);
             if (targetPid !== rootFolderId) invalidateCache(rootFolderId);
-            fetchFolders();
+
+            // Refetch current folder only if still on the same directory
+            if (activeFolderIdRef.current === folderAtRequest) {
+                await fetchFolders(activeFolderIdRef.current, false);
+            }
             fetchTreeSubfolders(targetPid || -1);
+            fetchDashboardStats();
         } catch (err) {
+            // Rollback optimistic item on error
+            if (isStillInTarget) {
+                setFolders(prev => prev.filter(f => f.id !== tempId));
+            }
             showToast(err.response?.data?.message || err.response?.data?.error || "Failed to create folder", "error");
         }
     };
 
-    const deleteFolder = async (e, folderId) => {
-        e.stopPropagation();
-        if (!window.confirm("Are you sure?")) return;
+    // Open custom delete modal (Zero native browser confirm/alert dialogs)
+    const promptDelete = useCallback((itemOrId, type = "folder") => {
+        let item = itemOrId;
+        if (typeof itemOrId === "number" || typeof itemOrId === "string") {
+            if (type === "folder") {
+                const found = folders.find(f => f.id === Number(itemOrId));
+                item = found || { id: Number(itemOrId), name: "Folder" };
+            } else {
+                const found = files.find(f => f.id === Number(itemOrId));
+                item = found || { id: Number(itemOrId), orgName: "File", name: "File" };
+            }
+        }
+        setDeleteModalState({
+            isOpen: true,
+            item,
+            type,
+            containsFiles: false,
+            isDeleting: false
+        });
+    }, [folders, files]);
+
+    const closeDeleteModal = useCallback(() => {
+        setDeleteModalState({
+            isOpen: false,
+            item: null,
+            type: "folder",
+            containsFiles: false,
+            isDeleting: false
+        });
+    }, []);
+
+    const executeDeleteConfirm = async (force = false) => {
+        const { item, type } = deleteModalState;
+        if (!item || !item.id) return;
+
+        setDeleteModalState(prev => ({ ...prev, isDeleting: true }));
+
         try {
             const token = localStorage.getItem("accessToken");
-            await axios.delete(`api/folder/delete/${folderId}`, { headers: { Authorization: `Bearer ${token}` } });
-            showToast("Folder deleted successfully", "success");
+            if (type === "folder") {
+                await axios.delete(`api/folder/delete/${item.id}${force ? "?force=true" : ""}`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+            } else {
+                await axios.delete(`api/file/delete/${item.id}`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+            }
+
+            const itemName = item.name || item.orgName || (type === "folder" ? "Folder" : "File");
+            showToast(`${itemName} deleted successfully`, "success");
+            closeDeleteModal();
+
             invalidateCache(currentFolderId);
             invalidateCache(rootFolderId);
-            invalidateCache(folderId);
-            fetchFolders();
+            invalidateCache(item.id);
+
+            // If the deleted folder was the currently open directory, navigate back to Root safely
+            if (type === "folder" && activeFolderIdRef.current === item.id) {
+                handleFolderSelect({ id: rootFolderId !== -1 ? rootFolderId : -1, name: "Root" });
+            } else {
+                await fetchFolders(activeFolderIdRef.current, false);
+            }
+
             fetchTreeSubfolders(currentFolderId);
             fetchUserProfile();
+            fetchDashboardStats();
         } catch (err) {
-            showToast(err.response?.data?.message || err.response?.data?.error || "Failed to delete folder", "error");
+            const errorMsg = (err.response?.data?.message || err.response?.data?.error || "").toLowerCase();
+            const isContainsFiles = err.response?.status === 409 || errorMsg.includes("contains") || errorMsg.includes("files");
+
+            if (type === "folder" && isContainsFiles && !force) {
+                // Secondary confirmation step: switch custom modal to "Folder contains files"
+                setDeleteModalState(prev => ({
+                    ...prev,
+                    containsFiles: true,
+                    isDeleting: false
+                }));
+            } else {
+                setDeleteModalState(prev => ({ ...prev, isDeleting: false }));
+                showToast(err.response?.data?.message || err.response?.data?.error || `Failed to delete ${type}`, "error");
+            }
         }
     };
 
-    const deleteFile = async (e, fileId) => {
-        e.stopPropagation();
-        if (!window.confirm("Are you sure?")) return;
-        try {
-            const token = localStorage.getItem("accessToken");
-            await axios.delete(`api/file/delete/${fileId}`, { headers: { Authorization: `Bearer ${token}` } });
-            showToast("File deleted successfully", "success");
-            invalidateCache(currentFolderId);
-            invalidateCache(rootFolderId);
-            fetchFolders();
-            fetchUserProfile();
-        } catch (err) {
-            showToast(err.response?.data?.message || err.response?.data?.error || "Failed to delete file", "error");
-        }
+    const deleteFolder = async (e, folderIdOrItem) => {
+        if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+        promptDelete(folderIdOrItem, "folder");
+    };
+
+    const deleteFile = async (e, fileIdOrItem) => {
+        if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+        promptDelete(fileIdOrItem, "file");
     };
 
     const [previewItem, setPreviewItem] = useState(null);
@@ -583,20 +719,33 @@ export function useFolderManager() {
     }, [openShareModal]);
 
     const handleRenameSubmit = async (e, id, type) => {
-        e.preventDefault();
-        if (!renameValue.trim()) return;
+        if (e && typeof e.preventDefault === 'function') e.preventDefault();
+        const trimmed = renameValue.trim();
+        if (!trimmed) return;
+
+        const prevFolders = [...folders];
+        const prevFiles = [...files];
+
+        if (type === 'folder') {
+            setFolders(prev => prev.map(f => f.id === id ? { ...f, name: trimmed } : f));
+        } else {
+            setFiles(prev => prev.map(f => f.id === id ? { ...f, orgName: trimmed, name: trimmed } : f));
+        }
+        setEditingItem(null);
+
         try {
             const token = localStorage.getItem("accessToken");
             const endpoint = type === 'folder' ? `api/folder/rename/${id}` : `api/file/rename/${id}`;
-            await axios.patch(endpoint, { newName: renameValue }, { headers: { Authorization: `Bearer ${token}` } });
-            showToast(`${type} renamed successfully`, "success");
+            await axios.patch(endpoint, { newName: trimmed }, { headers: { Authorization: `Bearer ${token}` } });
+            showToast(`${type === 'folder' ? 'Folder' : 'File'} renamed successfully`, "success");
             invalidateCache(currentFolderId);
             invalidateCache(rootFolderId);
             invalidateCache(id);
             if (type === 'folder') fetchTreeSubfolders(currentFolderId);
-            setEditingItem(null);
-            fetchFolders();
+            fetchFolders(currentFolderId, false);
         } catch (err) {
+            setFolders(prevFolders);
+            setFiles(prevFiles);
             showToast(err.response?.data?.message || err.response?.data?.error || `Failed to rename ${type}`, "error");
         }
     };
@@ -604,7 +753,9 @@ export function useFolderManager() {
     const moveItemToFolder = async (item, targetFolderId) => {
         if (!item || !item.id || !item.type) return;
 
-        let targetPid = (targetFolderId === -1 || targetFolderId === 0) ? (rootFolderId !== -1 ? rootFolderId : 0) : Number(targetFolderId);
+        let targetPid = (targetFolderId === -1 || targetFolderId === 0)
+            ? (rootFolderId !== -1 ? rootFolderId : 0)
+            : Number(targetFolderId);
 
         if (item.type === 'file' && targetPid === 0) {
             showToast("Files cannot be moved to Root folder.", "error");
@@ -614,6 +765,15 @@ export function useFolderManager() {
         if (item.type === 'folder' && item.id === targetPid) {
             showToast("Cannot move a folder into itself.", "error");
             return;
+        }
+
+        // Optimistic UI: immediately remove item from current view
+        const prevFolders = [...folders];
+        const prevFiles = [...files];
+        if (item.type === 'folder') {
+            setFolders(prev => prev.filter(f => f.id !== item.id));
+        } else {
+            setFiles(prev => prev.filter(f => f.id !== item.id));
         }
 
         try {
@@ -633,8 +793,12 @@ export function useFolderManager() {
             if (currentFolderId > 0) fetchTreeSubfolders(currentFolderId);
             if (targetFolderId > 0 && targetFolderId !== currentFolderId) fetchTreeSubfolders(targetFolderId);
             setMovingItem(null);
-            fetchFolders();
+
+            await fetchFolders(currentFolderId, false);
         } catch (err) {
+            // Rollback optimistic removal
+            setFolders(prevFolders);
+            setFiles(prevFiles);
             showToast(err.response?.data?.message || err.response?.data?.error || "Failed to move item", "error");
         }
     };
@@ -644,56 +808,211 @@ export function useFolderManager() {
         await moveItemToFolder(movingItem, currentFolderId);
     };
 
-    async function uploadFile(file, signedUrl) {
-        const response = await fetch(signedUrl, {
-            method: "PUT",
-            headers: {
-                "Content-Type": file.type || "application/octet-stream"
-            },
-            body: file
+    const uploadToFirebaseWithProgress = (file, signedUrl, onProgress) => {
+        return new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open("PUT", signedUrl, true);
+            xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+
+            let lastTime = performance.now();
+            let lastLoaded = 0;
+            let smoothedSpeed = 0;
+
+            xhr.upload.onprogress = (event) => {
+                if (event.lengthComputable) {
+                    const now = performance.now();
+                    const timeDelta = (now - lastTime) / 1000; // in seconds
+
+                    if (timeDelta >= 0.15) {
+                        const bytesDelta = event.loaded - lastLoaded;
+                        const instantSpeed = timeDelta > 0 ? (bytesDelta / timeDelta) : 0;
+                        // Exponential smoothing for steady UI
+                        smoothedSpeed = smoothedSpeed === 0 ? instantSpeed : (smoothedSpeed * 0.65 + instantSpeed * 0.35);
+                        lastTime = now;
+                        lastLoaded = event.loaded;
+                    }
+
+                    const percent = Math.min(100, Math.round((event.loaded / event.total) * 100));
+                    const remainingBytes = Math.max(0, event.total - event.loaded);
+                    const remainingTimeSec = smoothedSpeed > 512 ? (remainingBytes / smoothedSpeed) : null;
+
+                    onProgress({
+                        loaded: event.loaded,
+                        total: event.total,
+                        percent,
+                        speed: smoothedSpeed,
+                        remainingTimeSec
+                    });
+                }
+            };
+
+            xhr.onload = () => {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    resolve(xhr.response);
+                } else {
+                    reject(new Error(`Firebase upload failed (HTTP ${xhr.status})`));
+                }
+            };
+
+            xhr.onerror = () => {
+                reject(new Error("Network error during Firebase upload. Please check connection."));
+            };
+
+            xhr.onabort = () => {
+                reject(new Error("Upload cancelled"));
+            };
+
+            xhr.send(file);
         });
+    };
 
-        if (!response.ok) {
-            throw new Error("Failed to upload file to Firebase");
-        }
-    }
+    const executeUploadProcess = async (uploadItem) => {
+        const { id: uploadId, file, targetFolderId: destId } = uploadItem;
+        const token = localStorage.getItem("accessToken");
 
-    const handleFileUpload = async (file, targetFolderId = null) => {
-        if (!file) return;
-        let destId = targetFolderId || currentFolderId;
-        if (destId === -1 || destId === 0) {
-            destId = rootFolderId !== -1 ? rootFolderId : -1;
-        }
-        setIsUploading(true);
-        const uploadData = {
-            'fileName': file.name,
-            'fileSize': file.size,
-            'mimeType': file.type || "application/octet-stream",
-            'folderId': destId
-        };
         try {
-            const token = localStorage.getItem("accessToken");
+            // Stage 1: PREPARING (Request signed upload URL)
+            setUploads(prev => prev.map(u => u.id === uploadId ? { ...u, status: 'PREPARING', error: null } : u));
+
+            const uploadData = {
+                'fileName': file.name,
+                'fileSize': file.size,
+                'mimeType': file.type || "application/octet-stream",
+                'folderId': destId
+            };
+
             const response = await axios.post("api/file/upload", uploadData, {
                 headers: { Authorization: `Bearer ${token}` }
             });
+
             const { signedUrl, stoName } = response.data.data;
-            await uploadFile(file, signedUrl);
+
+            // Stage 2: UPLOADING (Direct Firebase PUT with real-time throughput calculation)
+            setUploads(prev => prev.map(u => u.id === uploadId ? {
+                ...u,
+                status: 'UPLOADING',
+                stoName
+            } : u));
+
+            await uploadToFirebaseWithProgress(file, signedUrl, (stats) => {
+                setUploads(prev => prev.map(u => {
+                    if (u.id !== uploadId) return u;
+                    return {
+                        ...u,
+                        status: 'UPLOADING',
+                        progress: stats.percent,
+                        uploadedBytes: stats.loaded,
+                        totalBytes: stats.total,
+                        speed: stats.speed,
+                        remainingTimeSec: stats.remainingTimeSec
+                    };
+                }));
+            });
+
+            // Stage 3: COMPLETING (Calling /upload/complete)
+            setUploads(prev => prev.map(u => u.id === uploadId ? {
+                ...u,
+                status: 'COMPLETING',
+                progress: 100,
+                uploadedBytes: file.size,
+                speed: 0,
+                remainingTimeSec: 0
+            } : u));
+
             await axios.post("api/file/upload/complete", { stoName }, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
+            // Stage 4: SUCCESS
+            setUploads(prev => prev.map(u => u.id === uploadId ? {
+                ...u,
+                status: 'SUCCESS',
+                progress: 100,
+                uploadedBytes: file.size,
+                speed: 0,
+                remainingTimeSec: 0
+            } : u));
+
             showToast(`File "${file.name}" uploaded successfully`, "success");
+
+            // Folder Isolation: Invalidate cache for destination and refresh only if active
             invalidateCache(destId);
-            invalidateCache(currentFolderId);
-            invalidateCache(rootFolderId);
-            fetchFolders();
+            if (destId !== rootFolderId) invalidateCache(rootFolderId);
+
+            if (activeFolderIdRef.current === destId) {
+                await fetchFolders(destId, false);
+            }
+
             fetchUserProfile();
+            fetchDashboardStats();
+
         } catch (err) {
-            showToast(err.response?.data?.error || err.response?.data?.message || "File upload failed", "error");
+            console.error("Upload error:", err);
+            const errorMsg = err.response?.data?.error || err.response?.data?.message || err.message || "File upload failed";
+            setUploads(prev => prev.map(u => u.id === uploadId ? {
+                ...u,
+                status: 'ERROR',
+                error: errorMsg
+            } : u));
+            showToast(errorMsg, "error");
         } finally {
-            setIsUploading(false);
+            setUploads(prev => {
+                const isStillActive = prev.some(u => u.status === 'PREPARING' || u.status === 'UPLOADING' || u.status === 'COMPLETING');
+                setIsUploading(isStillActive);
+                return prev;
+            });
         }
     };
+
+    const handleFileUpload = async (file, targetFolderId = null) => {
+        if (!file) return;
+        let destId = targetFolderId || activeFolderIdRef.current || currentFolderId;
+        if (destId === -1 || destId === 0) {
+            destId = rootFolderId !== -1 ? rootFolderId : (Number(localStorage.getItem("rootFolderId")) || null);
+        }
+
+        if (!destId) {
+            showToast("Destination folder not ready. Please try again.", "error");
+            return;
+        }
+
+        const uploadId = `upload-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+        const newUploadItem = {
+            id: uploadId,
+            file,
+            fileName: file.name,
+            fileSize: file.size,
+            mimeType: file.type || "application/octet-stream",
+            targetFolderId: destId,
+            status: 'PREPARING',
+            progress: 0,
+            uploadedBytes: 0,
+            totalBytes: file.size,
+            speed: 0,
+            remainingTimeSec: null,
+            error: null
+        };
+
+        setUploads(prev => [newUploadItem, ...prev]);
+        setIsUploading(true);
+
+        return executeUploadProcess(newUploadItem);
+    };
+
+    const retryUpload = useCallback((uploadId) => {
+        const item = uploads.find(u => u.id === uploadId);
+        if (item) {
+            executeUploadProcess(item);
+        }
+    }, [uploads]);
+
+    const dismissUpload = useCallback((uploadId) => {
+        setUploads(prev => prev.filter(u => u.id !== uploadId));
+    }, []);
+
+    const clearCompletedUploads = useCallback(() => {
+        setUploads(prev => prev.filter(u => u.status !== 'SUCCESS'));
+    }, []);
 
     const toggleFolderExpand = useCallback(async (folderId, e) => {
         if (e && typeof e.stopPropagation === 'function') {
@@ -730,8 +1049,9 @@ export function useFolderManager() {
         if (currentFolderId > 0) {
             await fetchTreeSubfolders(currentFolderId);
         }
+        await fetchProjects();
         fetchUserProfile();
-    }, [currentFolderId, rootFolderId, fetchFolders, fetchTreeSubfolders, fetchUserProfile, invalidateCache]);
+    }, [currentFolderId, rootFolderId, fetchFolders, fetchTreeSubfolders, fetchProjects, fetchUserProfile, invalidateCache]);
 
     const currentFolderInfo = currentFolderId > 0 ? foldersCache[currentFolderId] : null;
 
@@ -797,7 +1117,7 @@ export function useFolderManager() {
         : files;
 
     return {
-        folders, files, rootFolders, filteredFolders, filteredFiles, userProfile, storageBreakdown, dashboardStats, searchQuery, setSearchQuery,
+        folders, files, rootFolders, projects, filteredFolders, filteredFiles, userProfile, storageBreakdown, dashboardStats, searchQuery, setSearchQuery,
         searchLoading, searchError,
         rootFolderId, currentFolderId, history, folderName, setFolderName,
         loading, isUploading, isDragging, setIsDragging, showCreator, setShowCreator,
@@ -805,7 +1125,9 @@ export function useFolderManager() {
         previewItem, previewFile, closePreview,
         toasts, expandedFolders, treeNodes, foldersCache, currentFolderInfo,
         createFolder, deleteFolder, deleteFile,
+        deleteModalState, promptDelete, closeDeleteModal, executeDeleteConfirm,
         downloadFile, shareFile, openShareModal, closeShareModal, shareModalItem, handleRenameSubmit, executeMove, moveItemToFolder, handleFileUpload,
-        handleFolderSelect, prefetchFolder, invalidateCache, toggleFolderExpand, goBack, refreshAfterSharedAction, showToast
+        uploads, retryUpload, dismissUpload, clearCompletedUploads,
+        handleFolderSelect, prefetchFolder, fetchProjects, invalidateCache, toggleFolderExpand, goBack, refreshAfterSharedAction, showToast
     };
 }

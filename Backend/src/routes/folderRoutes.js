@@ -21,10 +21,11 @@ router.post("/invite/enable", checkFolderRole("OWNER"), folderCon.enableInviteCo
 router.post("/invite/expire", checkFolderRole("OWNER"), folderCon.expireInviteCode);
 
 // GET Routes
+router.get("/projects", folderCon.getUserProjects);
 router.get("/fetch/:id", folderCon.fetch);
 router.get("/requests/:folderId", folderCon.getFolderRequests);
 router.get("/search/:name", folderCon.search);
-router.get("/members/:folderId", checkFolderRole(["OWNER", "ADMIN"]), folderCon.getFolderMembers);
+router.get("/members/:folderId", checkFolderRole(["OWNER", "ADMIN", "EDITOR", "VIEWER"]), folderCon.getFolderMembers);
 router.get("/owner-panel/:folderId", checkFolderRole("OWNER"), folderCon.getOwnerPanel);
 router.get("/admin-panel/:folderId", checkFolderRole(["OWNER", "ADMIN"]), folderCon.getAdminPanel);
 router.get("/activities/:folderId", checkFolderRole(["OWNER", "ADMIN"]), folderCon.getFolderActivities);

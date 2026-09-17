@@ -74,7 +74,7 @@ export default function Navbar({ searchQuery, setSearchQuery, userProfile, onTog
                     </svg>
                     <input
                         type="text"
-                        placeholder="Search files, folders, or projects..."
+                        placeholder="Search files..."
                         value={searchQuery || ""}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         className="search-input"

@@ -363,88 +363,214 @@ export default function MyDriveView({
                         </div>
                     </div>
 
-                    <div className="cb-folders-grid-fluid">
-                        {folders.map((folder, idx) => {
-                            const isEditing = editingItem && editingItem.type === 'folder' && editingItem.id === folder.id;
-                            const isTarget = dropTargetId === folder.id;
-                            const palette = folderPalette[idx % folderPalette.length];
-                            const countText = `${folder.fileCount ?? (folder.files ? folder.files.length : (folder.totalFiles ?? 0))} items`;
+                    {viewMode === "grid" ? (
+                        /* ─── GRID VIEW FOR FOLDERS ─── */
+                        <div className="cb-folders-grid-fluid">
+                            {folders.map((folder, idx) => {
+                                const isEditing = editingItem && editingItem.type === 'folder' && editingItem.id === folder.id;
+                                const isTarget = dropTargetId === folder.id;
+                                const palette = folderPalette[idx % folderPalette.length];
+                                const countText = `${folder.fileCount ?? (folder.files ? folder.files.length : (folder.totalFiles ?? 0))} items`;
 
-                            return (
-                                <div
-                                    key={folder.id}
-                                    className={`cb-folder-tile ${isTarget ? 'drag-over' : ''}`}
-                                    style={{
-                                        "--folder-glow": palette.glow
-                                    }}
-                                    onClick={() => {
-                                        if (!isEditing) handleFolderSelect(folder);
-                                    }}
-                                    onMouseEnter={() => prefetchFolder && prefetchFolder(folder.id)}
-                                    draggable={!isEditing}
-                                    onDragStart={(e) => handleDragStartItem && handleDragStartItem(e, { type: 'folder', id: folder.id, name: folder.name })}
-                                    onDragEnd={handleDragEndItem}
-                                    onDragOver={(e) => handleDragOverTarget && handleDragOverTarget(e, folder.id)}
-                                    onDragLeave={(e) => handleDragLeaveTarget && handleDragLeaveTarget(e, folder.id)}
-                                    onDrop={(e) => handleDropOnTarget && handleDropOnTarget(e, folder.id)}
-                                >
-                                    <div className="cb-folder-tile-top">
-                                        <div className="cb-folder-icon-glow" style={{ color: palette.iconColor, background: palette.gradient }}>
-                                            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
-                                                <path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2z" />
-                                            </svg>
+                                return (
+                                    <div
+                                        key={folder.id}
+                                        className={`cb-folder-tile ${isTarget ? 'drag-over' : ''}`}
+                                        style={{
+                                            "--folder-glow": palette.glow
+                                        }}
+                                        onClick={() => {
+                                            if (!isEditing) handleFolderSelect(folder);
+                                        }}
+                                        onMouseEnter={() => prefetchFolder && prefetchFolder(folder.id)}
+                                        draggable={!isEditing}
+                                        onDragStart={(e) => handleDragStartItem && handleDragStartItem(e, { type: 'folder', id: folder.id, name: folder.name })}
+                                        onDragEnd={handleDragEndItem}
+                                        onDragOver={(e) => handleDragOverTarget && handleDragOverTarget(e, folder.id)}
+                                        onDragLeave={(e) => handleDragLeaveTarget && handleDragLeaveTarget(e, folder.id)}
+                                        onDrop={(e) => handleDropOnTarget && handleDropOnTarget(e, folder.id)}
+                                    >
+                                        <div className="cb-folder-tile-top">
+                                            <div className="cb-folder-icon-glow" style={{ color: palette.iconColor, background: palette.gradient }}>
+                                                <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+                                                    <path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2z" />
+                                                </svg>
+                                            </div>
+
+                                            {!isEditing && (
+                                                <button
+                                                    type="button"
+                                                    className="cb-folder-action-trigger"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        openActionSheet(folder, 'folder');
+                                                    }}
+                                                    aria-label="Folder Options"
+                                                    title="Folder options"
+                                                >
+                                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                                        <circle cx="12" cy="12" r="2" />
+                                                        <circle cx="19" cy="12" r="2" />
+                                                        <circle cx="5" cy="12" r="2" />
+                                                    </svg>
+                                                </button>
+                                            )}
                                         </div>
 
-                                        {!isEditing && (
-                                            <button
-                                                type="button"
-                                                className="cb-folder-action-trigger"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    openActionSheet(folder, 'folder');
-                                                }}
-                                                aria-label="Folder Options"
-                                                title="Folder options"
-                                            >
-                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                                                    <circle cx="12" cy="12" r="2" />
-                                                    <circle cx="19" cy="12" r="2" />
-                                                    <circle cx="5" cy="12" r="2" />
-                                                </svg>
-                                            </button>
-                                        )}
+                                        <div className="cb-folder-tile-body">
+                                            {isEditing ? (
+                                                <form
+                                                    onSubmit={(e) => handleRenameSubmit(e, folder.id, 'folder')}
+                                                    onClick={(e) => e.stopPropagation()}
+                                                    className="cb-rename-form"
+                                                >
+                                                    <input
+                                                        value={renameValue}
+                                                        onChange={(e) => setRenameValue(e.target.value)}
+                                                        className="cb-rename-input"
+                                                        autoFocus
+                                                    />
+                                                    <button type="submit" className="cb-rename-save">Save</button>
+                                                </form>
+                                            ) : (
+                                                <>
+                                                    <span className="cb-folder-tile-name" title={folder.name}>
+                                                        {folder.name}
+                                                    </span>
+                                                    {folder._isOptimistic ? (
+                                                        <span className="cb-optimistic-tag">Creating...</span>
+                                                    ) : (
+                                                        <span className="cb-folder-tile-sub">
+                                                            {countText}
+                                                        </span>
+                                                    )}
+                                                </>
+                                            )}
+                                        </div>
                                     </div>
+                                );
+                            })}
+                        </div>
+                    ) : (
+                        /* ─── LIST VIEW FOR FOLDERS ─── */
+                        <div className="cb-drive-table-wrapper cb-folders-list-wrapper">
+                            <div className="cb-drive-table-header">
+                                <div className="cb-tbl-col-name">Name</div>
+                                <div className="cb-tbl-col-type">Type</div>
+                                <div className="cb-tbl-col-size">Items</div>
+                                <div className="cb-tbl-col-date">Modified</div>
+                                <div className="cb-tbl-col-owner">Owner</div>
+                                <div className="cb-tbl-col-actions">Actions</div>
+                            </div>
 
-                                    <div className="cb-folder-tile-body">
-                                        {isEditing ? (
-                                            <form
-                                                onSubmit={(e) => handleRenameSubmit(e, folder.id, 'folder')}
-                                                onClick={(e) => e.stopPropagation()}
-                                                className="cb-rename-form"
-                                            >
-                                                <input
-                                                    value={renameValue}
-                                                    onChange={(e) => setRenameValue(e.target.value)}
-                                                    className="cb-rename-input"
-                                                    autoFocus
-                                                />
-                                                <button type="submit" className="cb-rename-save">Save</button>
-                                            </form>
-                                        ) : (
-                                            <>
-                                                <span className="cb-folder-tile-name" title={folder.name}>
-                                                    {folder.name}
+                            <div className="cb-drive-table-body">
+                                {folders.map((folder, idx) => {
+                                    const isEditing = editingItem && editingItem.type === 'folder' && editingItem.id === folder.id;
+                                    const isTarget = dropTargetId === folder.id;
+                                    const palette = folderPalette[idx % folderPalette.length];
+                                    const countText = `${folder.fileCount ?? (folder.files ? folder.files.length : (folder.totalFiles ?? 0))} items`;
+                                    const displayDate = formatDate(folder.updatedAt || folder.createdAt);
+                                    const folderOwner = folder.user?.name || (userName ? "You" : "User");
+                                    const ownerInitial = folder.user?.name
+                                        ? folder.user.name.split(" ").filter(Boolean).map(p => p[0]).join("").slice(0, 2).toUpperCase()
+                                        : userInitials;
+
+                                    return (
+                                        <div
+                                            key={folder.id}
+                                            className={`cb-drive-table-row cb-folder-list-row ${isTarget ? 'drag-over' : ''}`}
+                                            onClick={() => {
+                                                if (!isEditing) handleFolderSelect(folder);
+                                            }}
+                                            onMouseEnter={() => prefetchFolder && prefetchFolder(folder.id)}
+                                            draggable={!isEditing}
+                                            onDragStart={(e) => handleDragStartItem && handleDragStartItem(e, { type: 'folder', id: folder.id, name: folder.name })}
+                                            onDragEnd={handleDragEndItem}
+                                            onDragOver={(e) => handleDragOverTarget && handleDragOverTarget(e, folder.id)}
+                                            onDragLeave={(e) => handleDragLeaveTarget && handleDragLeaveTarget(e, folder.id)}
+                                            onDrop={(e) => handleDropOnTarget && handleDropOnTarget(e, folder.id)}
+                                        >
+                                            <div className="cb-tbl-col-name">
+                                                <div
+                                                    className="cb-file-icon-badge cb-folder-badge-icon"
+                                                    style={{ background: palette.gradient, color: palette.iconColor, borderColor: palette.glow }}
+                                                >
+                                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                                                        <path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2z" />
+                                                    </svg>
+                                                </div>
+                                                {isEditing ? (
+                                                    <form
+                                                        onSubmit={(e) => handleRenameSubmit(e, folder.id, 'folder')}
+                                                        onClick={(e) => e.stopPropagation()}
+                                                        className="cb-rename-inline-form"
+                                                    >
+                                                        <input
+                                                            value={renameValue}
+                                                            onChange={(e) => setRenameValue(e.target.value)}
+                                                            className="cb-rename-inline-input"
+                                                            autoFocus
+                                                        />
+                                                        <button type="submit" className="cb-rename-save-btn">Save</button>
+                                                    </form>
+                                                ) : (
+                                                    <div className="cb-tbl-meta-wrap">
+                                                        <span className="cb-tbl-filename" title={folder.name}>
+                                                            {folder.name}
+                                                        </span>
+                                                        {folder._isOptimistic ? (
+                                                            <span className="cb-optimistic-tag">Creating...</span>
+                                                        ) : (
+                                                            <span className="cb-tbl-mobile-sub">
+                                                                {countText} • {displayDate}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            <div className="cb-tbl-col-type">
+                                                <span className="cb-type-tag" style={{ color: palette.iconColor }}>
+                                                    Folder
                                                 </span>
-                                                <span className="cb-folder-tile-sub">
-                                                    {countText}
-                                                </span>
-                                            </>
-                                        )}
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
+                                            </div>
+
+                                            <div className="cb-tbl-col-size">
+                                                {countText}
+                                            </div>
+
+                                            <div className="cb-tbl-col-date">
+                                                {displayDate}
+                                            </div>
+
+                                            <div className="cb-tbl-col-owner">
+                                                <div className="cb-owner-badge">
+                                                    <div className="cb-owner-avatar-chip">{ownerInitial}</div>
+                                                    <span className="cb-owner-name">{folderOwner}</span>
+                                                </div>
+                                            </div>
+
+                                            <div className="cb-tbl-col-actions" onClick={(e) => e.stopPropagation()}>
+                                                <button
+                                                    type="button"
+                                                    className="cb-tbl-dots-btn"
+                                                    onClick={() => openActionSheet(folder, 'folder')}
+                                                    aria-label="More actions"
+                                                    title="Folder options"
+                                                >
+                                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                                        <circle cx="12" cy="12" r="2" />
+                                                        <circle cx="19" cy="12" r="2" />
+                                                        <circle cx="5" cy="12" r="2" />
+                                                    </svg>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
                 </section>
             )}
 
@@ -540,6 +666,9 @@ export default function MyDriveView({
                                                     {file.orgName}
                                                 </span>
                                             )}
+                                            {file._isUploading && (
+                                                <span className="cb-uploading-tag">Uploading...</span>
+                                            )}
 
                                             <button
                                                 type="button"
@@ -633,9 +762,18 @@ export default function MyDriveView({
                                                     <button type="submit" className="cb-rename-save-btn">Save</button>
                                                 </form>
                                             ) : (
-                                                <span className="cb-tbl-filename" title={file.orgName}>
-                                                    {file.orgName}
-                                                </span>
+                                                <div className="cb-tbl-meta-wrap">
+                                                    <span className="cb-tbl-filename" title={file.orgName}>
+                                                        {file.orgName}
+                                                    </span>
+                                                    {file._isUploading ? (
+                                                        <span className="cb-uploading-tag">Uploading...</span>
+                                                    ) : (
+                                                        <span className="cb-tbl-mobile-sub">
+                                                            {formatBytes(file.size)} • {displayDate}
+                                                        </span>
+                                                    )}
+                                                </div>
                                             )}
                                         </div>
 
