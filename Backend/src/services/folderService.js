@@ -318,25 +318,27 @@ export const joinSharedFolder = async (inviteCode, uid) => {
         };
     }
 
-    // Direct join by code: Create FolderMember record immediately
+    const existingRequest = await requestRepo.findRequest(folder.id, userId);
+    if (existingRequest && existingRequest.status === "PENDING") {
+        return {
+            folderName: folder.name,
+            status: "PENDING",
+            message: "Join request already pending approval.",
+        };
+    }
+
+    if (existingRequest) {
+        await requestRepo.updateStatus(existingRequest.id, "PENDING");
+    } else {
+        await requestRepo.create({
+            folderId: folder.id,
+            requestedBy: userId,
+            status: "PENDING"
+        });
+    }
+
     const user = await userRepo.findNameById(userId);
     const userName = user?.name || user?.email || `User #${userId}`;
-
-    await memberRepo.create({
-        folderId: folder.id,
-        userId,
-        role: "VIEWER"
-    });
-
-    // Clean up any pending join request if exists
-    try {
-        const pendingRequest = await requestRepo.findPendingRequest(folder.id, userId);
-        if (pendingRequest) {
-            await requestRepo.updateStatus(pendingRequest.id, "ACCEPTED");
-        }
-    } catch {
-        // Ignore request cleanup errors
-    }
 
     await activityService.log({
         folderId: folder.id,
@@ -344,15 +346,14 @@ export const joinSharedFolder = async (inviteCode, uid) => {
         action: ActivityType.JOIN_REQUEST,
         target: TargetType.FOLDER,
         targetId: folder.id,
-        message: `${userName} joined the project via invite code.`
+        message: `${userName} requested to join project "${folder.name}".`
     });
 
     return {
         folderName: folder.name,
-        status: "MEMBER",
-        role: "VIEWER",
+        status: "PENDING",
         folderId: folder.id,
-        message: `Successfully joined "${folder.name}"!`,
+        message: "Join request sent successfully! Awaiting owner or admin approval.",
     };
 };
 
@@ -800,6 +801,65 @@ export const getFolderActivities = async (folderId, uid) => {
     return await activityService.getFolderActivities(folderId, uid);
 };
 
-export const getUserProjects = async (uid) => {
-    return await repo.getUserProjects(uid);
+export const getDashboardStats = async (uid) => {
+    const userId = Number(uid);
+    if (!Number.isInteger(userId)) {
+        return { totalFolders: 0, projects: 0, sharedWithMe: 0 };
+    }
+
+    const [totalFolders, projects, sharedWithMe] = await Promise.all([
+        repo.countUserFolders(userId),
+        repo.countUserProjects(userId),
+        memberRepo.countUserMemberships(userId)
+    ]);
+
+    return { totalFolders, projects, sharedWithMe };
 };
+
+export const getUserProjects = async (uid) => {
+    const userId = Number(uid);
+    if (!Number.isInteger(userId)) {
+        return { ownedProjects: [], sharedWithMe: [], joinRequests: [] };
+    }
+
+    const [ownedFolders, memberships, joinRequests] = await Promise.all([
+        repo.findOwnedProjects(userId),
+        memberRepo.findUserMemberships(userId),
+        requestRepo.findUserJoinRequests(userId, ["PENDING", "REJECTED"])
+    ]);
+
+    // 1. Owned projects (user is folder owner)
+    const ownedProjects = ownedFolders.map(folder => ({
+        ...folder,
+        userRole: "OWNER",
+        isShared: true
+    }));
+
+    // 2. Shared with me (folders where user is an actual member and NOT the owner)
+    const sharedWithMe = memberships
+        .filter(m => m.folder && m.folder.uid !== userId)
+        .map(m => ({
+            ...m.folder,
+            userRole: m.role || "MEMBER",
+            requestStatus: "APPROVED",
+            isShared: true
+        }));
+
+    // 3. User's pending or rejected join requests (kept as a separate concept)
+    const formattedJoinRequests = joinRequests
+        .filter(req => req.folder && req.folder.uid !== userId)
+        .map(req => ({
+            ...req.folder,
+            userRole: null,
+            requestStatus: req.status,
+            requestId: req.id,
+            requestedAt: req.requestedAt,
+            isShared: true
+        }));
+
+    return {
+        ownedProjects,
+        sharedWithMe,
+        joinRequests: formattedJoinRequests
+    };
+};

@@ -90,3 +90,41 @@ export const updateRoleTx = async (folderId, targetUserId, newRole, actorUserId,
         }, tx);
     });
 };
+
+export const findUserMemberships = async (userId) => {
+    const normalizedUserId = Number(userId);
+    if (!Number.isInteger(normalizedUserId)) return [];
+
+    return await prisma.folderMember.findMany({
+        where: {
+            userId: normalizedUserId,
+            folder: {
+                uid: { not: normalizedUserId },
+                deletedAt: null
+            }
+        },
+        include: {
+            folder: {
+                include: {
+                    user: { select: { id: true, name: true, email: true } }
+                }
+            }
+        },
+        orderBy: { joinedAt: 'desc' }
+    });
+};
+
+export const countUserMemberships = async (userId) => {
+    const normalizedUserId = Number(userId);
+    if (!Number.isInteger(normalizedUserId)) return 0;
+
+    return await prisma.folderMember.count({
+        where: {
+            userId: normalizedUserId,
+            folder: {
+                uid: { not: normalizedUserId },
+                deletedAt: null
+            }
+        }
+    });
+};

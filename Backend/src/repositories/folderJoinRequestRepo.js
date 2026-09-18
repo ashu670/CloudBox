@@ -130,3 +130,27 @@ export const rejectJoinRequestTx = async (requestId, folderId, actorUserId, acto
         }
     });
 };
+
+export const findUserJoinRequests = async (userId, statuses = ["PENDING", "REJECTED"]) => {
+    const normalizedUserId = Number(userId);
+    if (!Number.isInteger(normalizedUserId)) return [];
+
+    return await prisma.folderJoinRequest.findMany({
+        where: {
+            requestedBy: normalizedUserId,
+            status: { in: statuses },
+            folder: {
+                uid: { not: normalizedUserId },
+                deletedAt: null
+            }
+        },
+        include: {
+            folder: {
+                include: {
+                    user: { select: { id: true, name: true, email: true } }
+                }
+            }
+        },
+        orderBy: { requestedAt: 'desc' }
+    });
+};

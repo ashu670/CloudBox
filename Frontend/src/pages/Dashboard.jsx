@@ -404,38 +404,11 @@ export default function Dashboard() {
 
     const currentUserId = userProfile?.id;
 
-    // Gather all shared folder records from all available sources
-    const allSharedSources = [
-        ...(projects || []),
-        ...(ownedProjects || []),
-        ...(sharedWithMe || []),
-        ...(rootFolders || []).filter(f => f.isShared),
-        ...(folders || []).filter(f => f.isShared),
-    ];
+    // 1. Projects Dropdown: ONLY shared folders where current user is the OWNER
+    const displayOwnedProjects = Array.isArray(ownedProjects) ? ownedProjects : [];
 
-    const uniqueSharedMap = new Map();
-    for (const f of allSharedSources) {
-        if (f && f.id && !uniqueSharedMap.has(f.id)) {
-            uniqueSharedMap.set(f.id, f);
-        }
-    }
-    const allSharedFolders = Array.from(uniqueSharedMap.values());
-
-    // 1. Projects Dropdown: shared folders where user is the OWNER
-    const displayOwnedProjects = allSharedFolders.filter(f => {
-        if (currentUserId && f.uid) {
-            return f.uid === currentUserId;
-        }
-        return f.userRole === "OWNER" || !f.userRole;
-    });
-
-    // 2. Shared with me: shared folders where user is NOT the owner
-    const displaySharedWithMe = allSharedFolders.filter(f => {
-        if (currentUserId && f.uid) {
-            return f.uid !== currentUserId;
-        }
-        return f.userRole && f.userRole !== "OWNER";
-    });
+    // 2. Shared with me: ONLY shared folders where current user is NOT the owner (and is a member)
+    const displaySharedWithMe = Array.isArray(sharedWithMe) ? sharedWithMe : [];
 
     return (
         <div className="app-container cb-dashboard-page">
@@ -545,6 +518,7 @@ export default function Dashboard() {
                             onSelectSharedFolder={handleProjectClick}
                             onJoinClick={() => setSharedPanel('join')}
                             onNewProjectClick={() => setSharedPanel('create')}
+                            showToast={showToast}
                         />
                     ) : activeNav === 'files' ? (
                         /* ─── DEDICATED MY DRIVE FILE MANAGER VIEW ─── */

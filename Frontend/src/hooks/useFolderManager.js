@@ -194,12 +194,10 @@ export function useFolderManager() {
             if (data.success) {
                 const owned = Array.isArray(data.ownedProjects) ? data.ownedProjects : [];
                 const shared = Array.isArray(data.sharedWithMe) ? data.sharedWithMe : [];
-                const allProjects = Array.isArray(data.projects) ? data.projects : [...owned, ...shared];
                 
                 setOwnedProjects(owned);
                 setSharedWithMe(shared);
-                setProjects(allProjects);
-                addToCache(allProjects);
+                addToCache([...owned, ...shared]);
             }
         } catch (err) {
             console.error("Failed to fetch projects:", err);

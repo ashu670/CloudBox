@@ -6,6 +6,69 @@ datasource db {
   provider = "postgresql"
 }
 
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum TrashType {
+  FILE
+  FOLDER
+}
+
+enum Visibility {
+  PRIVATE
+  PUBLIC
+}
+
+enum FolderRole {
+  OWNER
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum Provider {
+  LOCAL
+  GOOGLE
+}
+
+enum ActivityType {
+  CREATE_FOLDER
+  DELETE_FOLDER
+  RENAME_FOLDER
+  MOVE_FOLDER
+  UPLOAD_FILE
+  DELETE_FILE
+  RENAME_FILE
+  MOVE_FILE
+  SHARE_FOLDER
+  JOIN_REQUEST
+  APPROVE_REQUEST
+  REJECT_REQUEST
+  ROLE_CHANGED
+  MEMBER_REMOVED
+  OWNER_TRANSFERRED
+  CREATE_PR
+  APPROVE_PR
+  REJECT_PR
+  MERGE_PR
+}
+
+enum TargetType {
+  FOLDER
+  FILE
+  MEMBER
+  PULL_REQUEST
+}
+
 model User {
   id            Int                 @id @default(autoincrement())
   name          String
@@ -142,66 +205,4 @@ model TrashLogs {
   @@index([uid, expiry])
   @@index([fileId])
   @@index([folderId])
-}
-
-enum Role {
-  USER
-  ADMIN
-}
-
-enum TrashType {
-  FILE
-  FOLDER
-}
-
-enum Visibility {
-  PRIVATE
-  PUBLIC
-}
-
-enum FolderRole {
-  OWNER
-  ADMIN
-  EDITOR
-  VIEWER
-}
-
-enum RequestStatus {
-  PENDING
-  APPROVED
-  REJECTED
-}
-
-enum Provider {
-  LOCAL
-  GOOGLE
-}
-
-enum ActivityType {
-  CREATE_FOLDER
-  DELETE_FOLDER
-  RENAME_FOLDER
-  MOVE_FOLDER
-  UPLOAD_FILE
-  DELETE_FILE
-  RENAME_FILE
-  MOVE_FILE
-  SHARE_FOLDER
-  JOIN_REQUEST
-  APPROVE_REQUEST
-  REJECT_REQUEST
-  ROLE_CHANGED
-  MEMBER_REMOVED
-  OWNER_TRANSFERRED
-  CREATE_PR
-  APPROVE_PR
-  REJECT_PR
-  MERGE_PR
-}
-
-enum TargetType {
-  FOLDER
-  FILE
-  MEMBER
-  PULL_REQUEST
 }

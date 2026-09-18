@@ -6,7 +6,8 @@ export default function SharedWithMeView({
     userProfile,
     onSelectSharedFolder,
     onJoinClick,
-    onNewProjectClick
+    onNewProjectClick,
+    showToast
 }) {
     const [search, setSearch] = useState("");
 
@@ -16,9 +17,51 @@ export default function SharedWithMeView({
         f.name.toLowerCase().includes(search.toLowerCase())
     );
 
-    const getRoleBadge = (folder) => {
+    const getStatusBadge = (folder) => {
+        if (folder.requestStatus === "PENDING") {
+            return (
+                <span
+                    style={{
+                        background: "rgba(245, 158, 11, 0.14)",
+                        color: "#d97706",
+                        border: "1px solid rgba(245, 158, 11, 0.35)",
+                        padding: "2px 9px",
+                        borderRadius: "999px",
+                        fontSize: "11px",
+                        fontWeight: "700",
+                        letterSpacing: "0.4px",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "5px"
+                    }}
+                >
+                    <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#f59e0b" }}></span>
+                    PENDING APPROVAL
+                </span>
+            );
+        }
+
+        if (folder.requestStatus === "REJECTED") {
+            return (
+                <span
+                    style={{
+                        background: "rgba(239, 68, 68, 0.14)",
+                        color: "#ef4444",
+                        border: "1px solid rgba(239, 68, 68, 0.35)",
+                        padding: "2px 9px",
+                        borderRadius: "999px",
+                        fontSize: "11px",
+                        fontWeight: "700",
+                        letterSpacing: "0.4px"
+                    }}
+                >
+                    REJECTED
+                </span>
+            );
+        }
+
         const isOwner = folder.uid === currentUserId || folder.userRole === "OWNER";
-        const role = folder.userRole || (isOwner ? "OWNER" : "MEMBER");
+        const role = folder.userRole || (isOwner ? "OWNER" : "VIEWER");
 
         const colorMap = {
             OWNER: { bg: "rgba(245, 158, 11, 0.14)", color: "#d97706", border: "rgba(245, 158, 11, 0.3)" },
@@ -28,7 +71,7 @@ export default function SharedWithMeView({
             MEMBER: { bg: "rgba(100, 116, 139, 0.14)", color: "#64748b", border: "rgba(100, 116, 139, 0.3)" },
         };
 
-        const s = colorMap[role] || colorMap.MEMBER;
+        const s = colorMap[role] || colorMap.VIEWER;
 
         return (
             <span
@@ -46,6 +89,18 @@ export default function SharedWithMeView({
                 {role}
             </span>
         );
+    };
+
+    const handleCardClick = (folder) => {
+        if (folder.requestStatus === "PENDING") {
+            showToast?.("This workspace is pending approval from the project owner or admin.", "info");
+            return;
+        }
+        if (folder.requestStatus === "REJECTED") {
+            showToast?.("Your request to join this workspace was rejected by the owner.", "error");
+            return;
+        }
+        onSelectSharedFolder(folder);
     };
 
     return (
@@ -128,36 +183,56 @@ export default function SharedWithMeView({
             {filtered.length > 0 ? (
                 <div className="cb-shared-grid">
                     {filtered.map((folder) => {
+                        const isPending = folder.requestStatus === "PENDING";
+                        const isRejected = folder.requestStatus === "REJECTED";
                         const isOwner = folder.uid === currentUserId;
-                        const ownerLabel = isOwner ? "You (Owner)" : folder.user?.email || folder.user?.name || "Team Member";
+                        const ownerLabel = isOwner ? "You (Owner)" : folder.user?.name || folder.user?.email || "Team Member";
+
+                        const folderIconColor = isPending ? "#f59e0b" : isRejected ? "#ef4444" : "#7c3aed";
 
                         return (
                             <div
-                                key={folder.id}
-                                className="cb-shared-card"
-                                onClick={() => onSelectSharedFolder(folder)}
+                                key={`${folder.id}-${folder.requestStatus || 'APPROVED'}`}
+                                className={`cb-shared-card ${isPending ? 'cb-shared-card-pending' : ''} ${isRejected ? 'cb-shared-card-rejected' : ''}`}
+                                onClick={() => handleCardClick(folder)}
                                 role="button"
                                 tabIndex={0}
+                                style={{
+                                    cursor: isPending || isRejected ? "pointer" : "pointer",
+                                    opacity: isRejected ? 0.75 : 1
+                                }}
                                 onKeyDown={(e) => {
                                     if (e.key === 'Enter' || e.key === ' ') {
                                         e.preventDefault();
-                                        onSelectSharedFolder(folder);
+                                        handleCardClick(folder);
                                     }
                                 }}
                             >
                                 <div className="cb-shared-card-top">
                                     <div className="cb-shared-card-folder-icon">
                                         <svg viewBox="0 0 24 24" width="32" height="32">
-                                            <path fill="#7c3aed" d="M10,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V8C22,6.89 21.1,6 20,6H12L10,4Z" />
+                                            <path fill={folderIconColor} d="M10,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V8C22,6.89 21.1,6 20,6H12L10,4Z" />
                                         </svg>
-                                        <div className="cb-shared-mini-badge">
-                                            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
-                                                <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" />
-                                            </svg>
+                                        <div className="cb-shared-mini-badge" style={{ background: isPending ? "#f59e0b" : isRejected ? "#ef4444" : "#7c3aed" }}>
+                                            {isPending ? (
+                                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                                    <circle cx="12" cy="12" r="10" />
+                                                    <polyline points="12 6 12 12 16 14" />
+                                                </svg>
+                                            ) : isRejected ? (
+                                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                                                    <line x1="18" y1="6" x2="6" y2="18" />
+                                                    <line x1="6" y1="6" x2="18" y2="18" />
+                                                </svg>
+                                            ) : (
+                                                <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                                                    <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" />
+                                                </svg>
+                                            )}
                                         </div>
                                     </div>
                                     <div className="cb-shared-card-role">
-                                        {getRoleBadge(folder)}
+                                        {getStatusBadge(folder)}
                                     </div>
                                 </div>
 
@@ -176,11 +251,29 @@ export default function SharedWithMeView({
 
                                 <div className="cb-shared-card-footer">
                                     <span className="cb-shared-date">
-                                        Updated {formatDate(folder.updatedAt || folder.createdAt)}
+                                        {isPending
+                                            ? `Requested ${formatDate(folder.requestedAt || folder.updatedAt || folder.createdAt)}`
+                                            : isRejected
+                                            ? `Request Rejected`
+                                            : `Updated ${formatDate(folder.updatedAt || folder.createdAt)}`}
                                     </span>
-                                    <span className="cb-shared-enter-link">
-                                        Open Workspace &rarr;
-                                    </span>
+                                    {isPending ? (
+                                        <span style={{ fontSize: "12px", fontWeight: "600", color: "#d97706", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                                <circle cx="12" cy="12" r="10" />
+                                                <polyline points="12 6 12 12 16 14" />
+                                            </svg>
+                                            Awaiting Approval
+                                        </span>
+                                    ) : isRejected ? (
+                                        <span style={{ fontSize: "12px", fontWeight: "600", color: "#ef4444" }}>
+                                            Access Denied
+                                        </span>
+                                    ) : (
+                                        <span className="cb-shared-enter-link">
+                                            Open Workspace &rarr;
+                                        </span>
+                                    )}
                                 </div>
                             </div>
                         );

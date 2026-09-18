@@ -472,51 +472,33 @@ export const updateInviteCodeTx = async (folderId, inviteCodeData, actorUserId, 
     });
 };
 
-/* ── Dashboard Stats ─────────────────────────────────────────────── */
+/* ── Folder Counts (For Stats) ────────────────────────────────────────── */
 
-export const getDashboardStats = async (uid) => {
-    const userId = Number(uid);
-    if (!Number.isInteger(userId)) {
-        return { totalFolders: 0, projects: 0, sharedWithMe: 0 };
-    }
-
-    const [totalFolders, projects, sharedWithMe] = await Promise.all([
-        // All own folders (non-root, non-deleted)
-        prisma.folder.count({
-            where: { uid: userId, isRoot: false, deletedAt: null }
-        }),
-        // Projects = own shared folders
-        prisma.folder.count({
-            where: { uid: userId, isShared: true, deletedAt: null }
-        }),
-        // Shared with me = folders where user is a member but NOT the owner
-        prisma.folderMember.count({
-            where: {
-                userId,
-                role: { not: "OWNER" },
-                folder: {
-                    uid: { not: userId },
-                    deletedAt: null
-                }
-            }
-        })
-    ]);
-
-    return { totalFolders, projects, sharedWithMe };
+export const countUserFolders = async (userId) => {
+    const normalizedUserId = Number(userId);
+    if (!Number.isInteger(normalizedUserId)) return 0;
+    return await prisma.folder.count({
+        where: { uid: normalizedUserId, isRoot: false, deletedAt: null }
+    });
 };
 
-/* ── All User Projects (Strictly Separated: Owned vs Shared With Me) ── */
+export const countUserProjects = async (userId) => {
+    const normalizedUserId = Number(userId);
+    if (!Number.isInteger(normalizedUserId)) return 0;
+    return await prisma.folder.count({
+        where: { uid: normalizedUserId, isShared: true, deletedAt: null }
+    });
+};
 
-export const getUserProjects = async (uid) => {
-    const userId = Number(uid);
-    if (!Number.isInteger(userId)) {
-        return { ownedProjects: [], sharedWithMe: [], projects: [] };
-    }
+/* ── Owned Projects (Folder Queries Only) ────────────────────────────── */
 
-    // 1. Projects dropdown: ONLY folders where current user is the OWNER
-    const ownedFolders = await prisma.folder.findMany({
+export const findOwnedProjects = async (userId) => {
+    const normalizedUserId = Number(userId);
+    if (!Number.isInteger(normalizedUserId)) return [];
+
+    return await prisma.folder.findMany({
         where: {
-            uid: userId,
+            uid: normalizedUserId,
             isShared: true,
             deletedAt: null
         },
@@ -525,85 +507,4 @@ export const getUserProjects = async (uid) => {
         },
         orderBy: { updatedAt: 'desc' }
     });
-
-    const ownedMemberships = await prisma.folderMember.findMany({
-        where: {
-            userId,
-            role: "OWNER",
-            folder: { deletedAt: null }
-        },
-        include: {
-            folder: {
-                include: {
-                    user: { select: { id: true, name: true, email: true } }
-                }
-            }
-        }
-    });
-
-    const ownedMap = new Map();
-    for (const folder of ownedFolders) {
-        ownedMap.set(folder.id, {
-            ...folder,
-            userRole: "OWNER",
-            isShared: true
-        });
-    }
-
-    for (const m of ownedMemberships) {
-        if (m.folder && !ownedMap.has(m.folder.id)) {
-            ownedMap.set(m.folder.id, {
-                ...m.folder,
-                userRole: "OWNER",
-                isShared: true
-            });
-        }
-    }
-
-    const ownedProjects = Array.from(ownedMap.values());
-
-    // 2. Shared with me: folders where current user is a MEMBER and NOT the owner
-    const memberships = await prisma.folderMember.findMany({
-        where: {
-            userId,
-            role: { not: "OWNER" },
-            folder: {
-                uid: { not: userId },
-                deletedAt: null
-            }
-        },
-        include: {
-            folder: {
-                include: {
-                    user: { select: { id: true, name: true, email: true } }
-                }
-            }
-        },
-        orderBy: { createdAt: 'desc' }
-    });
-
-    // Deduplicate sharedWithMe by folder.id and ensure folder.uid !== userId
-    const sharedMap = new Map();
-    for (const m of memberships) {
-        if (m.folder && m.folder.uid !== userId) {
-            if (!sharedMap.has(m.folder.id) && !ownedMap.has(m.folder.id)) {
-                sharedMap.set(m.folder.id, {
-                    ...m.folder,
-                    userRole: m.role || "MEMBER",
-                    isShared: true
-                });
-            }
-        }
-    }
-
-    const sharedWithMe = Array.from(sharedMap.values());
-
-    return {
-        ownedProjects,
-        sharedWithMe,
-        projects: [...ownedProjects, ...sharedWithMe]
-    };
 };
-
-
-
