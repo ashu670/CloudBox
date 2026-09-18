@@ -36,6 +36,9 @@
   },
   "name": "Backend",
   "type": "module",
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "dev": "nodemon server.js",
     "start": "node server.js",

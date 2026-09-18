@@ -10,7 +10,7 @@
 # ────────────────────────────────────────────────────────────
 # Stage 1 — Full install + Prisma client generation
 # ────────────────────────────────────────────────────────────
-FROM node:20-slim AS builder
+FROM node:22-slim AS builder
 
 WORKDIR /app
 
@@ -37,7 +37,7 @@ RUN DATABASE_URL="postgresql://placeholder" \
 # ────────────────────────────────────────────────────────────
 # Stage 2 — Production-only node_modules
 # ────────────────────────────────────────────────────────────
-FROM node:20-slim AS prod-deps
+FROM node:22-slim AS prod-deps
 
 WORKDIR /app
 
@@ -53,7 +53,7 @@ RUN npm ci --omit=dev
 # ────────────────────────────────────────────────────────────
 # Stage 3 — Runtime image
 # ────────────────────────────────────────────────────────────
-FROM node:20-slim AS runtime
+FROM node:22-slim AS runtime
 
 WORKDIR /app
 
