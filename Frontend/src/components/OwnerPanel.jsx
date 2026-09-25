@@ -2,11 +2,20 @@ import React, { useState, useEffect, useCallback } from 'react';
 import axios from '../api/axios';
 import { formatBytes, formatDate } from '../utils/formatters';
 
-/* ─── tiny icon helpers ─────────────────────────────────────────────────── */
-const Icon = ({ d, size = 16, className = '' }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
-    strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}
-    style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+/* ─── Tiny Icon Helper ────────────────────────────────────────────────────── */
+const Icon = ({ d, size = 16, className = '', style = {} }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0, ...style }}
+  >
     <path d={d} />
   </svg>
 );
@@ -27,89 +36,112 @@ const Icons = {
   toggleOn:    'M17 12a5 5 0 1 1-10 0 5 5 0 0 1 10 0zM1 12h6M17 12h6',
   toggleOff:   'M7 12a5 5 0 1 1 10 0 5 5 0 0 1-10 0zM1 12h6M17 12h6',
   chevDown:    'M6 9l6 6 6-6',
+  close:       'M18 6L6 18M6 6l12 12',
 };
 
-/* ─── role badge ─────────────────────────────────────────────────────────── */
+/* ─── Role Badge ─────────────────────────────────────────────────────────── */
 const RoleBadge = ({ role }) => {
   const map = {
-    OWNER:  { bg: '#fef3c7', color: '#b45309', border: '#fde68a' },
-    ADMIN:  { bg: '#ede9fe', color: '#6d28d9', border: '#ddd6fe' },
-    EDITOR: { bg: '#dcfce7', color: '#15803d', border: '#bbf7d0' },
-    VIEWER: { bg: '#f0f9ff', color: '#0369a1', border: '#bae6fd' },
+    OWNER:  { bg: 'rgba(245, 158, 11, 0.12)', color: '#d97706', border: 'rgba(245, 158, 11, 0.3)' },
+    ADMIN:  { bg: 'rgba(139, 92, 246, 0.12)', color: '#8b5cf6', border: 'rgba(139, 92, 246, 0.3)' },
+    EDITOR: { bg: 'rgba(16, 185, 129, 0.12)', color: '#10b981', border: 'rgba(16, 185, 129, 0.3)' },
+    VIEWER: { bg: 'rgba(59, 130, 246, 0.12)', color: '#3b82f6', border: 'rgba(59, 130, 246, 0.3)' },
   };
   const s = map[role] || map.VIEWER;
   return (
-    <span style={{
-      background: s.bg, color: s.color, border: `1px solid ${s.border}`,
-      padding: '2px 10px', borderRadius: '999px', fontSize: '11px',
-      fontWeight: 700, letterSpacing: '0.5px', whiteSpace: 'nowrap',
-      display: 'inline-block',
-    }}>{role}</span>
+    <span
+      className="cb-role-badge"
+      style={{
+        background: s.bg,
+        color: s.color,
+        border: `1px solid ${s.border}`,
+      }}
+    >
+      {role}
+    </span>
   );
 };
 
-/* ─── stat card ──────────────────────────────────────────────────────────── */
-const StatCard = ({ icon, label, value, accent }) => (
-  <div className="op-stat-card" style={{ borderTop: `3px solid ${accent}` }}>
-    <div className="op-stat-icon" style={{ background: accent + '18', color: accent }}>
+/* ─── Stat Card ──────────────────────────────────────────────────────────── */
+const StatCard = ({ icon, label, value, bg, color }) => (
+  <div className="cb-op-stat-card">
+    <div className="cb-op-stat-icon" style={{ background: bg, color: color }}>
       <Icon d={icon} size={18} />
     </div>
-    <div>
-      <div className="op-stat-label">{label}</div>
-      <div className="op-stat-value">{value}</div>
+    <div className="cb-op-stat-info">
+      <span className="cb-op-stat-label">{label}</span>
+      <span className="cb-op-stat-value">{value}</span>
     </div>
   </div>
 );
 
-/* ─── role selector ──────────────────────────────────────────────────────── */
+/* ─── Role Selector ──────────────────────────────────────────────────────── */
 const RoleSelect = ({ value, onChange, disabled }) => (
-  <div className="op-role-select-wrap">
-    <select className="op-role-select" value={value} onChange={onChange} disabled={disabled}>
+  <div className="cb-op-role-select-wrap">
+    <select
+      className="cb-op-role-select"
+      value={value}
+      onChange={onChange}
+      disabled={disabled}
+    >
       <option value="ADMIN">Admin</option>
       <option value="EDITOR">Editor</option>
       <option value="VIEWER">Viewer</option>
     </select>
-    <Icon d={Icons.chevDown} size={12} className="op-role-chevron" />
+    <Icon d={Icons.chevDown} size={12} className="cb-op-role-chevron" />
   </div>
 );
 
 /* ══════════════════════════════════════════════════════════════════════════
-   OWNER PANEL
+   OWNER PANEL COMPONENT
 ══════════════════════════════════════════════════════════════════════════ */
 const OwnerPanel = ({ folderId, onNotify, onRefresh, onProjectDeleted }) => {
-  const [data, setData]             = useState(null);
-  const [loading, setLoading]       = useState(true);
-  const [error, setError]           = useState('');
-  const [copied, setCopied]         = useState(false);
-  const [busy, setBusy]             = useState(false);
-  const [activeTab, setActiveTab]   = useState('members');
+  const [data, setData]           = useState(null);
+  const [loading, setLoading]     = useState(true);
+  const [error, setError]         = useState('');
+  const [copied, setCopied]       = useState(false);
+  const [busy, setBusy]           = useState(false);
+  const [activeTab, setActiveTab] = useState('members');
 
   const token = () => localStorage.getItem('accessToken');
 
   const fetch = useCallback(async () => {
     if (!folderId) return;
-    setLoading(true); setError('');
+    setLoading(true);
+    setError('');
     try {
-      const res = await axios.get(`api/folder/owner-panel/${folderId}`,
-        { headers: { Authorization: `Bearer ${token()}` } });
+      const res = await axios.get(`api/folder/owner-panel/${folderId}`, {
+        headers: { Authorization: `Bearer ${token()}` }
+      });
       setData(res.data.data);
     } catch (e) {
       setError(e.response?.data?.error || 'Failed to load Owner Panel');
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   }, [folderId]);
 
-  useEffect(() => { fetch(); }, [fetch]);
+  useEffect(() => {
+    fetch();
+  }, [fetch]);
 
-  /* ── helpers ── */
+  /* ── Helpers ── */
   const act = async (fn, successMsg) => {
     setBusy(true);
-    try { await fn(); onNotify?.(successMsg, 'success'); await fetch(); onRefresh?.(); }
-    catch (e) { onNotify?.(e.response?.data?.error || 'Action failed', 'error'); }
-    finally { setBusy(false); }
+    try {
+      await fn();
+      onNotify?.(successMsg, 'success');
+      await fetch();
+      onRefresh?.();
+    } catch (e) {
+      onNotify?.(e.response?.data?.error || 'Action failed', 'error');
+    } finally {
+      setBusy(false);
+    }
   };
 
   const handleDeleteProject = async () => {
-    if (!window.confirm(`Are you sure you want to delete project "${data?.folderName || ''}"? All files and member access will be permanently removed.`)) return;
+    if (!window.confirm(`Are you sure you want to delete project "${data?.folderName || ''}"? All files and member access will be permanently deleted.`)) return;
     setBusy(true);
     try {
       await axios.delete(`api/folder/delete/${folderId}`, {
@@ -129,245 +161,393 @@ const OwnerPanel = ({ folderId, onNotify, onRefresh, onProjectDeleted }) => {
   };
 
   const handleCopy = () => {
+    if (!data?.currentInviteCode) return;
     navigator.clipboard.writeText(data.currentInviteCode);
-    setCopied(true); setTimeout(() => setCopied(false), 2000);
-    onNotify?.('Invite code copied!', 'success');
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+    onNotify?.('Invite code copied to clipboard!', 'success');
   };
 
   const handleRegenerate = () => {
     if (!window.confirm('Generate a new code? The current one will be invalidated immediately.')) return;
-    act(() => axios.post('api/folder/invite/regenerate', { folderId },
-      { headers: { Authorization: `Bearer ${token()}` } }),
-    'New invite code generated!');
+    act(
+      () => axios.post('api/folder/invite/regenerate', { folderId }, { headers: { Authorization: `Bearer ${token()}` } }),
+      'New invite code generated!'
+    );
   };
 
   const handleInviteStatus = (endpoint, msg) =>
-    act(() => axios.post(`api/folder/invite/${endpoint}`, { folderId },
-      { headers: { Authorization: `Bearer ${token()}` } }), msg);
+    act(
+      () => axios.post(`api/folder/invite/${endpoint}`, { folderId }, { headers: { Authorization: `Bearer ${token()}` } }),
+      msg
+    );
 
   const handleRemove = (userId, name) => {
-    if (!window.confirm(`Remove ${name} from this folder?`)) return;
-    act(() => axios.delete(`api/folder/members/${folderId}/${userId}`,
-      { headers: { Authorization: `Bearer ${token()}` } }),
-    `${name} removed`);
+    if (!window.confirm(`Remove ${name} from this project?`)) return;
+    act(
+      () => axios.delete(`api/folder/members/${folderId}/${userId}`, { headers: { Authorization: `Bearer ${token()}` } }),
+      `${name} removed from project`
+    );
   };
 
   const handleRoleChange = (userId, name, newRole) =>
-    act(() => axios.patch('api/folder/members/role', { folderId, userId, newRole },
-      { headers: { Authorization: `Bearer ${token()}` } }),
-    `${name}'s role changed to ${newRole}`);
+    act(
+      () => axios.patch('api/folder/members/role', { folderId, userId, newRole }, { headers: { Authorization: `Bearer ${token()}` } }),
+      `${name}'s role updated to ${newRole}`
+    );
 
   const handleTransfer = (userId, name) => {
-    if (!window.confirm(`Transfer ownership to ${name}? You will become an Admin.`)) return;
-    act(() => axios.patch('api/folder/transfer-ownership', { folderId, newOwnerUserId: userId },
-      { headers: { Authorization: `Bearer ${token()}` } }),
-    `Ownership transferred to ${name}`);
+    if (!window.confirm(`Transfer project ownership to ${name}? You will become an Admin.`)) return;
+    act(
+      () => axios.patch('api/folder/transfer-ownership', { folderId, newOwnerUserId: userId }, { headers: { Authorization: `Bearer ${token()}` } }),
+      `Ownership transferred to ${name}`
+    );
   };
 
   const handleApprove = (id) =>
-    act(() => axios.patch('api/folder/request/approve', { requestId: id, folderId },
-      { headers: { Authorization: `Bearer ${token()}` } }), 'Request approved');
+    act(
+      () => axios.patch('api/folder/request/approve', { requestId: id, folderId }, { headers: { Authorization: `Bearer ${token()}` } }),
+      'Join request approved'
+    );
 
   const handleReject = (id) =>
-    act(() => axios.patch('api/folder/request/reject', { requestId: id, folderId },
-      { headers: { Authorization: `Bearer ${token()}` } }), 'Request rejected');
+    act(
+      () => axios.patch('api/folder/request/reject', { requestId: id, folderId }, { headers: { Authorization: `Bearer ${token()}` } }),
+      'Join request rejected'
+    );
 
-  /* ── render ── */
-  if (loading) return (
-    <div className="op-center-state">
-      <div className="op-spinner" />
-      <span>Loading Owner Panel…</span>
-    </div>
-  );
-  if (error) return (
-    <div className="op-center-state op-error-state">
-      <Icon d={Icons.shield} size={32} />
-      <span>{error}</span>
-    </div>
-  );
+  /* ── Render States ── */
+  if (loading) {
+    return (
+      <div className="cb-op-center-state">
+        <div className="cb-op-spinner" />
+        <span>Loading Owner Panel...</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="cb-op-center-state cb-op-error-state">
+        <Icon d={Icons.shield} size={32} />
+        <span>{error}</span>
+      </div>
+    );
+  }
+
   if (!data) return null;
 
   const allMembers = [...(data.admins || []), ...(data.members || [])];
 
   return (
-    <div className="op-root">
+    <div className="cb-op-root">
 
-      {/* ── Banner ── */}
-      <div className="op-banner op-banner-owner">
-        <div className="op-banner-icon"><Icon d={Icons.shield} size={22} /></div>
-        <div>
-          <div className="op-banner-title">Owner Panel</div>
-          <div className="op-banner-sub">{data.folderName}</div>
+      {/* ── 1. Hero Header Banner ── */}
+      <div className="cb-op-banner cb-op-banner-owner">
+        <div className="cb-op-banner-left">
+          <div className="cb-op-banner-icon">
+            <Icon d={Icons.shield} size={24} />
+          </div>
+          <div className="cb-op-banner-details">
+            <div className="cb-op-banner-title-row">
+              <h2 className="cb-op-banner-title">Owner Management Panel</h2>
+              <span className="cb-op-visibility-badge">
+                <span className="cb-op-dot" />
+                {data.visibility || 'PUBLIC'}
+              </span>
+            </div>
+            <p className="cb-op-banner-sub">
+              Manage members, permissions, access codes, and project settings for <strong>{data.folderName}</strong>
+            </p>
+          </div>
         </div>
-        <div className="op-banner-badge">{data.visibility}</div>
+
         <button
           type="button"
-          className="op-btn op-btn-danger"
-          style={{ marginLeft: 'auto' }}
+          className="btn cb-op-btn-danger"
           onClick={handleDeleteProject}
           disabled={busy}
         >
-          <Icon d={Icons.trash} size={14} /> Delete Project
+          <Icon d={Icons.trash} size={14} />
+          <span>Delete Project</span>
         </button>
       </div>
 
-      {/* ── Stats ── */}
-      <div className="op-stats-row">
-        <StatCard icon={Icons.users}  label="Total Members"    value={data.totalMembers}          accent="#6d28d9" />
-        <StatCard icon={Icons.clock}  label="Pending Requests" value={data.pendingJoinRequests}    accent="#d97706" />
-        <StatCard icon={Icons.file}   label="Files"            value={data.filesCount}             accent="#0369a1" />
-        <StatCard icon={Icons.hdd}    label="Storage Used"     value={formatBytes(data.storageUsed)} accent="#15803d" />
+      {/* ── 2. Statistics Grid ── */}
+      <div className="cb-op-stats-grid">
+        <StatCard
+          icon={Icons.users}
+          label="Total Members"
+          value={data.totalMembers}
+          bg="rgba(124, 58, 237, 0.1)"
+          color="#7c3aed"
+        />
+        <StatCard
+          icon={Icons.clock}
+          label="Pending Requests"
+          value={data.pendingJoinRequests}
+          bg="rgba(245, 158, 11, 0.1)"
+          color="#d97706"
+        />
+        <StatCard
+          icon={Icons.file}
+          label="Files in Workspace"
+          value={data.filesCount}
+          bg="rgba(59, 130, 246, 0.1)"
+          color="#3b82f6"
+        />
+        <StatCard
+          icon={Icons.hdd}
+          label="Storage Used"
+          value={formatBytes(data.storageUsed)}
+          bg="rgba(16, 185, 129, 0.1)"
+          color="#10b981"
+        />
       </div>
 
-      {/* ── Invite Card ── */}
-      <div className="op-invite-card">
-        <div className="op-invite-left">
-          <div className="op-invite-icon"><Icon d={Icons.key} size={18} /></div>
-          <div>
-            <div className="op-invite-label">Invite Code</div>
-            <div className="op-invite-code">{data.currentInviteCode || '—'}</div>
+      {/* ── 3. Invite Code Card ── */}
+      <div className="cb-op-invite-card">
+        <div className="cb-op-invite-left">
+          <div className="cb-op-invite-icon">
+            <Icon d={Icons.key} size={20} />
           </div>
-          <span className={`op-invite-status ${data.isInviteActive ? 'op-status-active' : 'op-status-off'}`}>
-            {data.isInviteActive ? 'Active' : 'Disabled'}
-          </span>
+          <div className="cb-op-invite-info">
+            <div className="cb-op-invite-title-row">
+              <span className="cb-op-invite-label">INVITE CODE</span>
+              <span className={`cb-op-status-pill ${data.isInviteActive ? 'active' : 'disabled'}`}>
+                {data.isInviteActive ? 'Active' : 'Disabled'}
+              </span>
+            </div>
+            <div className="cb-op-code-box">
+              <code className="cb-op-code-text">{data.currentInviteCode || '—'}</code>
+            </div>
+          </div>
         </div>
-        <div className="op-invite-actions">
-          <button className="op-btn op-btn-ghost" onClick={handleCopy} disabled={!data.currentInviteCode || busy}>
-            <Icon d={copied ? Icons.check : Icons.copy} size={14} />
-            {copied ? 'Copied!' : 'Copy'}
+
+        <div className="cb-op-invite-actions">
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={handleCopy}
+            disabled={!data.currentInviteCode || busy}
+          >
+            <Icon d={copied ? Icons.check : Icons.copy} size={14} style={{ color: copied ? '#10b981' : 'inherit' }} />
+            <span>{copied ? 'Copied!' : 'Copy Code'}</span>
           </button>
-          <button className="op-btn op-btn-outline" onClick={handleRegenerate} disabled={busy}>
-            <Icon d={Icons.refresh} size={14} /> Regenerate
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={handleRegenerate}
+            disabled={busy}
+          >
+            <Icon d={Icons.refresh} size={14} />
+            <span>Regenerate</span>
           </button>
           {data.isInviteActive ? (
-            <button className="op-btn op-btn-danger-outline" onClick={() => handleInviteStatus('disable', 'Invite disabled')} disabled={busy}>
-              Disable
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm cb-op-btn-warn"
+              onClick={() => handleInviteStatus('disable', 'Invite disabled')}
+              disabled={busy}
+            >
+              <span>Disable</span>
             </button>
           ) : (
-            <button className="op-btn op-btn-success-outline" onClick={() => handleInviteStatus('enable', 'Invite enabled')} disabled={busy}>
-              Enable
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm cb-op-btn-success"
+              onClick={() => handleInviteStatus('enable', 'Invite enabled')}
+              disabled={busy}
+            >
+              <span>Enable</span>
             </button>
           )}
-          <button className="op-btn op-btn-danger-outline" onClick={() => handleInviteStatus('expire', 'Invite expired')} disabled={busy || !data.isInviteActive}>
-            Expire
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm cb-op-btn-danger-outline"
+            onClick={() => handleInviteStatus('expire', 'Invite code expired')}
+            disabled={busy || !data.isInviteActive}
+          >
+            <span>Expire</span>
           </button>
         </div>
       </div>
 
-      {/* ── Tabs ── */}
-      <div className="op-tabs">
-        {[
-          { key: 'members',  label: `Members (${allMembers.length + 1})` },
-          { key: 'requests', label: `Pending (${data.pendingRequests?.length || 0})` },
-        ].map(t => (
-          <button key={t.key} className={`op-tab ${activeTab === t.key ? 'op-tab-active' : ''}`}
-            onClick={() => setActiveTab(t.key)}>
-            {t.label}
-          </button>
-        ))}
+      {/* ── 4. Tabs Navigation ── */}
+      <div className="cb-op-tabs-bar">
+        <button
+          type="button"
+          className={`cb-op-tab ${activeTab === 'members' ? 'active' : ''}`}
+          onClick={() => setActiveTab('members')}
+        >
+          <Icon d={Icons.users} size={15} />
+          <span>Members ({allMembers.length + 1})</span>
+        </button>
+        <button
+          type="button"
+          className={`cb-op-tab ${activeTab === 'requests' ? 'active' : ''}`}
+          onClick={() => setActiveTab('requests')}
+        >
+          <Icon d={Icons.clock} size={15} />
+          <span>Pending Requests ({data.pendingRequests?.length || 0})</span>
+        </button>
       </div>
 
-      {/* ── Members Table ── */}
+      {/* ── 5. Members Tab Table ── */}
       {activeTab === 'members' && (
-        <div className="op-table-wrap">
-          <table className="op-table">
+        <div className="cb-op-table-container">
+          <table className="cb-op-table">
             <thead>
               <tr>
-                <th>Member</th>
-                <th>Role</th>
-                <th>Joined</th>
-                <th style={{ textAlign: 'right' }}>Actions</th>
+                <th style={{ width: '40%' }}>Member</th>
+                <th style={{ width: '22%' }}>Role</th>
+                <th style={{ width: '20%' }}>Joined</th>
+                <th style={{ width: '18%', textAlign: 'right' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {/* Owner row */}
-              <tr className="op-row-owner">
+              {/* Owner Row */}
+              <tr className="cb-op-row-owner">
                 <td>
-                  <div className="op-member-cell">
-                    <div className="op-avatar op-avatar-owner">{data.owner?.name?.[0]?.toUpperCase()}</div>
-                    <div>
-                      <div className="op-member-name">{data.owner?.name} <span className="op-you-label">you</span></div>
-                      <div className="op-member-email">{data.owner?.email}</div>
+                  <div className="cb-op-member-cell">
+                    <div className="cb-op-avatar cb-op-avatar-owner">
+                      {data.owner?.name?.[0]?.toUpperCase() || 'O'}
+                    </div>
+                    <div className="cb-op-member-meta">
+                      <div className="cb-op-member-name">
+                        <span>{data.owner?.name || 'Project Owner'}</span>
+                        <span className="cb-op-you-badge">You</span>
+                      </div>
+                      <span className="cb-op-member-email">{data.owner?.email}</span>
                     </div>
                   </div>
                 </td>
-                <td><RoleBadge role="OWNER" /></td>
-                <td className="op-cell-muted">—</td>
-                <td />
+                <td>
+                  <RoleBadge role="OWNER" />
+                </td>
+                <td className="cb-op-cell-muted">—</td>
+                <td style={{ textAlign: 'right' }}>
+                  <span className="cb-op-cell-dim">Workspace Owner</span>
+                </td>
               </tr>
-              {/* Other members */}
-              {allMembers.length === 0 && (
+
+              {/* Members List */}
+              {allMembers.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="op-empty-row">
-                    No members have joined yet. Share the invite code.
+                  <td colSpan={4} className="cb-op-empty-cell">
+                    <div className="cb-op-empty-wrap">
+                      <Icon d={Icons.users} size={24} style={{ color: 'var(--text-dim)' }} />
+                      <p>No team members have joined this workspace yet.</p>
+                      <span className="cb-op-empty-sub">Share the invite code above to collaborate with teammates.</span>
+                    </div>
                   </td>
                 </tr>
-              )}
-              {allMembers.map(m => (
-                <tr key={m.userId} className="op-table-row">
-                  <td>
-                    <div className="op-member-cell">
-                      <div className="op-avatar">{m.name?.[0]?.toUpperCase()}</div>
-                      <div>
-                        <div className="op-member-name">{m.name}</div>
-                        <div className="op-member-email">{m.email}</div>
+              ) : (
+                allMembers.map((m) => (
+                  <tr key={m.userId} className="cb-op-table-row">
+                    <td>
+                      <div className="cb-op-member-cell">
+                        <div className="cb-op-avatar">
+                          {m.name?.[0]?.toUpperCase() || 'M'}
+                        </div>
+                        <div className="cb-op-member-meta">
+                          <span className="cb-op-member-name">{m.name}</span>
+                          <span className="cb-op-member-email">{m.email}</span>
+                        </div>
                       </div>
-                    </div>
-                  </td>
-                  <td>
-                    <RoleSelect value={m.role} disabled={busy}
-                      onChange={e => handleRoleChange(m.userId, m.name, e.target.value)} />
-                  </td>
-                  <td className="op-cell-muted">{formatDate(m.joinedAt)}</td>
-                  <td>
-                    <div className="op-row-actions">
-                      <button className="op-btn op-btn-ghost op-btn-xs"
-                        onClick={() => handleTransfer(m.userId, m.name)} disabled={busy}>
-                        <Icon d={Icons.arrowRight} size={12} /> Transfer
-                      </button>
-                      <button className="op-btn op-btn-danger op-btn-xs"
-                        onClick={() => handleRemove(m.userId, m.name)} disabled={busy}>
-                        <Icon d={Icons.trash} size={12} /> Remove
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td>
+                      <RoleSelect
+                        value={m.role}
+                        disabled={busy}
+                        onChange={(e) => handleRoleChange(m.userId, m.name, e.target.value)}
+                      />
+                    </td>
+                    <td className="cb-op-cell-muted">{formatDate(m.joinedAt)}</td>
+                    <td style={{ textAlign: 'right' }}>
+                      <div className="cb-op-row-actions">
+                        <button
+                          type="button"
+                          className="cb-op-action-btn cb-op-transfer-btn"
+                          onClick={() => handleTransfer(m.userId, m.name)}
+                          disabled={busy}
+                          title="Transfer Project Ownership"
+                        >
+                          <Icon d={Icons.arrowRight} size={13} />
+                          <span>Transfer</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="cb-op-action-btn cb-op-remove-btn"
+                          onClick={() => handleRemove(m.userId, m.name)}
+                          disabled={busy}
+                          title="Remove Member"
+                        >
+                          <Icon d={Icons.trash} size={13} />
+                          <span>Remove</span>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
       )}
 
-      {/* ── Pending Requests ── */}
+      {/* ── 6. Pending Requests Tab ── */}
       {activeTab === 'requests' && (
-        <div className="op-requests-list">
-          {(!data.pendingRequests || data.pendingRequests.length === 0) ? (
-            <div className="op-empty-requests">
-              <Icon d={Icons.clock} size={28} />
-              <span>No pending requests</span>
+        <div className="cb-op-requests-container">
+          {!data.pendingRequests || data.pendingRequests.length === 0 ? (
+            <div className="cb-op-empty-requests">
+              <div className="cb-op-empty-icon-box">
+                <Icon d={Icons.clock} size={28} />
+              </div>
+              <h4 className="cb-op-empty-title">No pending requests</h4>
+              <p className="cb-op-empty-desc">
+                When users request access to join this workspace, their requests will appear here for your approval.
+              </p>
             </div>
-          ) : data.pendingRequests.map(req => (
-            <div key={req.id} className="op-request-item">
-              <div className="op-member-cell">
-                <div className="op-avatar">{req.name?.[0]?.toUpperCase()}</div>
-                <div>
-                  <div className="op-member-name">{req.name}</div>
-                  <div className="op-member-email">{req.email}</div>
-                  <div className="op-member-email" style={{ marginTop: 1 }}>
-                    Requested {formatDate(req.requestedAt)}
+          ) : (
+            <div className="cb-op-requests-list">
+              {data.pendingRequests.map((req) => (
+                <div key={req.id} className="cb-op-request-card">
+                  <div className="cb-op-member-cell">
+                    <div className="cb-op-avatar cb-op-avatar-req">
+                      {req.name?.[0]?.toUpperCase() || 'R'}
+                    </div>
+                    <div className="cb-op-member-meta">
+                      <span className="cb-op-member-name">{req.name}</span>
+                      <span className="cb-op-member-email">{req.email}</span>
+                      <span className="cb-op-req-time">Requested {formatDate(req.requestedAt)}</span>
+                    </div>
+                  </div>
+
+                  <div className="cb-op-request-actions">
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm cb-op-approve-btn"
+                      onClick={() => handleApprove(req.id)}
+                      disabled={busy}
+                    >
+                      <Icon d={Icons.check} size={14} />
+                      <span>Approve</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm cb-op-reject-btn"
+                      onClick={() => handleReject(req.id)}
+                      disabled={busy}
+                    >
+                      <Icon d={Icons.close} size={13} />
+                      <span>Reject</span>
+                    </button>
                   </div>
                 </div>
-              </div>
-              <div className="op-row-actions">
-                <button className="op-btn op-btn-success op-btn-sm" onClick={() => handleApprove(req.id)} disabled={busy}>
-                  <Icon d={Icons.check} size={13} /> Approve
-                </button>
-                <button className="op-btn op-btn-danger-outline op-btn-sm" onClick={() => handleReject(req.id)} disabled={busy}>
-                  Reject
-                </button>
-              </div>
+              ))}
             </div>
-          ))}
+          )}
         </div>
       )}
 

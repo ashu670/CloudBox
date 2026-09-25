@@ -74,14 +74,60 @@ async function getAndVerifyPendingRequest(requestId, uid) {
     return { request, folder };
 }
 
-const isDescendant = async (parentFolderId, childFolderId, uid) => {
-    if (!childFolderId) return false;
-    if (parentFolderId === childFolderId) return true;
+export const isDescendant = async (parentFolderId, childFolderId) => {
+    if (!childFolderId || !parentFolderId) return false;
+    const parentId = Number(parentFolderId);
+    const childId = Number(childFolderId);
+    if (parentId === childId) return true;
 
-    const child = await repo.findByIdAndUser(childFolderId, uid);
-    if (!child || child === true) return false;
+    const child = await repo.findById(childId);
+    if (!child || !child.pid) return false;
 
-    return await isDescendant(parentFolderId, child.pid, uid);
+    return await isDescendant(parentId, child.pid);
+};
+
+export const getFolderWorkspaceBoundary = async (folderId, userId) => {
+    if (folderId === null || folderId === undefined || folderId === -1 || folderId === 0 || folderId === "0" || folderId === "-1") {
+        const rootFolder = await repo.findRootFolder(Number(userId));
+        return {
+            type: "PRIVATE_DRIVE",
+            userId: Number(userId),
+            rootId: rootFolder ? rootFolder.id : null
+        };
+    }
+
+    const normalizedFolderId = Number(folderId);
+    let curr = await repo.findById(normalizedFolderId);
+    if (!curr) return null;
+
+    let projectRoot = null;
+    let current = curr;
+
+    // Traverse up the parent tree to determine if this folder belongs to a shared Project or Private Drive
+    while (current) {
+        if (current.isShared) {
+            projectRoot = current;
+        }
+
+        if (!current.pid) {
+            break;
+        }
+        current = await repo.findById(current.pid);
+    }
+
+    if (projectRoot) {
+        return {
+            type: "PROJECT",
+            rootId: projectRoot.id,
+            name: projectRoot.name
+        };
+    }
+
+    return {
+        type: "PRIVATE_DRIVE",
+        userId: curr.uid,
+        rootId: current ? current.id : null
+    };
 };
 
 // --- Exported Service Methods ---
@@ -472,42 +518,107 @@ export const rename = async (id, uid, newName) => {
 };
 
 export const move = async (id, uid, newPid) => {
-    if (newPid === -1) newPid = null;
-
-    const validCurr = await repo.findByIdAndUser(id, uid);
-    if (!validCurr) {
-        throw new Error("current folder doesnt exists or access denied");
+    if (newPid === -1 || newPid === 0 || newPid === "0" || newPid === "-1") {
+        newPid = null;
+    } else if (newPid !== null && newPid !== undefined) {
+        newPid = Number(newPid);
     }
 
-    if (id === newPid) {
+    const folderId = Number(id);
+    const userId = Number(uid);
+
+    // 1. Fetch source folder
+    const sourceFolder = await repo.findById(folderId);
+    if (!sourceFolder || sourceFolder.deletedAt) {
+        throw new Error("Folder does not exist or has been deleted.");
+    }
+
+    // 2. Project Root validation: A project root workspace folder CANNOT be moved
+    const isProjectRoot = sourceFolder.isShared && (!sourceFolder.pid || sourceFolder.pid === null);
+    if (isProjectRoot) {
+        throw new Error("Project root workspaces cannot be moved.");
+    }
+
+    // 3. Permission validation on source folder
+    const canMoveSource = await canAccessFolder(folderId, userId, FolderAction.MOVE);
+    if (!canMoveSource) {
+        throw new Error("Unauthorized: You do not have permission to move this folder.");
+    }
+
+    // 4. Resolve and validate destination folder
+    if (newPid !== null) {
+        const destinationFolder = await repo.findById(newPid);
+        if (!destinationFolder || destinationFolder.deletedAt) {
+            throw new Error("Destination folder does not exist or has been deleted.");
+        }
+
+        const canWriteDestination = await canAccessFolder(newPid, userId, FolderAction.CREATE);
+        if (!canWriteDestination) {
+            throw new Error("Unauthorized: You do not have permission to move items into the destination folder.");
+        }
+    }
+
+    // 5. Workspace Boundary Validation
+    const sourceBoundary = await getFolderWorkspaceBoundary(folderId, userId);
+    const destinationBoundary = await getFolderWorkspaceBoundary(newPid, userId);
+
+    if (!sourceBoundary || !destinationBoundary) {
+        throw new Error("Invalid workspace boundary.");
+    }
+
+    if (sourceBoundary.type !== destinationBoundary.type) {
+        throw new Error("Cross-workspace moves are forbidden: items cannot move between Private Drive and Projects.");
+    }
+
+    if (sourceBoundary.type === "PROJECT") {
+        if (sourceBoundary.rootId !== destinationBoundary.rootId) {
+            throw new Error("Cross-project moves are forbidden: items cannot move between different projects.");
+        }
+        // In a project, if newPid is null, that means moving to the project root
+        if (newPid === null) {
+            newPid = sourceBoundary.rootId;
+        }
+    } else if (sourceBoundary.type === "PRIVATE_DRIVE") {
+        if (sourceBoundary.userId !== destinationBoundary.userId || sourceBoundary.userId !== userId) {
+            throw new Error("Cannot move items across different user accounts.");
+        }
+        if (newPid === null) {
+            const userRoot = await repo.findRootFolder(userId);
+            newPid = userRoot ? userRoot.id : null;
+        }
+    }
+
+    // 6. Hierarchy / Cycle Validation
+    if (folderId === newPid) {
         throw new Error("Cannot move a folder into itself.");
     }
 
     if (newPid !== null) {
-        const isTargetDescendant = await isDescendant(id, newPid, uid);
+        const isTargetDescendant = await isDescendant(folderId, newPid);
         if (isTargetDescendant) {
             throw new Error("Cannot move a folder into its own subfolder.");
         }
     }
 
-    const parent = await repo.findByIdAndUser(newPid, uid);
-    if (!parent) {
-        throw new Error("Parent folder doenst exists or access denied");
+    // 7. Duplicate check in destination
+    const duplicate = await repo.findDuplicate(sourceFolder.name, newPid, sourceFolder.uid);
+    if (duplicate && duplicate.id !== folderId) {
+        throw new Error(`A folder named "${sourceFolder.name}" already exists in the destination.`);
     }
 
-    if (validCurr.pid) touchFolder(validCurr.pid);
+    if (sourceFolder.pid) touchFolder(sourceFolder.pid);
     if (newPid) touchFolder(newPid);
 
-    const movedFolder = await repo.move(id, newPid);
+    const movedFolder = await repo.move(folderId, newPid);
 
     if (newPid) {
         await activityService.log({
             folderId: newPid,
-            userId: uid,
+            userId,
             action: ActivityType.MOVE_FOLDER,
             target: TargetType.FOLDER,
-            targetId: id,
-            message: `Moved folder into this directory`
+            targetId: folderId,
+            message: `Moved folder "${sourceFolder.name}" into this directory`
         });
     }
 

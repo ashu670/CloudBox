@@ -191,25 +191,69 @@ export default function RightSidebar({
                         className="cb-view-all-link-modern"
                         onClick={() => rootFolderId && rootFolderId !== -1 && fetchRecentActivity && fetchRecentActivity(rootFolderId)}
                     >
-                        View all &rarr;
+                        Refresh &rarr;
                     </button>
                 </div>
 
                 <div className="cb-activity-list-modern">
-                    {/* TODO: implement activity data rendering */}
-                    <div className="cb-empty-activity-box">
-                        <div className="cb-empty-act-icon">
-                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                                <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
-                            </svg>
+                    {activityLoading ? (
+                        <div className="cb-activity-loading" style={{ padding: "16px 0", justifyContent: "center" }}>
+                            <span className="cb-spinner-sm" />
+                            <span style={{ fontSize: "12.5px", color: "var(--text-muted)" }}>Loading activity...</span>
                         </div>
-                        <p className="cb-empty-act-title">No recent activity</p>
-                        <span className="cb-empty-act-sub">
-                            Actions you perform on your folders &amp; files will appear here.
-                        </span>
-                    </div>
-                </div>
+                    ) : recentActivity && recentActivity.length > 0 ? (
+                        <div className="cb-sidebar-activity-items">
+                            {recentActivity.map((act, i) => {
+                                const action = act.action || "";
+                                const desc = act.description || act.message || "";
+                                const colorCls = getActivityColor(action || desc);
+                                const user = act.user?.name || act.userName || (act.user?.email ? act.user.email.split('@')[0] : (act.userEmail ? act.userEmail.split('@')[0] : "You"));
+                                const time = timeAgo(act.createdAt);
 
+                                let readableAction = desc && !desc.includes("_") ? desc : "";
+                                if (!readableAction) {
+                                    if (action === "UPLOAD_FILE") readableAction = "uploaded a file";
+                                    else if (action === "CREATE_FOLDER") readableAction = "created folder";
+                                    else if (action === "DELETE_FOLDER") readableAction = "deleted folder";
+                                    else if (action === "DELETE_FILE") readableAction = "deleted file";
+                                    else if (action === "RENAME_FOLDER" || action === "RENAME_FILE") readableAction = "renamed item";
+                                    else if (action === "MOVE_FOLDER" || action === "MOVE_FILE") readableAction = "moved item";
+                                    else if (action === "SHARE_FOLDER") readableAction = "shared folder";
+                                    else if (action === "ROLE_CHANGED" || action === "ROLE_UPDATED") readableAction = "updated permissions";
+                                    else if (action === "JOIN_REQUEST") readableAction = "requested access";
+                                    else if (action === "APPROVE_REQUEST") readableAction = "approved member";
+                                    else readableAction = action.replace(/_/g, " ").toLowerCase();
+                                }
+
+                                return (
+                                    <div key={act.id || i} className="cb-sidebar-act-item">
+                                        <div className={`cb-sidebar-act-icon-box ${colorCls}`}>
+                                            <ActivityIcon action={action || desc} />
+                                        </div>
+                                        <div className="cb-sidebar-act-details">
+                                            <p className="cb-sidebar-act-text">
+                                                <strong>{user}</strong> {readableAction}
+                                            </p>
+                                            <span className="cb-sidebar-act-time">{time}</span>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    ) : (
+                        <div className="cb-empty-activity-box">
+                            <div className="cb-empty-act-icon">
+                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                                    <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
+                                </svg>
+                            </div>
+                            <p className="cb-empty-act-title">No recent activity</p>
+                            <span className="cb-empty-act-sub">
+                                Actions you perform on your folders &amp; files will appear here.
+                            </span>
+                        </div>
+                    )}
+                </div>
             </div>
 
             {/* ── Card 3: Work Better Together ── */}

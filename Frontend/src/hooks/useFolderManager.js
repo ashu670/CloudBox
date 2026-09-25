@@ -192,17 +192,24 @@ export function useFolderManager() {
                 headers: { Authorization: `Bearer ${token}` }
             });
             if (data.success) {
-                const owned = Array.isArray(data.ownedProjects) ? data.ownedProjects : [];
-                const shared = Array.isArray(data.sharedWithMe) ? data.sharedWithMe : [];
+                const rawOwned = Array.isArray(data.ownedProjects) ? data.ownedProjects : [];
+                const rawShared = Array.isArray(data.sharedWithMe) ? data.sharedWithMe : [];
+                
+                // Top-level project workspaces have no parent (pid is null/undefined) or are at root level
+                // Subfolders created inside a project have their pid pointing to the parent project
+                const isTopLevel = (folder) => !folder.pid || folder.pid === null || folder.pid === rootFolderId || folder.pid === 0 || folder.pid === -1;
+
+                const owned = rawOwned.filter(isTopLevel);
+                const shared = rawShared.filter(isTopLevel);
                 
                 setOwnedProjects(owned);
                 setSharedWithMe(shared);
-                addToCache([...owned, ...shared]);
+                addToCache([...rawOwned, ...rawShared]);
             }
         } catch (err) {
             console.error("Failed to fetch projects:", err);
         }
-    }, [addToCache]);
+    }, [addToCache, rootFolderId]);
 
     const fetchFolders = useCallback(async (id = null, isBackgroundSync = false) => {
         const seqId = ++fetchSequenceRef.current;
@@ -574,6 +581,7 @@ export function useFolderManager() {
             fetchTreeSubfolders(currentFolderId);
             fetchUserProfile();
             fetchDashboardStats();
+            window.dispatchEvent(new CustomEvent('cb_project_refresh'));
         } catch (err) {
             const errorMsg = (err.response?.data?.message || err.response?.data?.error || "").toLowerCase();
             const isContainsFiles = err.response?.status === 409 || errorMsg.includes("contains") || errorMsg.includes("files");
@@ -751,6 +759,7 @@ export function useFolderManager() {
             invalidateCache(id);
             if (type === 'folder') fetchTreeSubfolders(currentFolderId);
             fetchFolders(currentFolderId, false);
+            window.dispatchEvent(new CustomEvent('cb_project_refresh'));
         } catch (err) {
             setFolders(prevFolders);
             setFiles(prevFiles);
@@ -803,6 +812,7 @@ export function useFolderManager() {
             setMovingItem(null);
 
             await fetchFolders(currentFolderId, false);
+            window.dispatchEvent(new CustomEvent('cb_project_refresh'));
         } catch (err) {
             // Rollback optimistic removal
             setFolders(prevFolders);
@@ -953,6 +963,7 @@ export function useFolderManager() {
 
             fetchUserProfile();
             fetchDashboardStats();
+            window.dispatchEvent(new CustomEvent('cb_project_refresh', { detail: { folderId: destId } }));
 
         } catch (err) {
             console.error("Upload error:", err);
@@ -1046,21 +1057,12 @@ export function useFolderManager() {
         }
     }, [expandedFolders, treeNodes, fetchTreeSubfolders, rootFolderId]);
 
-    const refreshAfterSharedAction = useCallback(async () => {
-        invalidateCache();
-        // Always refresh root so sidebar sharedFolders stays in sync
-        await fetchFolders(rootFolderId !== -1 ? rootFolderId : currentFolderId);
-        if (currentFolderId !== rootFolderId && currentFolderId > 0) {
-            await fetchFolders(currentFolderId);
-        }
-        await fetchTreeSubfolders(-1);
-        if (currentFolderId > 0) {
-            await fetchTreeSubfolders(currentFolderId);
-        }
-        await fetchProjects();
-        await fetchDashboardStats();
+    const refreshAfterSharedAction = useCallback(() => {
+        // Non-blocking background sync without clearing local caches or blocking UI
+        fetchProjects();
+        fetchDashboardStats();
         fetchUserProfile();
-    }, [currentFolderId, rootFolderId, fetchFolders, fetchTreeSubfolders, fetchProjects, fetchDashboardStats, fetchUserProfile, invalidateCache]);
+    }, [fetchProjects, fetchDashboardStats, fetchUserProfile]);
 
     const currentFolderInfo = currentFolderId > 0 ? foldersCache[currentFolderId] : null;
 

@@ -13,49 +13,24 @@ export default function SharedWithMeView({
 
     const currentUserId = userProfile?.id;
 
-    const filtered = sharedFolders.filter(f =>
-        f.name.toLowerCase().includes(search.toLowerCase())
+    const filtered = (sharedFolders || []).filter(f =>
+        (f.name || "").toLowerCase().includes(search.toLowerCase())
     );
 
     const getStatusBadge = (folder) => {
         if (folder.requestStatus === "PENDING") {
             return (
-                <span
-                    style={{
-                        background: "rgba(245, 158, 11, 0.14)",
-                        color: "#d97706",
-                        border: "1px solid rgba(245, 158, 11, 0.35)",
-                        padding: "2px 9px",
-                        borderRadius: "999px",
-                        fontSize: "11px",
-                        fontWeight: "700",
-                        letterSpacing: "0.4px",
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "5px"
-                    }}
-                >
+                <span className="cb-badge cb-badge-pending">
                     <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#f59e0b" }}></span>
-                    PENDING APPROVAL
+                    Pending
                 </span>
             );
         }
 
         if (folder.requestStatus === "REJECTED") {
             return (
-                <span
-                    style={{
-                        background: "rgba(239, 68, 68, 0.14)",
-                        color: "#ef4444",
-                        border: "1px solid rgba(239, 68, 68, 0.35)",
-                        padding: "2px 9px",
-                        borderRadius: "999px",
-                        fontSize: "11px",
-                        fontWeight: "700",
-                        letterSpacing: "0.4px"
-                    }}
-                >
-                    REJECTED
+                <span className="cb-badge cb-badge-rejected">
+                    Rejected
                 </span>
             );
         }
@@ -63,35 +38,21 @@ export default function SharedWithMeView({
         const isOwner = folder.uid === currentUserId || folder.userRole === "OWNER";
         const role = folder.userRole || (isOwner ? "OWNER" : "VIEWER");
 
-        const colorMap = {
-            OWNER: { bg: "rgba(245, 158, 11, 0.14)", color: "#d97706", border: "rgba(245, 158, 11, 0.3)" },
-            ADMIN: { bg: "rgba(139, 92, 246, 0.14)", color: "#8b5cf6", border: "rgba(139, 92, 246, 0.3)" },
-            EDITOR: { bg: "rgba(16, 185, 129, 0.14)", color: "#10b981", border: "rgba(16, 185, 129, 0.3)" },
-            VIEWER: { bg: "rgba(59, 130, 246, 0.14)", color: "#3b82f6", border: "rgba(59, 130, 246, 0.3)" },
-            MEMBER: { bg: "rgba(100, 116, 139, 0.14)", color: "#64748b", border: "rgba(100, 116, 139, 0.3)" },
+        const map = {
+            OWNER: "cb-badge-owner",
+            ADMIN: "cb-badge-admin",
+            EDITOR: "cb-badge-editor",
+            VIEWER: "cb-badge-viewer",
         };
 
-        const s = colorMap[role] || colorMap.VIEWER;
-
         return (
-            <span
-                style={{
-                    background: s.bg,
-                    color: s.color,
-                    border: `1px solid ${s.border}`,
-                    padding: "2px 9px",
-                    borderRadius: "999px",
-                    fontSize: "11px",
-                    fontWeight: "700",
-                    letterSpacing: "0.4px"
-                }}
-            >
+            <span className={`cb-badge ${map[role] || "cb-badge-viewer"}`}>
                 {role}
             </span>
         );
     };
 
-    const handleCardClick = (folder) => {
+    const handleRowClick = (folder) => {
         if (folder.requestStatus === "PENDING") {
             showToast?.("This workspace is pending approval from the project owner or admin.", "info");
             return;
@@ -104,34 +65,30 @@ export default function SharedWithMeView({
     };
 
     return (
-        <div className="cb-shared-view-container">
-            {/* Top Header Banner */}
-            <div className="cb-shared-header">
-                <div className="cb-shared-header-left">
-                    <div className="cb-shared-icon-badge">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <circle cx="18" cy="5" r="3" />
-                            <circle cx="6" cy="12" r="3" />
-                            <circle cx="18" cy="19" r="3" />
-                            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
-                            <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+        <div className="cb-shared-view-ref-container">
+            {/* ── Top Header Banner (Matching Reference 1) ── */}
+            <div className="cb-shared-ref-header">
+                <div className="cb-shared-ref-header-left">
+                    <div className="cb-shared-ref-icon-badge">
+                        <svg viewBox="0 0 24 24" width="28" height="28" fill="#7c3aed">
+                            <path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" />
                         </svg>
                     </div>
                     <div>
-                        <h1 className="cb-shared-title">Shared with me</h1>
-                        <p className="cb-shared-subtitle">
-                            Folders and team project workspaces shared with your account
+                        <h1 className="cb-shared-ref-title">Shared with me</h1>
+                        <p className="cb-shared-ref-subtitle">
+                            Projects and files shared by others
                         </p>
                     </div>
                 </div>
 
-                <div className="cb-shared-header-actions">
+                <div className="cb-shared-ref-header-actions">
                     <button
                         type="button"
-                        className="btn btn-secondary"
+                        className="btn btn-secondary btn-sm"
                         onClick={onJoinClick}
                     >
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
                             <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
                             <circle cx="8.5" cy="7" r="4" />
                             <line x1="20" y1="8" x2="20" y2="14" />
@@ -142,10 +99,10 @@ export default function SharedWithMeView({
 
                     <button
                         type="button"
-                        className="btn btn-primary"
+                        className="btn btn-primary btn-sm"
                         onClick={onNewProjectClick}
                     >
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
                             <line x1="12" y1="5" x2="12" y2="19" />
                             <line x1="5" y1="12" x2="19" y2="12" />
                         </svg>
@@ -154,17 +111,17 @@ export default function SharedWithMeView({
                 </div>
             </div>
 
-            {/* Filter / Search Bar */}
+            {/* ── Search & Filter Bar ── */}
             {sharedFolders.length > 0 && (
-                <div className="cb-shared-filter-bar">
+                <div className="cb-shared-ref-filter-bar">
                     <div className="cb-shared-search-wrap">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="cb-shared-search-icon">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="cb-shared-search-icon">
                             <circle cx="11" cy="11" r="8" />
                             <line x1="21" y1="21" x2="16.65" y2="16.65" />
                         </svg>
                         <input
                             type="text"
-                            placeholder="Filter shared workspaces..."
+                            placeholder="Filter shared items..."
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
                             className="cb-shared-search-input"
@@ -174,115 +131,83 @@ export default function SharedWithMeView({
                         )}
                     </div>
                     <span className="cb-shared-count-badge">
-                        {filtered.length} {filtered.length === 1 ? 'workspace' : 'workspaces'}
+                        {filtered.length} {filtered.length === 1 ? 'item' : 'items'}
                     </span>
                 </div>
             )}
 
-            {/* Grid of Shared Folders */}
+            {/* ── Table View (Matching Reference 1) ── */}
             {filtered.length > 0 ? (
-                <div className="cb-shared-grid">
-                    {filtered.map((folder) => {
-                        const isPending = folder.requestStatus === "PENDING";
-                        const isRejected = folder.requestStatus === "REJECTED";
-                        const isOwner = folder.uid === currentUserId;
-                        const ownerLabel = isOwner ? "You (Owner)" : folder.user?.name || folder.user?.email || "Team Member";
+                <div className="cb-shared-table-card">
+                    <table className="cb-shared-ref-table">
+                        <thead>
+                            <tr>
+                                <th style={{ width: "35%" }}>Name</th>
+                                <th style={{ width: "25%" }}>Shared by</th>
+                                <th style={{ width: "15%" }}>Type</th>
+                                <th style={{ width: "15%" }}>Date</th>
+                                <th style={{ width: "10%", textAlign: "right" }}>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {filtered.map(folder => {
+                                const isPending = folder.requestStatus === "PENDING";
+                                const isRejected = folder.requestStatus === "REJECTED";
+                                const sharedBy = folder.user?.email || folder.user?.name || folder.ownerEmail || "Team Member";
+                                const isProject = folder.isShared || folder.inviteCode;
 
-                        const folderIconColor = isPending ? "#f59e0b" : isRejected ? "#ef4444" : "#7c3aed";
-
-                        return (
-                            <div
-                                key={`${folder.id}-${folder.requestStatus || 'APPROVED'}`}
-                                className={`cb-shared-card ${isPending ? 'cb-shared-card-pending' : ''} ${isRejected ? 'cb-shared-card-rejected' : ''}`}
-                                onClick={() => handleCardClick(folder)}
-                                role="button"
-                                tabIndex={0}
-                                style={{
-                                    cursor: isPending || isRejected ? "pointer" : "pointer",
-                                    opacity: isRejected ? 0.75 : 1
-                                }}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter' || e.key === ' ') {
-                                        e.preventDefault();
-                                        handleCardClick(folder);
-                                    }
-                                }}
-                            >
-                                <div className="cb-shared-card-top">
-                                    <div className="cb-shared-card-folder-icon">
-                                        <svg viewBox="0 0 24 24" width="32" height="32">
-                                            <path fill={folderIconColor} d="M10,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V8C22,6.89 21.1,6 20,6H12L10,4Z" />
-                                        </svg>
-                                        <div className="cb-shared-mini-badge" style={{ background: isPending ? "#f59e0b" : isRejected ? "#ef4444" : "#7c3aed" }}>
-                                            {isPending ? (
-                                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                                    <circle cx="12" cy="12" r="10" />
-                                                    <polyline points="12 6 12 12 16 14" />
-                                                </svg>
-                                            ) : isRejected ? (
-                                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                                                    <line x1="18" y1="6" x2="6" y2="18" />
-                                                    <line x1="6" y1="6" x2="18" y2="18" />
-                                                </svg>
-                                            ) : (
-                                                <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
-                                                    <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" />
-                                                </svg>
-                                            )}
-                                        </div>
-                                    </div>
-                                    <div className="cb-shared-card-role">
-                                        {getStatusBadge(folder)}
-                                    </div>
-                                </div>
-
-                                <div className="cb-shared-card-info">
-                                    <h3 className="cb-shared-card-name" title={folder.name}>
-                                        {folder.name}
-                                    </h3>
-                                    <p className="cb-shared-card-owner">
-                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                                            <circle cx="12" cy="7" r="4" />
-                                        </svg>
-                                        <span>Owner: {ownerLabel}</span>
-                                    </p>
-                                </div>
-
-                                <div className="cb-shared-card-footer">
-                                    <span className="cb-shared-date">
-                                        {isPending
-                                            ? `Requested ${formatDate(folder.requestedAt || folder.updatedAt || folder.createdAt)}`
-                                            : isRejected
-                                            ? `Request Rejected`
-                                            : `Updated ${formatDate(folder.updatedAt || folder.createdAt)}`}
-                                    </span>
-                                    {isPending ? (
-                                        <span style={{ fontSize: "12px", fontWeight: "600", color: "#d97706", display: "inline-flex", alignItems: "center", gap: "4px" }}>
-                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                                <circle cx="12" cy="12" r="10" />
-                                                <polyline points="12 6 12 12 16 14" />
-                                            </svg>
-                                            Awaiting Approval
-                                        </span>
-                                    ) : isRejected ? (
-                                        <span style={{ fontSize: "12px", fontWeight: "600", color: "#ef4444" }}>
-                                            Access Denied
-                                        </span>
-                                    ) : (
-                                        <span className="cb-shared-enter-link">
-                                            Open Workspace &rarr;
-                                        </span>
-                                    )}
-                                </div>
-                            </div>
-                        );
-                    })}
+                                return (
+                                    <tr
+                                        key={`${folder.id}-${folder.requestStatus || 'APPROVED'}`}
+                                        className={`cb-shared-ref-row ${isPending ? 'pending' : ''} ${isRejected ? 'rejected' : ''}`}
+                                        onClick={() => handleRowClick(folder)}
+                                    >
+                                        <td>
+                                            <div className="cb-shared-name-cell">
+                                                <div className="cb-shared-icon-box">
+                                                    <svg viewBox="0 0 24 24" width="20" height="20" fill={isProject ? "#7c3aed" : "#f59e0b"}>
+                                                        <path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" />
+                                                    </svg>
+                                                </div>
+                                                <span className="cb-shared-item-name" title={folder.name}>
+                                                    {folder.name}
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td className="cb-cell-muted">
+                                            {sharedBy}
+                                        </td>
+                                        <td>
+                                            <span className="cb-shared-type-pill">
+                                                {isProject ? "Project" : "Folder"}
+                                            </span>
+                                        </td>
+                                        <td className="cb-cell-muted">
+                                            {formatDate(folder.updatedAt || folder.createdAt)}
+                                        </td>
+                                        <td style={{ textAlign: "right" }} onClick={(e) => e.stopPropagation()}>
+                                            <div className="cb-shared-row-actions">
+                                                {getStatusBadge(folder)}
+                                                <button
+                                                    type="button"
+                                                    className="cb-shared-overflow-btn"
+                                                    onClick={() => handleRowClick(folder)}
+                                                    title="Open"
+                                                >
+                                                    •••
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
                 </div>
             ) : (
                 <div className="cb-shared-empty-state">
                     <div className="cb-shared-empty-icon">
-                        <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+                        <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2">
                             <circle cx="18" cy="5" r="3" />
                             <circle cx="6" cy="12" r="3" />
                             <circle cx="18" cy="19" r="3" />
@@ -290,9 +215,9 @@ export default function SharedWithMeView({
                             <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
                         </svg>
                     </div>
-                    <h2>No shared workspaces yet</h2>
+                    <h2>No shared items found</h2>
                     <p>
-                        When teammates share folders or invite you with a collaboration code, they will appear right here as full shared workspaces.
+                        {search ? "No shared folders matched your search." : "When teammates share folders or invite you with a collaboration code, they will appear right here."}
                     </p>
                     <div className="cb-shared-empty-actions">
                         <button

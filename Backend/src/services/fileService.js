@@ -3,7 +3,7 @@ import { prisma } from "../config/db.js";
 import * as fileRepo from "../repositories/fileRepo.js";
 import * as folderRepo from "../repositories/folderRepo.js";
 import { getAvailableStorageDet, updateStorageSize, incrementStorageSize } from "../repositories/userRepo.js";
-import { touchFolder } from "./folderService.js";
+import { touchFolder, getFolderWorkspaceBoundary } from "./folderService.js";
 import { canAccessFolder, validateFolderAccess, FolderAction } from "./permissionService.js";
 import storageService from "../storage/storageService.js";
 import * as activityService from "./activityService.js";
@@ -164,22 +164,87 @@ export const renameFile = async (id, uid, newOrgName) => {
 };
 
 export const move = async (id, uid, newPid) => {
-    const validFile = await fileRepo.findByUserId(id, uid);
-    if (!validFile) throw new Error("File does not exists or access denied");
+    if (newPid === -1 || newPid === 0 || newPid === "0" || newPid === "-1") {
+        newPid = null;
+    } else if (newPid !== null && newPid !== undefined) {
+        newPid = Number(newPid);
+    }
 
-    const validFolder = await validateFolderAccess(newPid, uid, FolderAction.MOVE);
-    if (!validFolder) throw new Error("Folder doesn't exists or access denied");
+    const fileId = Number(id);
+    const userId = Number(uid);
 
-    const movedFile = await fileRepo.move(id, newPid);
+    // 1. Fetch file
+    const file = await fileRepo.findById(fileId);
+    if (!file || file.deletedAt) {
+        throw new Error("File does not exist or has been deleted.");
+    }
 
-    if (newPid > 0) {
+    // 2. Permission validation on source folder
+    const canMoveSource = await canAccessFolder(file.folderId, userId, FolderAction.MOVE);
+    if (!canMoveSource) {
+        throw new Error("Unauthorized: You do not have permission to move this file.");
+    }
+
+    // 3. Resolve and validate destination folder
+    if (newPid !== null) {
+        const destinationFolder = await folderRepo.findById(newPid);
+        if (!destinationFolder || destinationFolder.deletedAt) {
+            throw new Error("Destination folder does not exist or has been deleted.");
+        }
+
+        const canWriteDestination = await canAccessFolder(newPid, userId, FolderAction.CREATE);
+        if (!canWriteDestination) {
+            throw new Error("Unauthorized: You do not have permission to move items into the destination folder.");
+        }
+    }
+
+    // 4. Workspace Boundary Validation
+    const sourceBoundary = await getFolderWorkspaceBoundary(file.folderId, userId);
+    const destinationBoundary = await getFolderWorkspaceBoundary(newPid, userId);
+
+    if (!sourceBoundary || !destinationBoundary) {
+        throw new Error("Invalid workspace boundary.");
+    }
+
+    if (sourceBoundary.type !== destinationBoundary.type) {
+        throw new Error("Cross-workspace moves are forbidden: items cannot move between Private Drive and Projects.");
+    }
+
+    if (sourceBoundary.type === "PROJECT") {
+        if (sourceBoundary.rootId !== destinationBoundary.rootId) {
+            throw new Error("Cross-project moves are forbidden: items cannot move between different projects.");
+        }
+        if (newPid === null) {
+            newPid = sourceBoundary.rootId;
+        }
+    } else if (sourceBoundary.type === "PRIVATE_DRIVE") {
+        if (sourceBoundary.userId !== destinationBoundary.userId || sourceBoundary.userId !== userId) {
+            throw new Error("Cannot move items across different user accounts.");
+        }
+        if (newPid === null) {
+            const userRoot = await folderRepo.findRootFolder(userId);
+            newPid = userRoot ? userRoot.id : null;
+        }
+    }
+
+    // 5. Already in this folder
+    if (file.folderId === newPid) {
+        return file;
+    }
+
+    if (file.folderId) touchFolder(file.folderId);
+    if (newPid) touchFolder(newPid);
+
+    const movedFile = await fileRepo.move(fileId, newPid);
+
+    if (newPid) {
         await activityService.log({
             folderId: newPid,
-            userId: uid,
+            userId,
             action: ActivityType.MOVE_FILE,
             target: TargetType.FILE,
-            targetId: id,
-            message: `Moved file into this folder`
+            targetId: fileId,
+            message: `Moved file "${file.orgName || file.name}" into this folder`
         });
     }
 

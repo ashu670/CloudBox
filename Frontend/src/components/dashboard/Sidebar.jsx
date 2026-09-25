@@ -111,10 +111,12 @@ export default function Sidebar({
                             </svg>
                         </button>
 
-                        {projectsOpen && (
+                        {projectsOpen && (() => {
+                            const topLevelProjects = (sharedFolders || []).filter(f => !f.pid || f.pid === null || f.pid === rootFolderId || f.pid === 0 || f.pid === -1);
+                            return (
                             <div className="cb-nav-sub-list">
-                                {sharedFolders.length > 0 ? (
-                                    sharedFolders.map((folder) => {
+                                {topLevelProjects.length > 0 ? (
+                                    topLevelProjects.map((folder) => {
                                         const isActive = activeNav === 'projects' && activeProjectId === folder.id;
                                         const role = folder.userRole;
                                         return (
@@ -158,7 +160,8 @@ export default function Sidebar({
                                     <span>Add Project</span>
                                 </button>
                             </div>
-                        )}
+                            );
+                        })()}
                     </div>
 
                     {/* Shared with me */}

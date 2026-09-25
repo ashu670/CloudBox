@@ -5,6 +5,10 @@ import { lockBodyScroll, unlockBodyScroll } from "../utils/scrollLock";
 
 export default function DirectoryMoveModal({ movingItem, onClose, onMoveSuccess, showToast }) {
     const rootFolderId = Number(localStorage.getItem("rootFolderId")) || -1;
+    const workspaceRootId = movingItem?.workspace?.rootId !== undefined && movingItem?.workspace?.rootId !== null
+        ? movingItem.workspace.rootId
+        : (rootFolderId !== -1 ? rootFolderId : -1);
+    const workspaceRootName = movingItem?.workspace?.rootName || (movingItem?.workspace?.type === 'PROJECT' ? "Project Root" : "Root Drive");
 
     useEffect(() => {
         if (!movingItem) return;
@@ -14,12 +18,9 @@ export default function DirectoryMoveModal({ movingItem, onClose, onMoveSuccess,
         };
     }, [movingItem]);
 
-    const [pickerFolderId, setPickerFolderId] = useState(() => {
-        const saved = localStorage.getItem("rootFolderId");
-        return saved ? Number(saved) : -1;
-    });
+    const [pickerFolderId, setPickerFolderId] = useState(() => workspaceRootId);
     const [history, setHistory] = useState([]);
-    const [currentFolderName, setCurrentFolderName] = useState("Root Drive");
+    const [currentFolderName, setCurrentFolderName] = useState(workspaceRootName);
     const [subfolders, setSubfolders] = useState([]);
     const [loading, setLoading] = useState(false);
 
@@ -36,16 +37,20 @@ export default function DirectoryMoveModal({ movingItem, onClose, onMoveSuccess,
     const fetchSubfolders = useCallback(async (folderId) => {
         setLoading(true);
         try {
-            const fetchId = (folderId === -1 && rootFolderId !== -1) ? rootFolderId : folderId;
+            const fetchId = (folderId === -1 && workspaceRootId !== -1) ? workspaceRootId : folderId;
             const res = await axios.get(`api/folder/fetch/${fetchId}`, {
                 headers: { Authorization: `Bearer ${token()}` }
             });
             const children = res.data.children?.children || [];
             setSubfolders(children);
             if (res.data.children && res.data.children.name) {
-                setCurrentFolderName(res.data.children.name === "root" ? "Root Drive" : res.data.children.name);
-            } else if (folderId === -1 || folderId === rootFolderId) {
-                setCurrentFolderName("Root Drive");
+                if (folderId === workspaceRootId || folderId === -1) {
+                    setCurrentFolderName(workspaceRootName);
+                } else {
+                    setCurrentFolderName(res.data.children.name === "root" ? "Root Drive" : res.data.children.name);
+                }
+            } else if (folderId === -1 || folderId === workspaceRootId) {
+                setCurrentFolderName(workspaceRootName);
             }
         } catch (err) {
             console.error("Error fetching picker subfolders:", err);
@@ -53,7 +58,7 @@ export default function DirectoryMoveModal({ movingItem, onClose, onMoveSuccess,
         } finally {
             setLoading(false);
         }
-    }, [showToast, rootFolderId]);
+    }, [showToast, workspaceRootId, workspaceRootName]);
 
     useEffect(() => {
         fetchSubfolders(pickerFolderId);
@@ -74,14 +79,14 @@ export default function DirectoryMoveModal({ movingItem, onClose, onMoveSuccess,
         const newHist = [...history];
         newHist.pop();
         setHistory(newHist);
-        const prevId = newHist.length === 0 ? (rootFolderId !== -1 ? rootFolderId : -1) : newHist[newHist.length - 1].id;
+        const prevId = newHist.length === 0 ? (workspaceRootId !== -1 ? workspaceRootId : -1) : newHist[newHist.length - 1].id;
         setPickerFolderId(prevId);
     };
 
     const handleBreadcrumbClick = (index) => {
         if (index === -1) {
             setHistory([]);
-            setPickerFolderId(rootFolderId !== -1 ? rootFolderId : -1);
+            setPickerFolderId(workspaceRootId !== -1 ? workspaceRootId : -1);
             return;
         }
         const newHist = history.slice(0, index + 1);
@@ -121,7 +126,7 @@ export default function DirectoryMoveModal({ movingItem, onClose, onMoveSuccess,
 
     const handleActionClick = async () => {
         if (!movingItem) return;
-        const targetPid = (pickerFolderId === -1 || pickerFolderId === 0) ? (rootFolderId !== -1 ? rootFolderId : 0) : pickerFolderId;
+        const targetPid = (pickerFolderId === -1 || pickerFolderId === 0) ? (workspaceRootId !== -1 ? workspaceRootId : 0) : pickerFolderId;
 
         if (isUploadMode) {
             if (targetPid === 0) {
@@ -186,10 +191,10 @@ export default function DirectoryMoveModal({ movingItem, onClose, onMoveSuccess,
                 <div className="move-modal-toolbar">
                     <div className="move-breadcrumbs">
                         <span
-                            className={`move-crumb ${pickerFolderId === -1 ? 'active' : ''}`}
+                            className={`move-crumb ${(pickerFolderId === -1 || pickerFolderId === workspaceRootId) && history.length === 0 ? 'active' : ''}`}
                             onClick={() => handleBreadcrumbClick(-1)}
                         >
-                            Root Drive
+                            {workspaceRootName}
                         </span>
                         {history.map((h, idx) => (
                             <React.Fragment key={h.id}>

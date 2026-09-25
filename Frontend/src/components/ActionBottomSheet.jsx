@@ -34,7 +34,17 @@ export default function ActionBottomSheet({ activeItem, onClose }) {
 
     if (!activeItem) return null;
 
-    const { name, isFolder, actions } = activeItem;
+    const { name, isFolder, isProject, actions, userRole } = activeItem;
+
+    const getSubtitle = () => {
+        if (isProject) {
+            return userRole ? `${userRole} • Project Workspace Options` : "Project Options";
+        }
+        if (isFolder) {
+            return userRole ? `${userRole} • Folder Options` : "Folder Options";
+        }
+        return userRole ? `${userRole} • File Options` : "File Options";
+    };
 
     return (
         <div className="cb-action-modal-backdrop" onClick={onClose}>
@@ -42,9 +52,13 @@ export default function ActionBottomSheet({ activeItem, onClose }) {
                 {/* Header */}
                 <div className="cb-action-modal-header">
                     <div className="cb-action-item-info">
-                        <div className={`cb-action-type-badge ${isFolder ? 'folder-badge' : 'file-badge'}`}>
-                            {isFolder ? (
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="#8b5cf6">
+                        <div className={`cb-action-type-badge ${isProject ? 'cb-action-project-badge' : isFolder ? 'folder-badge' : 'file-badge'}`}>
+                            {isProject ? (
+                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                                    <path d="M3 7v10a3 3 0 003 3h12a3 3 0 003-3V9a3 3 0 00-3-3h-6l-2-2H6a3 3 0 00-3 3z" fill="#7c3aed" />
+                                </svg>
+                            ) : isFolder ? (
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="#f59e0b">
                                     <path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" />
                                 </svg>
                             ) : (
@@ -56,7 +70,7 @@ export default function ActionBottomSheet({ activeItem, onClose }) {
                         </div>
                         <div className="cb-action-header-texts">
                             <h3 className="cb-action-item-title" title={name}>{name}</h3>
-                            <span className="cb-action-item-sub">{isFolder ? "Folder Options" : "File Options"}</span>
+                            <span className="cb-action-item-sub">{getSubtitle()}</span>
                         </div>
                     </div>
                     <button type="button" className="preview-close-btn" onClick={onClose} aria-label="Close menu">✕</button>

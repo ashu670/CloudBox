@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useFolderManager } from "../hooks/useFolderManager";
 import Navbar from "../components/navbar";
 import Sidebar from "../components/dashboard/Sidebar";
@@ -65,7 +65,7 @@ export default function Dashboard() {
         setViewModeState(mode);
         try {
             localStorage.setItem("cloudbox_view_mode", mode);
-        } catch {}
+        } catch { }
     };
     const [activeNav, setActiveNav] = useState("dashboard");
     const [selectedRows, setSelectedRows] = useState(new Set());
@@ -102,78 +102,258 @@ export default function Dashboard() {
         }
     }, [activeNav, rootFolderId, currentFolderId, handleFolderSelect]);
 
-    const openActionSheet = (item, itemType) => {
-        const isFolder = itemType === 'folder';
-        const name = isFolder ? item.name : item.orgName;
-        const actions = isFolder ? [
-            {
+    const openActionSheet = (item, itemType, roleOverride) => {
+        if (!item) return;
+
+        // An item is a Project (Workspace Root) ONLY if:
+        // 1. Explicitly passed itemType === 'project'
+        // 2. OR it is the currently active project root (activeProject && item.id === activeProject.id)
+        // 3. OR it is a top-level shared folder (item.isShared && (!item.pid || item.pid === null) && itemType !== 'folder')
+        // Note: Subfolders inside a project have isShared === true in DB, but item.pid != null and itemType === 'folder'.
+        // They are subfolders, NOT project roots!
+        const isProject = itemType === 'project' ||
+            (activeProject && item.id === activeProject.id) ||
+            (!item.pid && (Boolean(item.inviteCode) || (item.isShared === true && itemType !== 'folder')));
+
+        const isFolder = itemType === 'folder' || itemType === 'project' || (!itemType && !item.mimeType && !item.orgName);
+        const name = isFolder ? (item.name || "Untitled Folder") : (item.orgName || item.name || "Untitled File");
+
+        // Determine user role for this item
+        let userRole = roleOverride || item.userRole;
+        if (!userRole) {
+            if (item.uid === userProfile?.id || item.ownerId === userProfile?.id) {
+                userRole = "OWNER";
+            } else if (!isProject && !activeProject && !item.isShared) {
+                userRole = "OWNER"; // User owns their personal drive files & folders
+            } else if (activeProject?.userRole) {
+                userRole = activeProject.userRole;
+            } else {
+                userRole = "VIEWER";
+            }
+        }
+
+        const isOwner = userRole === "OWNER";
+        const isAdmin = userRole === "ADMIN";
+        const isEditor = userRole === "EDITOR";
+        const isOwnerOrAdmin = isOwner || isAdmin;
+        const canWrite = isOwner || isAdmin || isEditor;
+
+        const actions = [];
+
+        if (isProject) {
+            // ─── PROJECT WORKSPACE ACTIONS ───
+            // 1. Projects CANNOT be moved to any directory (Owner, Admin, Editor, Viewer cannot move).
+            // 2. ONLY Owner can delete the project. Admin CANNOT delete the project.
+            // 3. Editor & Viewer do NOT get administrative options (Rename, Delete, Move, Admin Panel, Owner Panel).
+
+            // Open Project (if not already inside this project)
+            if (!activeProject || activeProject.id !== item.id) {
+                actions.push({
+                    type: 'open',
+                    label: "Open Project",
+                    onClick: () => handleProjectClick(item)
+                });
+            }
+
+            // Rename Project (Owner and Admin only)
+            if (isOwnerOrAdmin) {
+                actions.push({
+                    type: 'rename',
+                    label: "Rename Project",
+                    onClick: () => {
+                        setEditingItem({ type: 'folder', id: item.id });
+                        setRenameValue(item.name);
+                    }
+                });
+            }
+
+            // Share / Invite Code (Owner, Admin, or Editor)
+            if (item.inviteCode || item.code || isOwnerOrAdmin || isEditor) {
+                actions.push({
+                    type: 'share',
+                    label: "Share / Invite Code",
+                    onClick: () => {
+                        const code = item.inviteCode || item.code;
+                        if (code) {
+                            navigator.clipboard.writeText(code);
+                            showToast?.(`Invite code copied: ${code}`, "success");
+                        } else {
+                            shareFile(item.id);
+                        }
+                    }
+                });
+            }
+
+            // Owner Panel (Owner only)
+            if (isOwner) {
+                actions.push({
+                    type: 'owner_panel',
+                    label: "Project Settings & Members",
+                    onClick: () => {
+                        if (activeProject && activeProject.id === item.id) {
+                            const evt = new CustomEvent('cb_open_project_tab', { detail: 'owner-panel' });
+                            window.dispatchEvent(evt);
+                        } else {
+                            handleProjectClick(item);
+                        }
+                    }
+                });
+            }
+
+            // Admin Panel (Admin only)
+            if (isAdmin) {
+                actions.push({
+                    type: 'admin_panel',
+                    label: "Admin Management",
+                    onClick: () => {
+                        if (activeProject && activeProject.id === item.id) {
+                            const evt = new CustomEvent('cb_open_project_tab', { detail: 'admin-panel' });
+                            window.dispatchEvent(evt);
+                        } else {
+                            handleProjectClick(item);
+                        }
+                    }
+                });
+            }
+
+            // Delete Project (ONLY OWNER has delete! Admin, Editor, Viewer do NOT have delete)
+            if (isOwner) {
+                actions.push({
+                    type: 'delete',
+                    label: "Delete Project",
+                    danger: true,
+                    onClick: () => promptDelete(item, 'folder')
+                });
+            }
+        } else if (isFolder) {
+            // ─── SUBFOLDER (INSIDE PROJECT OR PERSONAL MY DRIVE) ───
+            actions.push({
                 type: 'open',
                 label: "Open Folder",
-                onClick: () => handleFolderSelect(item)
-            },
-            {
-                type: 'move',
-                label: "Move Folder",
                 onClick: () => {
-                    setMovingItem({ type: 'folder', id: item.id, name: item.name });
-                    setShowMoveModal(true);
+                    if (activeNav === 'projects' && activeProject) {
+                        const evt = new CustomEvent('cb_open_subfolder', { detail: item });
+                        window.dispatchEvent(evt);
+                    } else {
+                        handleFolderSelect(item);
+                    }
                 }
-            },
-            {
-                type: 'rename',
-                label: "Rename",
-                onClick: () => {
-                    setEditingItem({ type: 'folder', id: item.id });
-                    setRenameValue(item.name);
-                }
-            },
-            {
-                type: 'delete',
-                label: "Delete",
-                danger: true,
-                onClick: () => promptDelete(item, 'folder')
+            });
+
+            // Move Folder (Only if canWrite AND item is NOT the project root workspace itself)
+            const isTopLevelProjectRoot = (activeNav === 'projects' && activeProject && item.id === activeProject.id) || (item.isShared && (!item.pid || item.pid === null));
+            if (canWrite && !isTopLevelProjectRoot) {
+                actions.push({
+                    type: 'move',
+                    label: "Move Folder",
+                    onClick: () => {
+                        const isInsideProject = Boolean(activeProject) || item.isShared;
+                        const workspace = isInsideProject ? {
+                            type: 'PROJECT',
+                            rootId: activeProject ? activeProject.id : item.id,
+                            rootName: activeProject ? activeProject.name : item.name
+                        } : {
+                            type: 'PRIVATE_DRIVE',
+                            rootId: rootFolderId,
+                            rootName: 'My Drive'
+                        };
+                        setMovingItem({ type: 'folder', id: item.id, name: item.name, workspace });
+                        setShowMoveModal(true);
+                    }
+                });
             }
-        ] : [
-            {
+
+            // Rename Folder (Only if canWrite)
+            if (canWrite) {
+                actions.push({
+                    type: 'rename',
+                    label: "Rename Folder",
+                    onClick: () => {
+                        setEditingItem({ type: 'folder', id: item.id });
+                        setRenameValue(item.name);
+                    }
+                });
+            }
+
+            // Delete Folder (Only if canWrite)
+            if (canWrite) {
+                actions.push({
+                    type: 'delete',
+                    label: "Delete Folder",
+                    danger: true,
+                    onClick: () => promptDelete(item, 'folder')
+                });
+            }
+        } else {
+            // ─── FILE (INSIDE PROJECT OR PERSONAL MY DRIVE) ───
+            actions.push({
                 type: 'preview',
                 label: "Preview / Open",
                 onClick: (e) => previewFile(e, item)
-            },
-            {
+            });
+
+            actions.push({
                 type: 'download',
                 label: "Download",
                 onClick: (e) => downloadFile(e, item.id, item.orgName)
-            },
-            {
-                type: 'share',
-                label: "Share",
-                onClick: () => shareFile(item.id)
-            },
-            {
-                type: 'move',
-                label: "Move File",
-                onClick: () => {
-                    setMovingItem({ type: 'file', id: item.id, name: item.orgName });
-                    setShowMoveModal(true);
-                }
-            },
-            {
-                type: 'rename',
-                label: "Rename",
-                onClick: () => {
-                    setEditingItem({ type: 'file', id: item.id });
-                    setRenameValue(item.orgName);
-                }
-            },
-            {
-                type: 'delete',
-                label: "Delete",
-                danger: true,
-                onClick: () => promptDelete(item, 'file')
-            }
-        ];
+            });
 
-        setActiveBottomSheet({ name, isFolder, item, actions });
+            if (!activeProject || item.uid === userProfile?.id || isOwner) {
+                actions.push({
+                    type: 'share',
+                    label: "Share",
+                    onClick: () => shareFile(item.id)
+                });
+            }
+
+            // Move File (Only if canWrite)
+            if (canWrite) {
+                actions.push({
+                    type: 'move',
+                    label: "Move File",
+                    onClick: () => {
+                        const isInsideProject = Boolean(activeProject) || item.isShared;
+                        const workspace = isInsideProject ? {
+                            type: 'PROJECT',
+                            rootId: activeProject ? activeProject.id : (item.projectId || item.folderId),
+                            rootName: activeProject ? activeProject.name : 'Project'
+                        } : {
+                            type: 'PRIVATE_DRIVE',
+                            rootId: rootFolderId,
+                            rootName: 'My Drive'
+                        };
+                        setMovingItem({ type: 'file', id: item.id, name: item.orgName, workspace });
+                        setShowMoveModal(true);
+                    }
+                });
+            }
+
+            // Rename File (Only if canWrite)
+            if (canWrite) {
+                actions.push({
+                    type: 'rename',
+                    label: "Rename File",
+                    onClick: () => {
+                        setEditingItem({ type: 'file', id: item.id });
+                        setRenameValue(item.orgName);
+                    }
+                });
+            }
+
+            // Delete File (Only if canWrite)
+            if (canWrite) {
+                actions.push({
+                    type: 'delete',
+                    label: "Delete File",
+                    danger: true,
+                    onClick: () => promptDelete(item, 'file')
+                });
+            }
+        }
+
+        if (actions.length > 0) {
+            setActiveBottomSheet({ name, isFolder, isProject, item, actions, userRole });
+        }
     };
 
     const handleSharedFolderCreated = async () => {
@@ -189,6 +369,20 @@ export default function Dashboard() {
         });
         setActiveNav("projects");
     }, []);
+
+    const handleCloseProject = useCallback(() => {
+        setActiveProject(prev => {
+            const returnNav = prev?.userRole === 'OWNER' ? 'dashboard' : 'shared';
+            setActiveNav(returnNav);
+            return null;
+        });
+    }, []);
+
+    const handleProjectDeleted = useCallback(() => {
+        setActiveProject(null);
+        setActiveNav('shared');
+        refreshAfterSharedAction();
+    }, [refreshAfterSharedAction]);
 
     const handleSharedFolderJoined = async () => {
         await refreshAfterSharedAction();
@@ -404,11 +598,28 @@ export default function Dashboard() {
 
     const currentUserId = userProfile?.id;
 
-    // 1. Projects Dropdown: ONLY shared folders where current user is the OWNER
-    const displayOwnedProjects = Array.isArray(ownedProjects) ? ownedProjects : [];
+    // 1. Projects Dropdown: ONLY top-level shared folders where current user is the OWNER
+    const displayOwnedProjects = useMemo(() => {
+        if (!Array.isArray(ownedProjects)) return [];
+        return ownedProjects.filter(folder => {
+            // Filter out subfolders: subfolders have pid set to a parent project
+            if (folder.pid && folder.pid !== rootFolderId && folder.pid !== 0 && folder.pid !== -1) {
+                return false;
+            }
+            return true;
+        });
+    }, [ownedProjects, rootFolderId]);
 
-    // 2. Shared with me: ONLY shared folders where current user is NOT the owner (and is a member)
-    const displaySharedWithMe = Array.isArray(sharedWithMe) ? sharedWithMe : [];
+    // 2. Shared with me: ONLY top-level shared folders where current user is NOT the owner (and is a member)
+    const displaySharedWithMe = useMemo(() => {
+        if (!Array.isArray(sharedWithMe)) return [];
+        return sharedWithMe.filter(folder => {
+            if (folder.pid && folder.pid !== rootFolderId && folder.pid !== 0 && folder.pid !== -1) {
+                return false;
+            }
+            return true;
+        });
+    }, [sharedWithMe, rootFolderId]);
 
     return (
         <div className="app-container cb-dashboard-page">
@@ -491,11 +702,7 @@ export default function Dashboard() {
                         /* ─── SHARED FOLDER WORKSPACE VIEW ─── */
                         <ProjectView
                             project={activeProject}
-                            onClose={() => {
-                                const returnNav = activeProject?.userRole === 'OWNER' ? 'dashboard' : 'shared';
-                                setActiveProject(null);
-                                setActiveNav(returnNav);
-                            }}
+                            onClose={handleCloseProject}
                             showToast={showToast}
                             prefetchFolder={prefetchFolder}
                             previewFile={previewFile}
@@ -504,11 +711,17 @@ export default function Dashboard() {
                             handleFileUpload={handleFileUpload}
                             userRole={activeProject.userRole}
                             onRefresh={refreshAfterSharedAction}
-                            onProjectDeleted={() => {
-                                setActiveProject(null);
-                                setActiveNav('shared');
-                                refreshAfterSharedAction();
-                            }}
+                            onProjectDeleted={handleProjectDeleted}
+                            editingItem={editingItem}
+                            renameValue={renameValue}
+                            setRenameValue={setRenameValue}
+                            handleRenameSubmit={handleRenameSubmit}
+                            dropTargetId={dropTargetId}
+                            handleDragStartItem={handleDragStartItem}
+                            handleDragEndItem={handleDragEndItem}
+                            handleDragOverTarget={handleDragOverTarget}
+                            handleDragLeaveTarget={handleDragLeaveTarget}
+                            handleDropOnTarget={handleDropOnTarget}
                         />
                     ) : activeNav === 'shared' ? (
                         /* ─── SHARED WITH ME WORKSPACES LIST ─── */
