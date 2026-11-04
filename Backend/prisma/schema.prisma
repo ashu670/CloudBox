@@ -149,6 +149,7 @@ model File {
   size       Int
   folderId   Int
   uid        Int
+  hash       String      @unique
   createdAt  DateTime    @default(now())
   updatedAt  DateTime    @updatedAt
   deletedAt  DateTime?
