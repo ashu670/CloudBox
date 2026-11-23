@@ -11,7 +11,7 @@ const getErrorStatus = (error) => {
 
 export const uploadFile = async (req, res) => {
     try {
-        const { folderId, fileName, fileSize, mimeType } = req.body;
+        const { folderId, fileName, fileSize, mimeType, hash } = req.body;
         const uid = req.user.id;
 
         if (!fileName || !fileSize || !mimeType) {
@@ -32,8 +32,19 @@ export const uploadFile = async (req, res) => {
         const uploadedFile = await fileService.uploadFile(
             file,
             folderId,
-            uid
+            uid,
+            hash
         );
+
+        if (uploadedFile.message === "Already exists") {
+            return res.status(200).json({
+                success: true,
+                duplicate: true,
+                message: "File already exists",
+                data: uploadedFile.checkExistingHash
+            });
+        }
+
         return res.status(201).json({
             success: true,
             message: "Url generated successfully",
@@ -58,7 +69,7 @@ export const uploadFile = async (req, res) => {
 };
 
 export const uploadComplete = async (req, res) => {
-    const { stoName } = req.body;
+    const { stoName, hash, orgName, fileName, folderId } = req.body;
     const uid = req.user.id;
 
     if (!stoName) return res.status(400).json({
@@ -67,7 +78,7 @@ export const uploadComplete = async (req, res) => {
     });
 
     try {
-        const data = await fileService.uploadComplete(stoName, uid);
+        const data = await fileService.uploadComplete(stoName, uid, hash, orgName || fileName, folderId);
         return res.status(201).json({
             success: true,
             message: "File saved successfully",
@@ -79,6 +90,35 @@ export const uploadComplete = async (req, res) => {
             success: false,
             message: err.message,
             error: err.message
+        });
+    }
+};
+
+export const createDuplicate = async (req, res) => {
+    try {
+        const { storageObjectId, hash, orgName, folderId } = req.body;
+        const uid = req.user.id;
+
+        if (!storageObjectId || !folderId) {
+            return res.status(400).json({
+                success: false,
+                message: "storageObjectId and folderId are required."
+            });
+        }
+
+        const file = await fileService.createDuplicateFile(storageObjectId, hash, orgName, folderId, uid);
+
+        return res.status(201).json({
+            success: true,
+            message: "Duplicate file copy created successfully.",
+            data: file
+        });
+    } catch (error) {
+        const status = getErrorStatus(error);
+        return res.status(status).json({
+            success: false,
+            message: error.message,
+            error: error.message
         });
     }
 };

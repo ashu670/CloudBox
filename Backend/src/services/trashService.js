@@ -4,6 +4,7 @@ import { findAnyById } from '../repositories/folderRepo.js';
 import * as fileRepo from '../repositories/fileRepo.js';
 import * as folderRepo from '../repositories/folderRepo.js';
 import * as userRepo from '../repositories/userRepo.js';
+import * as storageRepo from '../repositories/storageRepo.js';
 import storageService from '../storage/storageService.js';
 
 const findLocation = async (pid, location = []) => {
@@ -71,26 +72,69 @@ async function cleanupExpiredFile(trashLog) {
         return 0;
     }
 
-    // 1. Delete physical object from storage
-    if (file.stoName) {
-        try {
-            await storageService.delete(file.stoName);
-        } catch (err) {
-            console.warn(`TrashLog ${trashLog.id}: Storage deletion warning for ${file.stoName}: ${err.message}`);
-        }
+    const storageObjectId = file.storageObjectId;
+    const storageObject = file.storageObject || (storageObjectId ? await storageRepo.findById(storageObjectId) : null);
+
+    // 1. Transactionally delete TrashLog and File record
+    await prisma.$transaction(async (tx) => {
+        await tx.trashLogs.deleteMany({
+            where: {
+                OR: [
+                    { id: trashLog.id },
+                    { fileId: file.id }
+                ]
+            }
+        });
+
+        await tx.file.delete({
+            where: { id: file.id }
+        });
+    });
+
+    console.log(`Permanently deleted logical file: ${file.id} ("${file.orgName}")`);
+
+    if (!storageObject || !storageObjectId) {
+        return 0;
     }
 
-    // 2. Permanently delete File DB record
-    await fileRepo.delById(file.id);
+    // 2. Concurrency-safe check: Are any other File records (active or trashed) referencing this StorageObject?
+    const remainingRefs = await prisma.file.count({
+        where: { storageObjectId }
+    });
 
-    // 3. Subtract file.size from user's usedStorage
-    await userRepo.decrementStorageSize(trashLog.uid, file.size);
+    if (remainingRefs > 0) {
+        console.log(`StorageObject ${storageObjectId} still referenced by ${remainingRefs} file(s). Retaining physical object.`);
+        return 0;
+    }
 
-    // 4. Delete TrashLog entry
-    await repo.deleteById(trashLog.id);
+    // 3. Last reference removed. Attempt physical deletion in Firebase.
+    // Distinguish missing objects from transient network or permission failures.
+    try {
+        await storageService.delete(storageObject.stoName);
+    } catch (fbErr) {
+        console.error(`Firebase deletion failed for ${storageObject.stoName}: ${fbErr.message}. Preserving DB metadata.`);
+        return 0;
+    }
 
-    console.log(`Permanently deleted file: ${file.id} ("${file.orgName}")`);
-    return file.size || 0;
+    // 4. Physical deletion confirmed. Atomically delete StorageObject and decrement user storage.
+    let reclaimed = 0;
+    try {
+        const deleteCount = await prisma.$executeRaw`
+            DELETE FROM "StorageObject"
+            WHERE id = ${storageObjectId}
+            AND NOT EXISTS (SELECT 1 FROM "File" WHERE "storageObjectId" = ${storageObjectId})
+        `;
+
+        if (deleteCount > 0) {
+            await userRepo.decrementStorageSize(storageObject.ownerId, storageObject.size);
+            reclaimed = storageObject.size || 0;
+            console.log(`Permanently deleted StorageObject ${storageObjectId} and reclaimed ${reclaimed} bytes.`);
+        }
+    } catch (dbErr) {
+        console.error(`Database error removing StorageObject ${storageObjectId}:`, dbErr.message);
+    }
+
+    return reclaimed;
 }
 
 async function cleanupExpiredFolder(trashLog) {
@@ -107,37 +151,52 @@ async function cleanupExpiredFolder(trashLog) {
         return 0;
     }
 
+    // 1. Recursive CTE: get all subfolders in the subtree
     const subfolderRows = await folderRepo.subfolders(folderId);
     const folderIds = subfolderRows.map(f => f.id);
     if (!folderIds.includes(folderId)) {
         folderIds.push(folderId);
     }
 
+    // 2. Find all files in the subtree with their storageObject
     const files = await prisma.file.findMany({
         where: {
             folderId: { in: folderIds }
+        },
+        include: {
+            storageObject: true
         }
     });
 
-    let totalStorageRemoved = 0;
+    const fileIds = files.map(f => f.id);
 
-    for (const file of files) {
-        if (file.stoName) {
-            try {
-                await storageService.delete(file.stoName);
-            } catch (err) {
-                console.warn(`TrashLog ${trashLog.id}: Storage deletion warning for file ${file.id}: ${err.message}`);
-            }
+    // 3. Map candidate storage objects (unique by storageObjectId)
+    const candidateStorageObjects = new Map();
+    for (const f of files) {
+        if (f.storageObjectId && f.storageObject) {
+            candidateStorageObjects.set(f.storageObjectId, f.storageObject);
         }
-        totalStorageRemoved += file.size || 0;
     }
 
+    // 4. Transactionally delete all TrashLogs, Files, and Folders in the subtree
     await prisma.$transaction(async (tx) => {
-        await tx.file.deleteMany({
+        await tx.trashLogs.deleteMany({
             where: {
-                folderId: { in: folderIds }
+                OR: [
+                    { id: trashLog.id },
+                    { folderId: { in: folderIds } },
+                    { fileId: { in: fileIds } }
+                ]
             }
         });
+
+        if (fileIds.length > 0) {
+            await tx.file.deleteMany({
+                where: {
+                    id: { in: fileIds }
+                }
+            });
+        }
 
         await tx.folder.deleteMany({
             where: {
@@ -146,13 +205,48 @@ async function cleanupExpiredFolder(trashLog) {
         });
     });
 
-    if (totalStorageRemoved > 0) {
-        await userRepo.decrementStorageSize(trashLog.uid, totalStorageRemoved);
+    console.log(`Permanently deleted folder subtree for folder: ${folder.id} ("${folder.name}")`);
+
+    // 5. Evaluate each candidate StorageObject
+    let totalStorageRemoved = 0;
+
+    for (const [storageObjectId, storageObject] of candidateStorageObjects.entries()) {
+        try {
+            // Check if any other File records across the DB (active or trashed) still reference this StorageObject
+            const remainingRefs = await prisma.file.count({
+                where: { storageObjectId }
+            });
+
+            if (remainingRefs > 0) {
+                console.log(`StorageObject ${storageObjectId} still referenced by ${remainingRefs} file(s) outside subtree. Retaining.`);
+                continue;
+            }
+
+            // Attempt Firebase physical deletion
+            try {
+                await storageService.delete(storageObject.stoName);
+            } catch (fbErr) {
+                console.error(`Firebase deletion failed for ${storageObject.stoName}: ${fbErr.message}. Preserving DB metadata.`);
+                continue;
+            }
+
+            // Atomic conditional deletion of StorageObject
+            const deleteCount = await prisma.$executeRaw`
+                DELETE FROM "StorageObject"
+                WHERE id = ${storageObjectId}
+                AND NOT EXISTS (SELECT 1 FROM "File" WHERE "storageObjectId" = ${storageObjectId})
+            `;
+
+            if (deleteCount > 0) {
+                await userRepo.decrementStorageSize(storageObject.ownerId, storageObject.size);
+                totalStorageRemoved += storageObject.size || 0;
+                console.log(`Permanently deleted StorageObject ${storageObjectId} and reclaimed ${storageObject.size} bytes.`);
+            }
+        } catch (err) {
+            console.error(`Error during physical cleanup of StorageObject ${storageObjectId}:`, err.message);
+        }
     }
 
-    await repo.deleteById(trashLog.id);
-
-    console.log(`Permanently deleted folder: ${folder.id} ("${folder.name}")`);
     return totalStorageRemoved;
 }
 
@@ -203,8 +297,8 @@ export const getUserTrash = async (uid) => {
 
         if (log.type === "FILE" && log.file) {
             name = log.file.orgName;
-            size = log.file.size;
-            mimeType = log.file.mimeType;
+            size = log.file.storageObject?.size || 0;
+            mimeType = log.file.storageObject?.mimeType || null;
         } else if (log.type === "FOLDER" && log.folder) {
             name = log.folder.name;
         }

@@ -13,6 +13,7 @@ router.get('/preview/:id', fileCon.preview);
 
 router.post("/upload", fileCon.uploadFile);
 router.post("/upload/complete", fileCon.uploadComplete);
+router.post("/duplicate", fileCon.createDuplicate);
 router.post("/share/:id", fileCon.share);
 
 router.delete("/share/:id", fileCon.unshare);

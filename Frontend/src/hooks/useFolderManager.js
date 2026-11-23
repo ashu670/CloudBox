@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "../api/axios";
+import { calculateFileHash } from "../utils/fileHash";
+import { normalizeFileList } from "../utils/fileNormalization";
 
 const CACHE_STORAGE_KEY = "cloudbox_folder_content_cache";
 
@@ -36,6 +38,7 @@ export function useFolderManager() {
         folders: [],
         files: []
     });
+    const [duplicate, setDuplicate] = useState(null);
     const [searchLoading, setSearchLoading] = useState(false);
     const [searchError, setSearchError] = useState(null);
     const [rootFolderId, setRootFolderId] = useState(() => {
@@ -264,7 +267,7 @@ export function useFolderManager() {
             }
 
             const fetchedChildren = data.children?.children || [];
-            const fetchedFiles = data.children?.files || [];
+            const fetchedFiles = normalizeFileList(data.children?.files || []);
             const fetchedInfo = data.children || null;
 
             // Save to persistent cache
@@ -337,7 +340,7 @@ export function useFolderManager() {
                 headers: { Authorization: `Bearer ${token}` }
             });
             const fetchedChildren = data.children?.children || [];
-            const fetchedFiles = data.children?.files || [];
+            const fetchedFiles = normalizeFileList(data.children?.files || []);
             const fetchedInfo = data.children || null;
 
             addToCache(fetchedChildren);
@@ -884,25 +887,113 @@ export function useFolderManager() {
         });
     };
 
-    const executeUploadProcess = async (uploadItem) => {
-        const { id: uploadId, file, targetFolderId: destId } = uploadItem;
+    const closeDuplicateDialog = () => {
+        if (!duplicate) return;
+
+        setUploads(prev => prev.filter(
+            u => u.id !== duplicate.uploadId
+        ));
+
+        setDuplicate(null);
+    };
+
+    const createDuplicateCopy = async () => {
+        if (!duplicate) return;
+        const { uploadId, targetFolder: destId, newFile, existingFile } = duplicate;
         const token = localStorage.getItem("accessToken");
 
         try {
+            setUploads(prev => prev.map(u => u.id === uploadId ? {
+                ...u,
+                status: 'COMPLETING',
+                progress: 100,
+                uploadedBytes: newFile.size,
+                speed: 0,
+                remainingTimeSec: 0
+            } : u));
+
+            await axios.post("api/file/duplicate", {
+                storageObjectId: existingFile.id,
+                hash: existingFile.hash,
+                orgName: newFile.name,
+                folderId: destId
+            }, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+
+            setUploads(prev => prev.map(u => u.id === uploadId ? {
+                ...u,
+                status: 'SUCCESS',
+                progress: 100,
+                uploadedBytes: newFile.size,
+                speed: 0,
+                remainingTimeSec: 0
+            } : u));
+
+            showToast(`File "${newFile.name}" added instantly via deduplication`, "success");
+
+            invalidateCache(destId);
+            if (destId !== rootFolderId) invalidateCache(rootFolderId);
+
+            if (activeFolderIdRef.current === destId) {
+                await fetchFolders(destId, false);
+            }
+
+            fetchUserProfile();
+            fetchDashboardStats();
+            window.dispatchEvent(new CustomEvent('cb_project_refresh', { detail: { folderId: destId } }));
+        } catch (err) {
+            console.error("Duplicate copy error:", err);
+            const errorMsg = err.response?.data?.error || err.response?.data?.message || err.message || "Failed to create duplicate copy";
+            setUploads(prev => prev.map(u => u.id === uploadId ? {
+                ...u,
+                status: 'ERROR',
+                error: errorMsg
+            } : u));
+            showToast(errorMsg, "error");
+        } finally {
+            setDuplicate(null);
+        }
+    };
+
+    const executeUploadProcess = async (uploadItem) => {
+        const { id: uploadId, file, targetFolderId: destId } = uploadItem;
+        const token = localStorage.getItem("accessToken");
+        
+        try {
             // Stage 1: PREPARING (Request signed upload URL)
             setUploads(prev => prev.map(u => u.id === uploadId ? { ...u, status: 'PREPARING', error: null } : u));
+            const hash = await calculateFileHash(file);
 
             const uploadData = {
                 'fileName': file.name,
                 'fileSize': file.size,
                 'mimeType': file.type || "application/octet-stream",
-                'folderId': destId
+                'folderId': destId,
+                'hash' : hash
             };
 
             const response = await axios.post("api/file/upload", uploadData, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
+            if (response.data.duplicate === true) {
+                setUploads(prev => prev.map(u => u.id === uploadId ? {
+                    ...u,
+                    status : 'Duplicate',
+                    error : null
+                } : u));
+
+                setDuplicate({
+                    uploadId,
+                    targetFolder : destId,
+                    newFile : file,
+                    existingFile : response.data.data
+                })
+                return;
+            }
+
+            console.log("NO DUPLICATE — CONTINUING TO FIREBASE");
             const { signedUrl, stoName } = response.data.data;
 
             // Stage 2: UPLOADING (Direct Firebase PUT with real-time throughput calculation)
@@ -937,7 +1028,12 @@ export function useFolderManager() {
                 remainingTimeSec: 0
             } : u));
 
-            await axios.post("api/file/upload/complete", { stoName }, {
+            await axios.post("api/file/upload/complete", {
+                stoName,
+                hash,
+                orgName: file.name,
+                folderId: destId
+            }, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
@@ -1090,7 +1186,11 @@ export function useFolderManager() {
                     signal: controller.signal
                 });
                 if (!controller.signal.aborted) {
-                    setSearchResult(response.data?.result || { folders: [], files: [] });
+                    const rawResult = response.data?.result || { folders: [], files: [] };
+                    setSearchResult({
+                        folders: rawResult.folders || [],
+                        files: normalizeFileList(rawResult.files || [])
+                    });
                     setSearchError(null);
                     setSearchLoading(false);
                 }
@@ -1139,6 +1239,6 @@ export function useFolderManager() {
         deleteModalState, promptDelete, closeDeleteModal, executeDeleteConfirm,
         downloadFile, shareFile, openShareModal, closeShareModal, shareModalItem, handleRenameSubmit, executeMove, moveItemToFolder, handleFileUpload,
         uploads, retryUpload, dismissUpload, clearCompletedUploads,
-        handleFolderSelect, prefetchFolder, fetchProjects, invalidateCache, toggleFolderExpand, goBack, refreshAfterSharedAction, showToast
+        handleFolderSelect, prefetchFolder, fetchProjects, invalidateCache, toggleFolderExpand, goBack, refreshAfterSharedAction, showToast, duplicate, closeDuplicateDialog, createDuplicateCopy, setDuplicate
     };
 }

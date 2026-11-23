@@ -99,13 +99,22 @@ export const searchChild = async (uid, name) => {
                     mode: "insensitive"
                 },
                 deletedAt: null
+            },
+            include: {
+                storageObject: true
             }
         })
     ]);
 
+    const formattedFiles = files.map(f => ({
+        ...f,
+        size: f.storageObject?.size ?? 0,
+        mimeType: f.storageObject?.mimeType ?? null
+    }));
+
     return {
         folders,
-        files
+        files: formattedFiles
     };
 };
 
@@ -185,6 +194,9 @@ export const findChildren = async (uid, pid) => {
             files: {
                 where: {
                     deletedAt: null
+                },
+                include: {
+                    storageObject: true
                 }
             },
             children: {
@@ -201,6 +213,14 @@ export const findChildren = async (uid, pid) => {
 
     if (!folder) {
         return null;
+    }
+
+    if (folder.files) {
+        folder.files = folder.files.map(f => ({
+            ...f,
+            size: f.storageObject?.size ?? 0,
+            mimeType: f.storageObject?.mimeType ?? null
+        }));
     }
 
     const hasAccess = await checkAccess(
@@ -413,13 +433,24 @@ export const getFolderStats = async (folderId) => {
             folderId: { in: folderIds },
             deletedAt: null
         },
-        select: {
-            size: true
+        include: {
+            storageObject: {
+                select: {
+                    id: true,
+                    size: true
+                }
+            }
         }
     });
 
     const filesCount = files.length;
-    const storageUsed = files.reduce((acc, file) => acc + file.size, 0);
+    const uniqueStorage = new Map();
+    files.forEach(file => {
+        if (file.storageObject) {
+            uniqueStorage.set(file.storageObject.id, file.storageObject.size);
+        }
+    });
+    const storageUsed = Array.from(uniqueStorage.values()).reduce((acc, s) => acc + s, 0);
 
     return { filesCount, storageUsed };
 };

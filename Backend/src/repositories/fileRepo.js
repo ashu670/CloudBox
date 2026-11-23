@@ -9,7 +9,12 @@ export const create = async (data) => {
 export const findByStoName = async (stoName) => {
     return await prisma.file.findFirst({
         where: {
-            stoName
+            storageObject: {
+                stoName
+            }
+        },
+        include: {
+            storageObject: true
         }
     });
 };
@@ -19,6 +24,9 @@ export const findAllByFolderId = async (folderId) => {
         where: {
             folderId: Number(folderId),
             deletedAt: null
+        },
+        include: {
+            storageObject: true
         },
         orderBy: {
             createdAt: "desc"
@@ -32,6 +40,9 @@ export const findByUserId = async (id, uid) => {
             id,
             uid: uid,
             deletedAt: null
+        },
+        include: {
+            storageObject: true
         }
     });
 };
@@ -42,6 +53,9 @@ export const findById = async (id) => {
             id,
             deletedAt: null
         },
+        include: {
+            storageObject: true
+        }
     });
 };
 
@@ -56,13 +70,19 @@ export const findDeletedById = async (id) => {
             deletedAt: {
                 not: null
             }
+        },
+        include: {
+            storageObject: true
         }
     });
 };
 
 export const findAnyById = async (id) => {
     return await prisma.file.findUnique({
-        where: { id }
+        where: { id },
+        include: {
+            storageObject: true
+        }
     });
 };
 
@@ -83,8 +103,8 @@ export const softDelete = async (id, tx = prisma) => {
     });
 };
 
-export const update = async (id, stoName, orgName) => {
-    const data = { orgName: orgName, stoName: stoName };
+export const update = async (id, orgName) => {
+    const data = { orgName: orgName};
     return await prisma.file.update({
         where: { id },
         data: data
@@ -114,11 +134,13 @@ export const fetchByFolderIdAndUserId = async (folderId, userId) => {
         INNER JOIN FolderTree ft ON f.pid = ft.id
         WHERE f.uid = ${userId} AND f."deletedAt" IS NULL
         )
-        -- Files owned by the user across the entire tree
-        SELECT * FROM "File"
-        WHERE "folderId" IN (SELECT id FROM FolderTree)
-        AND uid = ${userId}
-        AND "deletedAt" IS NULL;
+        -- Files owned by the user across the entire tree with physical storage details
+        SELECT f.*, so."mimeType", so."size", so."stoName", so."hash"
+        FROM "File" f
+        JOIN "StorageObject" so ON f."storageObjectId" = so.id
+        WHERE f."folderId" IN (SELECT id FROM FolderTree)
+        AND f.uid = ${userId}
+        AND f."deletedAt" IS NULL;
     `;
 };
 
@@ -128,9 +150,13 @@ export const findAllByUserId = async (userId) => {
             uid: Number(userId),
             deletedAt: null
         },
-        select: {
-            mimeType: true,
-            size: true
+        include: {
+            storageObject: {
+                select: {
+                    mimeType: true,
+                    size: true
+                }
+            }
         }
     });
 };

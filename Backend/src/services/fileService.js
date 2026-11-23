@@ -9,6 +9,7 @@ import storageService from "../storage/storageService.js";
 import * as activityService from "./activityService.js";
 import { ActivityType, TargetType } from "../utils/activityValidation.js";
 import * as trashLogs from "./trashService.js";
+import * as storageRepo from "../repositories/storageRepo.js";
 
 async function generateUniqueStorageName(uid, folderId, originalName) {
     const ext = path.extname(originalName);
@@ -27,14 +28,14 @@ async function generateUniqueStorageName(uid, folderId, originalName) {
     return stoName;
 }
 
-export const uploadFile = async (file, folderId, uid) => {
+export const uploadFile = async (file, folderId, uid, hash) => {
     folderId = Number(folderId);
 
     if (isNaN(folderId)) {
         throw new Error("Invalid Folder ID.");
     }
 
-    if(folderId !== -1){
+    if (folderId !== -1) {
         const folderExists = await folderRepo.findById(folderId);
         if (!folderExists) {
             throw new Error("Folder not found.");
@@ -46,51 +47,84 @@ export const uploadFile = async (file, folderId, uid) => {
         }
     }
 
+    if (hash) {
+        const checkExistingHash = await storageRepo.findByHash(hash, uid);
+        if (checkExistingHash) {
+            return { checkExistingHash, message: "Already exists" };
+        }
+    }
+
     const filesize = BigInt(file.size);
-    const {usedSize, limit} = await getAvailableStorageDet(uid);
+    const { usedSize, limit } = await getAvailableStorageDet(uid);
     const avlSize = limit - usedSize;
 
-    if(filesize > avlSize){
+    if (filesize > avlSize) {
         throw new Error("Not enough storage available");
     }
 
     const stoName = await generateUniqueStorageName(uid, folderId, file.name);
     const signedUrl = await storageService.getSignedUploadUrl(stoName, file.mimeType);
 
-    return {signedUrl, stoName};
+    return { signedUrl, stoName };
 };
 
-export const uploadComplete = async (stoName, uid) => {
-    if (uid !== Number(stoName.split("_")[0])) throw new Error("Access denied");
+export const uploadComplete = async (stoName, uid, hash, providedOrgName = null, providedFolderId = null) => {
+    const parsedUid = Number(stoName.split("_")[0]);
+    if (Number(uid) !== parsedUid) throw new Error("Access denied");
+
     const response = await storageService.getMetadata(stoName);
     if (!response) throw new Error("unable to fetch metadata");
-    
+
+    const match = stoName.match(/^(\d+)_(\d+)_(?:(\d+)_)?(.+)$/);
+    const parsedFolderId = match ? Number(match[2]) : Number(stoName.split("_")[1]);
+    const fallbackOrgName = match && match[4] ? match[4] : stoName;
+
+    const folderId = providedFolderId !== null && providedFolderId !== undefined
+        ? Number(providedFolderId)
+        : parsedFolderId;
+    const orgName = providedOrgName ? String(providedOrgName).trim() : fallbackOrgName;
+
+    const existingStorageObject = await storageRepo.findByHash(hash, Number(uid));
+    if (existingStorageObject) {
+        throw new Error("Physical storage object already exists for this content hash. Use duplicate linking flow.");
+    }
+
     const data = {
-        orgName: stoName.split("_").slice(3).join("_"),
         stoName,
-        mimeType: response.contentType,
-        folderId: Number(stoName.split("_")[1]),
-        uid,
-        size: Number(response.size)
+        mimeType: response.contentType || "application/octet-stream",
+        ownerId: Number(uid),
+        size: Number(response.size),
+        hash
     };
 
     try {
-        const file = await fileRepo.create(data);
+        const storageObject = await storageRepo.create(data);
+        const file = await fileRepo.create({
+            orgName,
+            folderId: Number(folderId),
+            uid: Number(uid),
+            storageObjectId: storageObject.id
+        });
 
         await Promise.all([
             incrementStorageSize(uid, BigInt(data.size)),
-            touchFolder(data.folderId),
+            touchFolder(Number(folderId)),
             activityService.log({
-                folderId: data.folderId,
-                userId: uid,
+                folderId: Number(folderId),
+                userId: Number(uid),
                 action: ActivityType.UPLOAD_FILE,
                 target: TargetType.FILE,
                 targetId: file.id,
-                message: `Uploaded file "${data.orgName}"`
+                message: `Uploaded file "${orgName}"`
             })
         ]);
 
-        return file;
+        return {
+            ...file,
+            size: storageObject.size,
+            mimeType: storageObject.mimeType,
+            storageObject
+        };
     } catch (err) {
         await storageService.delete(stoName);
         console.error("Upload complete error:", err.message);
@@ -98,8 +132,80 @@ export const uploadComplete = async (stoName, uid) => {
     }
 };
 
-export const del = async (id, uid) => {
+export const createDuplicateFile = async (storageObjectId, hash, orgName, folderId, uid) => {
+    const numericFolderId = Number(folderId);
+    const numericUid = Number(uid);
+    const numericStorageObjectId = Number(storageObjectId);
 
+    if (isNaN(numericFolderId) || isNaN(numericUid) || isNaN(numericStorageObjectId)) {
+        throw new Error("Invalid parameters provided for duplicate file creation.");
+    }
+
+    if (numericFolderId === -1 || numericFolderId === 0) {
+        throw new Error("Files cannot be placed in the Root directory. Please select a valid folder.");
+    }
+
+    // 1. Verify destination folder existence and write access
+    const targetFolder = await folderRepo.findById(numericFolderId);
+    if (!targetFolder || targetFolder.deletedAt) {
+        throw new Error("Destination folder not found.");
+    }
+
+    const hasWritePermission = await canAccessFolder(numericFolderId, numericUid, FolderAction.WRITE);
+    if (!hasWritePermission) {
+        throw new Error("You don't have permission to add files to this folder.");
+    }
+
+    // 2. Verify StorageObject existence, ownership, and content hash
+    const storageObject = await storageRepo.findById(numericStorageObjectId);
+    if (!storageObject) {
+        throw new Error("Physical storage object not found.");
+    }
+
+    if (storageObject.ownerId !== numericUid) {
+        throw new Error("Access denied: You do not own this physical storage object.");
+    }
+
+    if (hash && storageObject.hash !== hash) {
+        throw new Error("Integrity check failed: Provided hash does not match storage object.");
+    }
+
+    // 3. Resolve clean logical file name
+    const cleanOrgName = (orgName && String(orgName).trim())
+        ? String(orgName).trim()
+        : (storageObject.stoName.split("_").slice(3).join("_") || "Untitled File");
+
+    // 4. Create logical File record referencing existing StorageObject
+    // NOTICE: We do NOT create another StorageObject, we do NOT touch Firebase, and we do NOT increment used storage.
+    const file = await fileRepo.create({
+        orgName: cleanOrgName,
+        folderId: numericFolderId,
+        uid: numericUid,
+        storageObjectId: storageObject.id
+    });
+
+    // 5. Touch destination folder and log activity
+    await Promise.all([
+        touchFolder(numericFolderId),
+        activityService.log({
+            folderId: numericFolderId,
+            userId: numericUid,
+            action: ActivityType.UPLOAD_FILE,
+            target: TargetType.FILE,
+            targetId: file.id,
+            message: `Created file reference "${cleanOrgName}" via deduplication`
+        })
+    ]);
+
+    return {
+        ...file,
+        size: storageObject.size,
+        mimeType: storageObject.mimeType,
+        storageObject
+    };
+};
+
+export const del = async (id, uid) => {
     const valid = await fileRepo.findByUserId(id, uid);
 
     if (!valid) {
@@ -135,8 +241,6 @@ export const del = async (id, uid) => {
     };
 };
 
-
-
 export const renameFile = async (id, uid, newOrgName) => {
     if (!newOrgName || !newOrgName.trim()) {
         throw new Error("New file name is required.");
@@ -149,7 +253,7 @@ export const renameFile = async (id, uid, newOrgName) => {
 
     const trimmedName = newOrgName.trim();
     touchFolder(currentFile.folderId);
-    const updatedFile = await fileRepo.update(id, currentFile.stoName, trimmedName);
+    const updatedFile = await fileRepo.update(id, trimmedName);
 
     await activityService.log({
         folderId: currentFile.folderId,
@@ -258,41 +362,46 @@ export const download = async (id, uid) => {
     const hasAccess = await canAccessFolder(file.folderId, uid, FolderAction.READ);
     if (!hasAccess) throw new Error("File doesnt exist or access denied");
 
+    const stoName = file.storageObject?.stoName;
+    if (!stoName) throw new Error("Physical storage object missing");
 
-    const downloadUrl = await storageService.getSignedUrl(file.stoName, 60, file.orgName);
+    const downloadUrl = await storageService.getSignedUrl(stoName, 60, file.orgName);
 
     return {
         downloadUrl,
         orgName: file.orgName,
-        mimeType: file.mimeType,
-        size: file.size
+        mimeType: file.storageObject?.mimeType || "application/octet-stream",
+        size: file.storageObject?.size || 0
     };
 };
 
 export const preview = async (id, uid) => {
     const file = await fileRepo.findById(id);
-    if(!file) throw new Error("File doesnt exists or access denied");
+    if (!file) throw new Error("File doesnt exists or access denied");
 
     const hasAccess = await canAccessFolder(file.folderId, uid, FolderAction.READ);
-    if(!hasAccess) throw new Error("you dont have permission to view the file");
+    if (!hasAccess) throw new Error("you dont have permission to view the file");
     
-    const previewUrl = await storageService.getSignedUrl(file.stoName, 15);
+    const stoName = file.storageObject?.stoName;
+    if (!stoName) throw new Error("Physical storage object missing");
+
+    const previewUrl = await storageService.getSignedUrl(stoName, 15);
 
     return {
-        url : previewUrl,
-        orgName : file.orgName,
-        mimeType : file.mimeType,
-        size : file.size
+        url: previewUrl,
+        orgName: file.orgName,
+        mimeType: file.storageObject?.mimeType || "application/octet-stream",
+        size: file.storageObject?.size || 0
     };
-}
+};
 
 export const getStorageBreakdown = async (uid) => {
     const files = await fileRepo.findAllByUserId(uid);
     const stats = { image: 0, video: 0, audio: 0, document: 0 };
 
     files.forEach(file => {
-        const mime = file.mimeType || "";
-        const size = file.size || 0;
+        const mime = file.storageObject?.mimeType || "";
+        const size = file.storageObject?.size || 0;
         if (mime.startsWith("image/")) stats.image += size;
         else if (mime.startsWith("video/")) stats.video += size;
         else if (mime.startsWith("audio/")) stats.audio += size;

@@ -28,12 +28,16 @@ export default function UploadProgressWidget({
 
     const activeCount = uploads.filter(u => u.status === 'PREPARING' || u.status === 'UPLOADING' || u.status === 'COMPLETING').length;
     const completedCount = uploads.filter(u => u.status === 'SUCCESS').length;
+    const duplicateCount = uploads.filter(u => u.status === 'Duplicate' || u.status === 'DUPLICATE').length;
     const errorCount = uploads.filter(u => u.status === 'ERROR').length;
     const totalCount = uploads.length;
 
     const getHeaderTitle = () => {
         if (activeCount > 0) {
             return `Uploading ${activeCount} ${activeCount === 1 ? 'item' : 'items'}...`;
+        }
+        if (duplicateCount > 0) {
+            return `${duplicateCount} duplicate ${duplicateCount === 1 ? 'file' : 'files'} found`;
         }
         if (errorCount > 0 && completedCount === 0) {
             return `${errorCount} upload failed`;
@@ -123,6 +127,7 @@ export default function UploadProgressWidget({
                         const isPreparing = item.status === 'PREPARING';
                         const isCompleting = item.status === 'COMPLETING';
                         const isSuccess = item.status === 'SUCCESS';
+                        const isDuplicate = item.status === 'Duplicate' || item.status === 'DUPLICATE';
                         const isError = item.status === 'ERROR';
 
                         return (
@@ -171,7 +176,8 @@ export default function UploadProgressWidget({
                                     <div
                                         className={`cb-upload-progress-bar-fill ${item.status.toLowerCase()}`}
                                         style={{
-                                            width: isSuccess ? "100%" : `${Math.max(3, item.progress || 0)}%`
+                                            width: (isSuccess || isDuplicate) ? "100%" : `${Math.max(3, item.progress || 0)}%`,
+                                            backgroundColor: isDuplicate ? "var(--accent-primary, #6366f1)" : undefined
                                         }}
                                     />
                                 </div>
@@ -197,6 +203,11 @@ export default function UploadProgressWidget({
                                         {isSuccess && (
                                             <span className="cb-upload-stage success">
                                                 ✓ Uploaded
+                                            </span>
+                                        )}
+                                        {isDuplicate && (
+                                            <span className="cb-upload-stage duplicate" style={{ color: "var(--accent-primary, #6366f1)", fontWeight: 600 }}>
+                                                Duplicate content detected (copy pending confirmation)
                                             </span>
                                         )}
                                         {isError && (

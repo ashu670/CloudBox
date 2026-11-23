@@ -89,20 +89,23 @@ export const getFileShareByToken = async (token) => {
     }
 
     let downloadUrl = null;
-    try {
-        downloadUrl = await storageService.getSignedUrl(fileShare.file.stoName, 3600);
-    } catch (err) {
-        console.error("Failed to generate signed URL for share:", err);
+    const stoName = fileShare.file.storageObject?.stoName;
+    if (stoName) {
+        try {
+            downloadUrl = await storageService.getSignedUrl(stoName, 3600);
+        } catch (err) {
+            console.error("Failed to generate signed URL for share:", err);
+        }
     }
 
-    const ownerName = fileShare.User?.name || fileShare.file?.user?.name || "CloudBox User";
+    const ownerName = fileShare.user?.name || fileShare.file?.user?.name || "CloudBox User";
 
     return {
         file: {
             id: fileShare.file.id,
             orgName: fileShare.file.orgName,
-            mimeType: fileShare.file.mimeType,
-            size: fileShare.file.size,
+            mimeType: fileShare.file.storageObject?.mimeType || null,
+            size: fileShare.file.storageObject?.size || 0,
             createdAt: fileShare.file.createdAt
         },
         ownerName,

@@ -14,10 +14,11 @@ export const findByToken = async (token) => {
                 include: {
                     user: {
                         select: { id: true, name: true, email: true }
-                    }
+                    },
+                    storageObject: true
                 }
             },
-            User: {
+            user: {
                 select: { id: true, name: true, email: true }
             }
         }
@@ -37,10 +38,11 @@ export const findByFileAndUser = async (fileId, uid) => {
                 include: {
                     user: {
                         select: { id: true, name: true, email: true }
-                    }
+                    },
+                    storageObject: true
                 }
             },
-            User: {
+            user: {
                 select: { id: true, name: true, email: true }
             }
         }

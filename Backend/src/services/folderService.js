@@ -238,7 +238,7 @@ export const searchChild = async (uid, name) => {
     const folders = [];
 
     for(const folder of results.folders){
-        const hasAccess = validateFolderAccess(folder.id, uid, FolderAction.READ);
+        const hasAccess = await validateFolderAccess(folder.id, uid, FolderAction.READ);
 
         if(hasAccess) folders.push(folder);
     }
@@ -246,7 +246,7 @@ export const searchChild = async (uid, name) => {
     const files = [];
 
     for(const file of results.files){
-        const hasAccess = validateFolderAccess(file.folderId, uid, FolderAction.READ);
+        const hasAccess = await validateFolderAccess(file.folderId, uid, FolderAction.READ);
         
         if(hasAccess) files.push(file);
     }

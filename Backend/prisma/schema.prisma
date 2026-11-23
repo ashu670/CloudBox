@@ -1,3 +1,4 @@
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -5,7 +6,6 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
-
 
 enum Role {
   USER
@@ -83,6 +83,7 @@ model User {
   usedStorage   BigInt              @default(0)
   activities    ActivityLogs[]
   files         File[]
+  storageObjects StorageObject[]
   fileShares    FileShare[]
   folders       Folder[]
   joinRequests  FolderJoinRequest[]
@@ -142,24 +143,38 @@ model FolderJoinRequest {
 }
 
 model File {
-  id         Int         @id @default(autoincrement())
-  orgName    String
-  stoName    String      @unique
-  mimeType   String
-  size       Int
-  folderId   Int
-  uid        Int
-  hash       String      @unique
-  createdAt  DateTime    @default(now())
-  updatedAt  DateTime    @updatedAt
-  deletedAt  DateTime?
-  folder     Folder      @relation(fields: [folderId], references: [id], onDelete: Cascade)
-  user       User        @relation(fields: [uid], references: [id], onDelete: Cascade)
-  fileShares FileShare[]
-  trash      TrashLogs[]
+  id              Int           @id @default(autoincrement())
+  orgName         String
+  folderId        Int
+  uid             Int
+  storageObjectId Int
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  deletedAt       DateTime?
+  folder          Folder        @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  user            User          @relation(fields: [uid], references: [id], onDelete: Cascade)
+  storageObject   StorageObject @relation(fields: [storageObjectId], references: [id], onDelete: Restrict)
+  fileShares      FileShare[]
+  trash           TrashLogs[]
 
   @@index([uid, deletedAt])
   @@index([folderId, deletedAt])
+  @@index([storageObjectId])
+}
+
+model StorageObject {
+  id          Int      @id @default(autoincrement())
+  ownerId     Int
+  stoName     String   @unique
+  hash        String
+  mimeType    String
+  size        Int
+  createdAt   DateTime @default(now())
+  owner       User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  files       File[]
+
+  @@unique([ownerId, hash])
+  @@index([ownerId])
 }
 
 model FileShare {

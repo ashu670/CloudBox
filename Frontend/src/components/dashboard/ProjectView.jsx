@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import axios from "../../api/axios";
 import { formatBytes, formatDate } from "../../utils/formatters";
+import { normalizeFileList } from "../../utils/fileNormalization";
 import OwnerPanel from "../OwnerPanel";
 import AdminPanel from "../AdminPanel";
 import ActivityLogs from "../ActivityLogs";
@@ -381,7 +382,7 @@ function ProjectView({
             if (seq !== fetchSequenceRef.current) return;
             const ch = data.children || {};
             const fetchedFolders = ch.children || [];
-            const fetchedFiles = ch.files || [];
+            const fetchedFiles = normalizeFileList(ch.files || []);
 
             projectCacheRef.current[fid] = {
                 folders: fetchedFolders,

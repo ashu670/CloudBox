@@ -25,6 +25,7 @@ import ShareModal from "../components/ShareModal";
 import TrashModal from "../components/TrashModal";
 import DeleteConfirmationModal from "../components/DeleteConfirmationModal";
 import UploadProgressWidget from "../components/UploadProgressWidget";
+import { formatBytes } from "../utils/formatters";
 import { lockBodyScroll, unlockBodyScroll } from "../utils/scrollLock";
 import axios from "../api/axios";
 
@@ -41,7 +42,7 @@ export default function Dashboard() {
         deleteModalState, promptDelete, closeDeleteModal, executeDeleteConfirm,
         downloadFile, shareFile, openShareModal, closeShareModal, shareModalItem, handleRenameSubmit, executeMove, moveItemToFolder, handleFileUpload,
         uploads, retryUpload, dismissUpload, clearCompletedUploads,
-        handleFolderSelect, prefetchFolder, fetchProjects, goBack, refreshAfterSharedAction, showToast
+        handleFolderSelect, prefetchFolder, fetchProjects, goBack, refreshAfterSharedAction, showToast, duplicate , closeDuplicateDialog, createDuplicateCopy
     } = useFolderManager();
 
     const [sharedPanel, setSharedPanel] = useState(null);
@@ -966,8 +967,59 @@ export default function Dashboard() {
                 <TrashModal
                     onClose={() => setShowTrash(false)}
                     showToast={showToast}
-                    refreshDashboard={refreshAfterSharedAction}
+                    refreshDashboard={async () => {
+                        refreshAfterSharedAction();
+                        if (currentFolderId > 0) {
+                            invalidateCache(currentFolderId);
+                            await fetchFolders(currentFolderId, false);
+                        }
+                    }}
                 />
+            )}
+
+            {/* Duplicate File Confirmation Modal */}
+            {duplicate && (
+                <div className="file-preview-modal-backdrop" onClick={closeDuplicateDialog}>
+                    <div className="file-preview-modal-card custom-modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "460px", width: "90%" }}>
+                        <div className="share-modal-header" style={{ marginBottom: "16px" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                                <div style={{ width: "36px", height: "36px", borderRadius: "8px", background: "rgba(99, 102, 241, 0.12)", color: "#6366f1", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <h2 style={{ fontSize: "17px", fontWeight: "700", margin: 0, color: "var(--text-main)" }}>Duplicate File Detected</h2>
+                                    <p style={{ margin: "2px 0 0 0", fontSize: "12.5px", color: "var(--text-muted)" }}>Storage deduplication</p>
+                                </div>
+                            </div>
+                            <button className="preview-close-btn" onClick={closeDuplicateDialog} aria-label="Close modal">✕</button>
+                        </div>
+
+                        <div style={{ margin: "16px 0", padding: "14px", background: "var(--bg-subtle, rgba(255,255,255,0.03))", borderRadius: "8px", border: "1px solid var(--border-color)" }}>
+                            <p style={{ margin: "0 0 8px 0", fontSize: "13.5px", color: "var(--text-main)", fontWeight: "600", wordBreak: "break-all" }}>
+                                {duplicate.newFile?.name}
+                            </p>
+                            <p style={{ margin: 0, fontSize: "12.5px", color: "var(--text-muted)" }}>
+                                {formatBytes(duplicate.newFile?.size || duplicate.existingFile?.size || 0)} • Identical content already exists in your storage
+                            </p>
+                        </div>
+
+                        <p style={{ fontSize: "13.5px", color: "var(--text-secondary)", lineHeight: 1.5, margin: "0 0 20px 0" }}>
+                            A file with matching cryptographic hash is already stored under your account. Creating a copy creates a new logical reference in this folder without uploading again or consuming extra storage quota.
+                        </p>
+
+                        <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+                            <button type="button" className="btn btn-secondary" onClick={closeDuplicateDialog}>
+                                Cancel
+                            </button>
+                            <button type="button" className="btn btn-primary" onClick={createDuplicateCopy}>
+                                Create Logical Copy
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
 
             {/* Create / Join Project Modal */}

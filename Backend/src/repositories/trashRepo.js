@@ -31,7 +31,11 @@ export const findByUserId = async (uid) => {
             }
         },
         include: {
-            file: true,
+            file: {
+                include: {
+                    storageObject: true
+                }
+            },
             folder: true
         },
         orderBy: {
@@ -47,7 +51,11 @@ export const findByIdAndUid = async (id, uid) => {
             uid: Number(uid)
         },
         include: {
-            file: true,
+            file: {
+                include: {
+                    storageObject: true
+                }
+            },
             folder: true
         }
     });
